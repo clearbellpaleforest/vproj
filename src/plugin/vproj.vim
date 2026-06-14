@@ -22,9 +22,10 @@ vproj#DefineHighlights()
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
-command! -nargs=0 VprojToggle vproj#PaneToggle()
-command! -nargs=0 VprojOpen   vproj#PaneOpen()
-command! -nargs=0 VprojClose  vproj#PaneClose()
+command! -nargs=0 VprojToggle  vproj#PaneToggle()
+command! -nargs=0 VprojOpen    vproj#PaneOpen()
+command! -nargs=0 VprojClose   vproj#PaneClose()
+command! -nargs=0 VprojRefresh vproj#Refresh()
 
 # ---------------------------------------------------------------------------
 # Default key mapping: F4 toggles the project pane.

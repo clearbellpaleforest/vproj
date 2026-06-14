@@ -10,8 +10,8 @@ var selected_line: number = 1
 var current_dir: string = ''
 var items: list<dict<any>> = []
 
-const MODE_KEYS: list<string> = ['file', 'doc', 'code']
-const MODE_LABELS: dict<string> = {file: '[F]ile', doc: '[D]oc', code: '[C]ode'}
+const MODE_KEYS: list<string> = ['file', 'doc']
+const MODE_LABELS: dict<string> = {file: '[F]ile', doc: '[D]oc'}
 const MIN_WIDTH: number = 20
 const MAX_WIDTH: number = 80
 const AUTOGROUP: string = 'VprojPane'
@@ -66,8 +66,6 @@ export def PaneOpen(): void
   endif
   Render()
   SetupPaneMappings()
-
-  cursor(selected_line, 1)
 enddef
 
 export def PaneClose(): void
@@ -84,7 +82,7 @@ enddef
 
 export def HandleBufWipeout(): void
   pane_bufnr = -1
-  selected_line = 1
+  selected_line = 3
 enddef
 
 # ──────────────────────────────────────────────
@@ -144,16 +142,11 @@ export def SelectCurrent(): void
     return
   endif
 
-  # Mode menu line: switch mode based on cursor column
+  # Mode menu line: cycle through modes
   if selected_line == 1
-    var col: number = col('.')
-    if col <= 6
-      SwitchMode('file')
-    elseif col <= 13
-      SwitchMode('doc')
-    else
-      SwitchMode('code')
-    endif
+    var idx = index(MODE_KEYS, current_mode)
+    var next_idx = (idx + 1) % len(MODE_KEYS)
+    SwitchMode(MODE_KEYS[next_idx])
     return
   endif
 
@@ -289,7 +282,7 @@ enddef
 def BuildModeMenu(): string
   var parts: list<string> = []
   for key in MODE_KEYS
-    parts->add(get(MODE_LABELS, key, key))
+    parts->add(MODE_LABELS[key])
   endfor
   var line: string = join(parts, '  ')
   var w: number = strwidth(line)
@@ -356,7 +349,7 @@ def BuildFileLines(file_items: list<dict<any>>): list<string>
     # Build line: "  name  ...  info"
     var name_width: number = pane_width - info_width - 1
     if strwidth(name) > name_width
-      name = name[: name_width - 1]
+      name = strcharpart(name, 0, name_width)
     endif
     var line: string = '  ' .. name
     var pad: number = pane_width - strwidth(line) - strwidth(info)
@@ -423,10 +416,7 @@ def OpenFile(path: string): void
 enddef
 
 def IsBinary(path: string): bool
-  var blob: any = readblob(path, 0, 8192)
-  if type(blob) != v:t_blob
-    return false
-  endif
+  var blob: blob = readblob(path, 0, 8192)
   for b in blob
     if b == 0
       return true
@@ -469,7 +459,7 @@ def BuildDocLines(buf_items: list<dict<any>>): list<string>
     var name: string = item.name
     var name_width: number = pane_width - flag_width - 1
     if strwidth(name) > name_width
-      name = name[: name_width - 1]
+      name = strcharpart(name, 0, name_width)
     endif
     var line: string = '  ' .. name
     var pad: number = pane_width - strwidth(line) - strwidth(flags)
@@ -495,6 +485,29 @@ def OpenBuffer(bufnr: number): void
   execute 'buffer ' .. bufnr
 enddef
 
+export def Refresh(): void
+  if !IsPaneVisible()
+    return
+  endif
+  Render()
+enddef
+
+export def CloseBuffer(): void
+  if current_mode != 'doc' || !IsPaneVisible()
+    return
+  endif
+  var idx: number = selected_line - 3
+  if idx < 0 || idx >= len(items)
+    return
+  endif
+  var item: dict<any> = items[idx]
+  if has_key(item, 'bufnr')
+    silent! execute 'bdelete ' .. item.bufnr
+    selected_line = 3
+    Render()
+  endif
+enddef
+
 # ──────────────────────────────────────────────
 # Pane setup
 # ──────────────────────────────────────────────
@@ -505,28 +518,38 @@ def SetupPaneMappings(): void
   endif
 
   # Navigation
-  nnoremap <buffer> <silent> <Down> :call vproj#SelectNext()<CR>
-  nnoremap <buffer> <silent> <Up> :call vproj#SelectPrev()<CR>
-  nnoremap <buffer> <silent> j :call vproj#SelectNext()<CR>
-  nnoremap <buffer> <silent> k :call vproj#SelectPrev()<CR>
+  nnoremap <buffer> <silent> <Down> <Cmd>call vproj#SelectNext()<CR>
+  nnoremap <buffer> <silent> <Up> <Cmd>call vproj#SelectPrev()<CR>
+  nnoremap <buffer> <silent> j <Cmd>call vproj#SelectNext()<CR>
+  nnoremap <buffer> <silent> k <Cmd>call vproj#SelectPrev()<CR>
 
   # Width
-  nnoremap <buffer> <silent> <Right> :call vproj#PaneGrow()<CR>
-  nnoremap <buffer> <silent> <Left> :call vproj#PaneShrink()<CR>
+  nnoremap <buffer> <silent> <Right> <Cmd>call vproj#PaneGrow()<CR>
+  nnoremap <buffer> <silent> <Left> <Cmd>call vproj#PaneShrink()<CR>
 
   # Activate / open
-  nnoremap <buffer> <silent> <CR> :call vproj#SelectCurrent()<CR>
+  nnoremap <buffer> <silent> <CR> <Cmd>call vproj#SelectCurrent()<CR>
 
-  # Close
-  nnoremap <buffer> <silent> q :call vproj#PaneClose()<CR>
-  nnoremap <buffer> <silent> <F4> :call vproj#PaneClose()<CR>
+  # Mode switching
+  nnoremap <buffer> <silent> <S-F> <Cmd>call vproj#SwitchMode('file')<CR>
+  nnoremap <buffer> <silent> <S-D> <Cmd>call vproj#SwitchMode('doc')<CR>
+
+  # Refresh
+  nnoremap <buffer> <silent> r <Cmd>call vproj#Refresh()<CR>
+
+  # Close buffer (doc mode)
+  nnoremap <buffer> <silent> d <Cmd>call vproj#CloseBuffer()<CR>
+
+  # Close pane
+  nnoremap <buffer> <silent> q <Cmd>call vproj#PaneClose()<CR>
+  nnoremap <buffer> <silent> <F4> <Cmd>call vproj#PaneClose()<CR>
 
   # Parent directory shortcut
-  nnoremap <buffer> <silent> . :call vproj#NavigateUp()<CR>
+  nnoremap <buffer> <silent> . <Cmd>call vproj#NavigateUp()<CR>
 enddef
 
 def SetupAutocommands(): void
-  augroup VprojPane
+  execute 'augroup ' .. AUTOGROUP
     autocmd!
     execute 'autocmd BufWipeout <buffer> call vproj#HandleBufWipeout()'
   augroup END
