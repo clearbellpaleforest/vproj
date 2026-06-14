@@ -54,7 +54,7 @@ export def Emit(event: string, data: dict<any>): void
     try
       entry.fn(data)
     catch
-      echom $"[nam/events] Error in listener '{event}': {v:exception}"
+      echom $"[vproj/events] Error in listener '{event}': {v:exception}"
     endtry
   endfor
 enddef

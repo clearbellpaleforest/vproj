@@ -21,17 +21,17 @@ if exists('g:loaded_vproj')
 endif
 let g:loaded_vproj = 1
 
-command! -nargs=0 Nam          call vproj#init#Toggle()
-command! -nargs=0 NamOpen      call vproj#init#Open()
-command! -nargs=0 NamClose     call vproj#init#Close()
-command! -nargs=0 NamWorkspace   call vproj#workspace#ListWorkspaces()
-command! -nargs=1 NamWorkspaceSave  call vproj#workspace#SaveWorkspace(<q-args>)
-command! -nargs=1 NamWorkspaceLoad  call vproj#workspace#LoadWorkspace(<q-args>)
-command! -nargs=1 NamWorkspaceDelete call vproj#workspace#DeleteWorkspace(<q-args>)
-command! -nargs=0 NamPin       call vproj#workspace#PinBuffer()
-command! -nargs=0 NamUnpin     call vproj#workspace#UnpinBuffer()
-command! -nargs=1 NamBookmark      call vproj#workspace#AddBookmark(<q-args>)
-command! -nargs=1 NamBookmarkJump  call vproj#workspace#JumpToBookmark(<q-args>)
+command! -nargs=0 Vproj          call vproj#init#Toggle()
+command! -nargs=0 VprojOpen      call vproj#init#Open()
+command! -nargs=0 VprojClose     call vproj#init#Close()
+command! -nargs=0 VprojWorkspace   call vproj#workspace#ListWorkspaces()
+command! -nargs=1 VprojWorkspaceSave  call vproj#workspace#SaveWorkspace(<q-args>)
+command! -nargs=1 VprojWorkspaceLoad  call vproj#workspace#LoadWorkspace(<q-args>)
+command! -nargs=1 VprojWorkspaceDelete call vproj#workspace#DeleteWorkspace(<q-args>)
+command! -nargs=0 VprojPin       call vproj#workspace#PinBuffer()
+command! -nargs=0 VprojUnpin     call vproj#workspace#UnpinBuffer()
+command! -nargs=1 VprojBookmark      call vproj#workspace#AddBookmark(<q-args>)
+command! -nargs=1 VprojBookmarkJump  call vproj#workspace#JumpToBookmark(<q-args>)
 
 " Auto-setup with defaults so <F2> toggle works out of the box.
 " Users who want custom config can call vproj#init#Setup({...}) in their vimrc;

@@ -128,8 +128,8 @@ function! s:install_from_local(src, dest) abort
     call mkdir(a:dest . '/lua', 'p')
     call mkdir(a:dest . '/plugin', 'p')
 
-    " Recursively copy lua/nam tree
-    let l:cp_lua = 'cp -r ' . shellescape(a:src . '/lua/nam') . ' ' . shellescape(a:dest . '/lua/')
+    " Recursively copy lua/vproj tree
+    let l:cp_lua = 'cp -r ' . shellescape(a:src . '/lua/vproj') . ' ' . shellescape(a:dest . '/lua/')
     silent let l:out = system(l:cp_lua)
     if v:shell_error
         echohl ErrorMsg

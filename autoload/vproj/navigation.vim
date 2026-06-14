@@ -65,7 +65,7 @@ export def Dispatch(label: string): any
   try
     return HandlerFn(label)
   catch
-    echom $'[nam/navigation] Dispatch error: {v:exception}'
+    echom $'[vproj/navigation] Dispatch error: {v:exception}'
     return false
   endtry
 enddef
