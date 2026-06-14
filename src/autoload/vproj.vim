@@ -179,9 +179,9 @@ export def SelectCurrent(): void
     endif
   elseif current_mode == 'code'
     if get(item, 'is_parent', false)
-      NavigateCodeUp()
+      NavigateUp()
     elseif get(item, 'is_dir', false)
-      NavigateCodeInto(item.name)
+      NavigateInto(item.name)
     else
       OpenFile(item.path)
     endif
@@ -408,40 +408,35 @@ def FormatSize(bytes: number): string
   endif
 enddef
 
+def CurrentRoot(): string
+  return (current_mode == 'code') ? code_root : current_dir
+enddef
+
 export def NavigateUp(): void
-  if current_dir == '/' || current_dir == ''
+  var root = CurrentRoot()
+  if root == '/' || root == ''
     return
   endif
-  current_dir = fnamemodify(current_dir, ':h')
+  if current_mode == 'code'
+    code_root = fnamemodify(root, ':h')
+  else
+    current_dir = fnamemodify(root, ':h')
+  endif
   selected_line = 3
   Render()
 enddef
 
 def NavigateInto(subdir: string): void
-  var new_dir: string = current_dir .. '/' .. subdir
+  var root = CurrentRoot()
+  var new_dir: string = root .. '/' .. subdir
   if !isdirectory(new_dir)
     return
   endif
-  current_dir = new_dir
-  selected_line = 3
-  Render()
-enddef
-
-def NavigateCodeUp(): void
-  if code_root == '/' || code_root == ''
-    return
+  if current_mode == 'code'
+    code_root = new_dir
+  else
+    current_dir = new_dir
   endif
-  code_root = fnamemodify(code_root, ':h')
-  selected_line = 3
-  Render()
-enddef
-
-def NavigateCodeInto(subdir: string): void
-  var new_dir: string = code_root .. '/' .. subdir
-  if !isdirectory(new_dir)
-    return
-  endif
-  code_root = new_dir
   selected_line = 3
   Render()
 enddef
@@ -570,68 +565,40 @@ def FindVprojFile(dir: string): string
   return ''
 enddef
 
+const SECTION_MAP: dict<string> = {
+  'project name': 'name',
+  'project root': 'root',
+  'included directories': 'included_dirs',
+  'included files': 'included_files',
+  'excluded directories': 'excluded_dirs',
+  'excluded files': 'excluded_files',
+}
+
 def ParseVprojFile(path: string): dict<any>
   var p: dict<any> = {
-    name: '',
-    root: '',
-    vproj_file: path,
-    included_dirs: [],
-    included_files: [],
-    excluded_dirs: [],
-    excluded_files: [],
+    name: '', root: '', vproj_file: path,
+    included_dirs: [], included_files: [],
+    excluded_dirs: [], excluded_files: [],
   }
-
-  if !filereadable(path)
-    return p
-  endif
+  if !filereadable(path) | return p | endif
 
   var section: string = ''
   for line in readfile(path)
-    var trimmed: string = line->substitute('^\s\+', '', '')->substitute('\s\+$', '', '')
-    # Skip blank lines and comments
-    if empty(trimmed) || trimmed[0] == '#'
+    var t: string = line->substitute('^\s\+', '', '')->substitute('\s\+$', '', '')
+    if empty(t) || t[0] == '#' | continue | endif
+
+    if t =~ ':$'
+      section = get(SECTION_MAP, tolower(t->substitute(':$', '', '')), '')
       continue
     endif
 
-    # Section header (ends with colon)
-    if trimmed =~ ':$'
-      var key: string = tolower(trimmed->substitute(':$', '', ''))
-      if key == 'project name'
-        section = 'name'
-      elseif key == 'project root'
-        section = 'root'
-      elseif key == 'included directories'
-        section = 'included_dirs'
-      elseif key == 'included files'
-        section = 'included_files'
-      elseif key == 'excluded directories'
-        section = 'excluded_dirs'
-      elseif key == 'excluded files'
-        section = 'excluded_files'
-      else
-        section = ''
-      endif
-      continue
-    endif
-
-    # Value or list entry
-    if section == 'name'
-      p.name = trimmed
+    if section == 'name' || section == 'root'
+      p[section] = t
       section = ''
-    elseif section == 'root'
-      p.root = trimmed
-      section = ''
-    elseif section == 'included_dirs'
-      p.included_dirs->add(trimmed)
-    elseif section == 'included_files'
-      p.included_files->add(trimmed)
-    elseif section == 'excluded_dirs'
-      p.excluded_dirs->add(trimmed)
-    elseif section == 'excluded_files'
-      p.excluded_files->add(trimmed)
+    elseif !empty(section)
+      p[section]->add(t)
     endif
   endfor
-
   return p
 enddef
 
@@ -690,52 +657,21 @@ def LoadProject(): void
   endif
 enddef
 
-def IsItemIncluded(item: dict<any>): bool
-  if empty(project)
-    return false
-  endif
-
-  # Get path relative to project root
-  var rel: string = item.path
+def RelPath(full: string): string
+  var rel: string = full
   if !empty(project.root) && rel->stridx(project.root) == 0
-    rel = rel[project.root->len() :]
-    rel = rel->substitute('^/', '', '')
+    rel = rel[project.root->len() :]->substitute('^/', '', '')
   endif
+  return rel
+enddef
 
-  # Explicitly excluded?
-  if project.excluded_dirs->index(rel) >= 0
+def IsItemIncluded(item: dict<any>): bool
+  if empty(project) | return false | endif
+  var rel = RelPath(item.path)
+  if project.excluded_dirs->index(rel) >= 0 || project.excluded_files->index(rel) >= 0
     return false
   endif
-  if project.excluded_files->index(rel) >= 0
-    return false
-  endif
-
-  # Explicitly included?
-  if project.included_dirs->index(rel) >= 0
-    return true
-  endif
-  if project.included_files->index(rel) >= 0
-    return true
-  endif
-
-  # Check if any parent directory is included
-  for inc_dir in project.included_dirs
-    if rel->stridx(inc_dir .. '/') == 0
-      # Check not under an excluded dir
-      var under_excluded = false
-      for exc_dir in project.excluded_dirs
-        if rel->stridx(exc_dir .. '/') == 0
-          under_excluded = true
-          break
-        endif
-      endfor
-      if !under_excluded
-        return true
-      endif
-    endif
-  endfor
-
-  return false
+  return project.included_dirs->index(rel) >= 0 || project.included_files->index(rel) >= 0
 enddef
 
 def CodeItems(): list<dict<any>>
@@ -866,58 +802,31 @@ def BuildProjectStatusLine(): string
   return line
 enddef
 
+def ToggleList(list_a: list<string>, list_b: list<string>, rel: string): void
+  var i = list_a->index(rel)
+  if i >= 0 | list_a->remove(i) | endif
+  if list_b->index(rel) < 0 | list_b->add(rel) | endif
+enddef
+
 export def ToggleInclude(): void
-  if current_mode != 'code' || !IsPaneVisible()
-    return
-  endif
-
-  var idx: number = selected_line - 3  # offset past menu + status
-  if idx < 0 || idx >= len(items)
-    return
-  endif
-
+  if current_mode != 'code' || !IsPaneVisible() | return | endif
+  var idx: number = selected_line - 3
+  if idx < 0 || idx >= len(items) | return | endif
   var item: dict<any> = items[idx]
-  if get(item, 'is_parent', false)
-    return
-  endif
+  if get(item, 'is_parent', false) | return | endif
 
-  # Get relative path from project root
-  var rel: string = item.path
-  if !empty(project.root) && rel->stridx(project.root) == 0
-    rel = rel[project.root->len() :]
-    rel = rel->substitute('^/', '', '')
+  var rel = RelPath(item.path)
+  var inc = project.included_dirs
+  var exc = project.excluded_dirs
+  if !get(item, 'is_dir', false)
+    inc = project.included_files
+    exc = project.excluded_files
   endif
 
   if get(item, 'included', false)
-    # Exclude: remove from included, add to excluded
-    if get(item, 'is_dir', false)
-      var i = project.included_dirs->index(rel)
-      if i >= 0 | project.included_dirs->remove(i) | endif
-      if project.excluded_dirs->index(rel) < 0
-        project.excluded_dirs->add(rel)
-      endif
-    else
-      var i = project.included_files->index(rel)
-      if i >= 0 | project.included_files->remove(i) | endif
-      if project.excluded_files->index(rel) < 0
-        project.excluded_files->add(rel)
-      endif
-    endif
+    ToggleList(inc, exc, rel)
   else
-    # Include: remove from excluded, add to included
-    if get(item, 'is_dir', false)
-      var i = project.excluded_dirs->index(rel)
-      if i >= 0 | project.excluded_dirs->remove(i) | endif
-      if project.included_dirs->index(rel) < 0
-        project.included_dirs->add(rel)
-      endif
-    else
-      var i = project.excluded_files->index(rel)
-      if i >= 0 | project.excluded_files->remove(i) | endif
-      if project.included_files->index(rel) < 0
-        project.included_files->add(rel)
-      endif
-    endif
+    ToggleList(exc, inc, rel)
   endif
 
   WriteVprojFile()
@@ -925,44 +834,20 @@ export def ToggleInclude(): void
 enddef
 
 export def RenameProject(): void
-  if current_mode != 'code' || !IsPaneVisible()
-    return
-  endif
+  if current_mode != 'code' || !IsPaneVisible() | return | endif
 
-  var default_name: string
-  if !empty(project) && !empty(project.name)
-    default_name = project.name
-  else
-    default_name = fnamemodify(current_dir, ':t')
-  endif
-
-  var new_name: string = input('Project name: ', default_name)
-  if empty(new_name) || new_name == default_name
-    return
-  endif
+  var default_name = !empty(get(project, 'name', '')) ? project.name : fnamemodify(current_dir, ':t')
+  var new_name = input('Project name: ', default_name)
+  if empty(new_name) || new_name == default_name | return | endif
 
   if empty(project)
-    # Create new .vproj
-    var vproj_path: string = current_dir .. '/' .. new_name .. '.vproj'
-    project = {
-      name: new_name,
-      root: current_dir,
-      vproj_file: vproj_path,
-      included_dirs: [],
-      included_files: [],
-      excluded_dirs: [],
-      excluded_files: [],
-    }
+    project = {name: new_name, root: current_dir, vproj_file: current_dir .. '/' .. new_name .. '.vproj', included_dirs: [], included_files: [], excluded_dirs: [], excluded_files: []}
     code_root = current_dir
   else
-    # Rename: change name, rename file
-    var old_path: string = project.vproj_file
-    var new_path: string = fnamemodify(old_path, ':h') .. '/' .. new_name .. '.vproj'
+    var old = project.vproj_file
     project.name = new_name
-    project.vproj_file = new_path
-    if old_path != new_path && filereadable(old_path)
-      delete(old_path)
-    endif
+    project.vproj_file = fnamemodify(old, ':h') .. '/' .. new_name .. '.vproj'
+    if old != project.vproj_file && filereadable(old) | delete(old) | endif
   endif
 
   WriteVprojFile()
