@@ -72,9 +72,9 @@ export def Setup(user_opts: dict<any>)
   events_mod.On('mode_changed', ModeChangedHandler)
   events_mod.On('mode_rerender', ModeRerenderHandler)
 
-  # 8. Set up persistence and workspace modules
-  vproj#persistence#Setup(cfg)
+  # 8. Set up workspace first (so persistence auto-restore can push data into it)
   vproj#workspace#Setup(cfg)
+  vproj#persistence#Setup(cfg)
 
   # 9. Set global hotkey mapping (Normal mode)
   # Validate hotkey to prevent injection via embedded newlines or ex separators

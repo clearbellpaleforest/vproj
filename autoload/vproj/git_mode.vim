@@ -70,7 +70,7 @@ enddef
 #   {label_map: dict<any>, lines: list<string>}
 export def RenderGit(): dict<any>
   if empty(Items)
-    return vproj#labels#BuildMap([{name: '(no changes)'}], get(Config, 'labels', {}))
+    return vproj#labels#BuildMap([{name: '(no changes)', category: 'info'}], get(Config, 'labels', {}))
   endif
   var result = vproj#labels#BuildMap(Items, get(Config, 'labels', {}))
   LabelMap = result.label_map
@@ -88,7 +88,10 @@ export def SelectGit(label: string): any
     return v:null
   endif
   var item = LabelMap[label]
-  if item.category == 'error'
+  if has_key(item, 'category') && (item.category == 'error' || item.category == 'info')
+    return false
+  endif
+  if !has_key(item, 'path') || type(item.path) != v:t_string || empty(item.path)
     return false
   endif
   var main_win = vproj#sidebar#GetMainWin()
@@ -110,7 +113,7 @@ export def StageItem(label: string): bool
     return false
   endif
   var item = LabelMap[label]
-  if item.path == ''
+  if !has_key(item, 'path') || type(item.path) != v:t_string || empty(item.path)
     return false
   endif
   vproj#git#StageFile(item.path)
@@ -125,7 +128,7 @@ export def UnstageItem(label: string): bool
     return false
   endif
   var item = LabelMap[label]
-  if item.path == ''
+  if !has_key(item, 'path') || type(item.path) != v:t_string || empty(item.path)
     return false
   endif
   vproj#git#UnstageFile(item.path)
@@ -142,7 +145,7 @@ export def ShowDiffItem(label: string): bool
     return false
   endif
   var item = LabelMap[label]
-  if item.path == ''
+  if !has_key(item, 'path') || type(item.path) != v:t_string || empty(item.path)
     return false
   endif
   var staged: bool = item.category == 'staged'

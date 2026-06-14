@@ -51,6 +51,9 @@ export def GetStatus(): dict<any>
     elseif y != ' ' && y != '?'
       entry.category = 'unstaged'
       entry.prefix = 'M'
+    else
+      # Ignored or unrecognised status — skip this entry
+      continue
     endif
 
     items->add(entry)

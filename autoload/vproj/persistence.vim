@@ -44,7 +44,7 @@ def ResolveCacheHome(): string
     return expand('~') .. '/.cache'
   endif
   var expanded: string = expand(raw)
-  if empty(expanded) || expanded !~# '^/\|^~/'
+  if empty(expanded) || expanded !~# '^/\|^\~/'
     return expand('~') .. '/.cache'
   endif
   # Reject path traversal components and glob metacharacters
@@ -177,6 +177,16 @@ export def GetState(): dict<any>
 
   # Capture window layout (executable command string for restore)
   state.window_layout = winrestcmd()
+
+  # Include workspace data (pins, bookmarks, symbols) in the session
+  try
+    if exists('*vproj#workspace#GetPinned')
+      state.pinned_buffers = vproj#workspace#GetPinned()
+      state.bookmarks = vproj#workspace#GetBookmarks()
+      state.recent_symbols = vproj#workspace#GetRecentSymbols(100)
+    endif
+  catch
+  endtry
 
   return state
 enddef
@@ -311,6 +321,26 @@ export def Restore(project_root: string = ''): bool
       if !vproj#sidebar#IsOpen()
         vproj#sidebar#Open()
       endif
+    catch
+    endtry
+  endif
+
+  # Restore workspace data (pins, bookmarks, recent symbols)
+  if has_key(state, 'pinned_buffers') && type(state.pinned_buffers) == v:t_list
+    try
+      vproj#workspace#RestorePins(state.pinned_buffers)
+    catch
+    endtry
+  endif
+  if has_key(state, 'bookmarks') && type(state.bookmarks) == v:t_list
+    try
+      vproj#workspace#RestoreBookmarks(state.bookmarks)
+    catch
+    endtry
+  endif
+  if has_key(state, 'recent_symbols') && type(state.recent_symbols) == v:t_list
+    try
+      vproj#workspace#RestoreSymbols(state.recent_symbols)
     catch
     endtry
   endif

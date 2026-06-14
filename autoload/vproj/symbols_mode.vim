@@ -155,7 +155,11 @@ export def SelectSym(label: string): any
   if main_win > 0
     win_gotoid(main_win)
   endif
-  execute 'edit ' .. fnameescape(item.path)
+  var path: string = item->get('path', '')
+  if empty(path) || type(path) != v:t_string
+    return false
+  endif
+  execute 'edit ' .. fnameescape(path)
   execute '' .. item.line
 
   var side_win = vproj#sidebar#GetWin()

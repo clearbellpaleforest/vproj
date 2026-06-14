@@ -65,9 +65,12 @@ export def AddBookmark(name: string): bool
     col: pos[2],
     timestamp: localtime(),
   }
+  if empty(name)
+    return false
+  endif
   # Update existing bookmark with the same name, or add new
   for idx in range(len(Bookmarks))
-    if Bookmarks[idx].name == name
+    if has_key(Bookmarks[idx], 'name') && Bookmarks[idx].name == name
       Bookmarks[idx] = bm
       return true
     endif
@@ -78,9 +81,16 @@ enddef
 
 export def JumpToBookmark(name: string): bool
   for bm in Bookmarks
-    if bm.name == name
+    if has_key(bm, 'name') && bm.name == name
+      if !has_key(bm, 'path') || type(bm.path) != v:t_string || empty(bm.path)
+        return false
+      endif
       execute 'edit! ' .. fnameescape(bm.path)
-      cursor(bm.line, bm.col)
+      var line: number = get(bm, 'line', 1)
+      var col: number = get(bm, 'col', 1)
+      if type(line) == v:t_number && type(col) == v:t_number
+        cursor(line, col)
+      endif
       return true
     endif
   endfor
@@ -96,12 +106,20 @@ enddef
 # ──────────────────────────────────────────────
 
 export def RecordSymbol(sym: dict<any>): bool
+  if !has_key(sym, 'name') || !has_key(sym, 'path')
+    return false
+  endif
+  if type(sym.name) != v:t_string || type(sym.path) != v:t_string
+    return false
+  endif
   # Dedupe: if same name+path already exists, remove the old entry first
   var i = 0
   while i < len(RecentSymbols)
-    if RecentSymbols[i].name == sym.name && RecentSymbols[i].path == sym.path
-      remove(RecentSymbols, i)
-      break
+    if has_key(RecentSymbols[i], 'name') && has_key(RecentSymbols[i], 'path')
+      if RecentSymbols[i].name == sym.name && RecentSymbols[i].path == sym.path
+        remove(RecentSymbols, i)
+        break
+      endif
     endif
     i += 1
   endwhile
@@ -110,8 +128,8 @@ export def RecordSymbol(sym: dict<any>): bool
   var entry: dict<any> = {
     name: sym.name,
     path: sym.path,
-    line: sym.line,
-    kind: sym.kind,
+    line: get(sym, 'line', 0),
+    kind: get(sym, 'kind', ''),
     timestamp: localtime(),
   }
   insert(RecentSymbols, entry, 0)
@@ -161,6 +179,21 @@ export def Restore(): dict<any>
   return state
 enddef
 
+# RestorePins replaces the internal pin list (called by persistence.Restore).
+export def RestorePins(pins: list<string>)
+  Pins = copy(pins)
+enddef
+
+# RestoreBookmarks replaces the internal bookmark list (called by persistence.Restore).
+export def RestoreBookmarks(bms: list<dict<any>>)
+  Bookmarks = copy(bms)
+enddef
+
+# RestoreSymbols replaces the internal symbol list (called by persistence.Restore).
+export def RestoreSymbols(syms: list<dict<any>>)
+  RecentSymbols = copy(syms)
+enddef
+
 # ──────────────────────────────────────────────
 # Named workspace CRUD
 # ──────────────────────────────────────────────
@@ -174,7 +207,7 @@ def WorkspaceDir(): string
 enddef
 
 def ValidateWorkspaceDir(dir: string): bool
-  if empty(dir) || dir !~# '^/\|^~/'
+  if empty(dir) || dir !~# '^/\|^\~/'
     return false
   endif
   var expanded: string = expand(dir)
