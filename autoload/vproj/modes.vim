@@ -16,7 +16,7 @@ var Events: dict<any> = {}
 
 # Setup resets all module state and stores a reference to the events module.
 # cfg is accepted for API consistency with other Setup functions.
-export def Setup(cfg: dict<any>, events_mod: dict<any>)
+export def Setup(cfg: dict<any>, events_mod: dict<any>): void
   Modes = {}
   ModeOrder = []
   Current = {}
@@ -25,7 +25,7 @@ enddef
 
 # Register adds a mode to the registry.
 # The mode dict must have a string 'key' field.
-export def Register(mode: dict<any>)
+export def Register(mode: dict<any>): void
   if !has_key(mode, 'key') || type(mode.key) != v:t_string || empty(mode.key)
     return
   endif

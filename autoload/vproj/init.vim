@@ -22,7 +22,7 @@ var setup_done: bool = false
 # Setup — full plugin initialization.
 # @param user_opts: dict<any> — optional user-override configuration.
 # ---------------------------------------------------------------------------
-export def Setup(user_opts: dict<any>)
+export def Setup(user_opts: dict<any>): void
   if setup_done
     return
   endif
@@ -94,7 +94,7 @@ enddef
 # Toggle — open the sidebar if closed, close it if open.
 # After opening, attaches navigation mappings and switches to the default mode.
 # ---------------------------------------------------------------------------
-export def Toggle()
+export def Toggle(): void
   vproj#sidebar#Toggle()
   if vproj#sidebar#IsOpen()
     AttachAndShow()
@@ -104,7 +104,7 @@ enddef
 # ---------------------------------------------------------------------------
 # Open — open the sidebar and prepare for interaction.
 # ---------------------------------------------------------------------------
-export def Open()
+export def Open(): void
   vproj#sidebar#Open()
   if vproj#sidebar#IsOpen()
     AttachAndShow()
@@ -114,7 +114,7 @@ enddef
 # ---------------------------------------------------------------------------
 # Close — close the sidebar and tear down its buffer.
 # ---------------------------------------------------------------------------
-export def Close()
+export def Close(): void
   vproj#sidebar#Close()
 enddef
 
@@ -123,7 +123,7 @@ enddef
 # Retrieves the sidebar buffer, attaches navigation keymaps, and switches
 # to the first registered (default) mode.
 # ---------------------------------------------------------------------------
-def AttachAndShow()
+def AttachAndShow(): void
   var buf: number = vproj#sidebar#GetBuf()
   if buf <= 0
     return
@@ -153,7 +153,7 @@ enddef
 #    b. If mode.Select returns v:null, checks whether label matches a
 #       registered mode hotkey and switches to that mode.
 # ---------------------------------------------------------------------------
-def ModeChangedHandler(data: dict<any>)
+def ModeChangedHandler(data: dict<any>): void
   if !vproj#sidebar#IsOpen()
     return
   endif
@@ -201,7 +201,7 @@ enddef
 # Re-renders the currently active mode without switching or refreshing data.
 # Useful after page-turn operations (prev_page/next_page).
 # ---------------------------------------------------------------------------
-def ModeRerenderHandler(data: dict<any>)
+def ModeRerenderHandler(data: dict<any>): void
   if !vproj#sidebar#IsOpen()
     return
   endif

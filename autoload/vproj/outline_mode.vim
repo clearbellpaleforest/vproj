@@ -40,7 +40,7 @@ export def Create(cfg: dict<any>): dict<any>
 enddef
 
 # Refresh — reads the current buffer, detects filetype, and parses outline items.
-export def Refresh()
+export def Refresh(): void
   Items = []
   SourceBuf = bufnr('%')
   if SourceBuf <= 0
@@ -114,7 +114,7 @@ enddef
 # Handles ATX headings (# through ######) with level-based indentation,
 # setext headings (=== for h1, --- for h2), and fenced code block skipping.
 
-def ParseMarkdown()
+def ParseMarkdown(): void
   var lines: list<string> = getbufline(SourceBuf, 1, '$')
   var in_code: bool = false
   var i: number = 0
@@ -167,7 +167,7 @@ enddef
 # Extracts: local function, function, M. assignments, return { ... }.
 # Skips content inside multi-line [[ ... ]] long strings.
 
-def ParseLua()
+def ParseLua(): void
   var lines: list<string> = getbufline(SourceBuf, 1, '$')
   var in_long: bool = false
 
@@ -224,7 +224,7 @@ enddef
 # ── Vimscript parser ─────────────────────────────────────────────────
 # Extracts: function!, function, command!/command (with -flag skipping), def.
 
-def ParseVim()
+def ParseVim(): void
   var lines: list<string> = getbufline(SourceBuf, 1, '$')
   for i in range(len(lines))
     var trimmed: string = trim(lines[i])
@@ -274,7 +274,7 @@ enddef
 # ── Python parser ────────────────────────────────────────────────────
 # Extracts: class, def, async def.
 
-def ParsePython()
+def ParsePython(): void
   var lines: list<string> = getbufline(SourceBuf, 1, '$')
   for i in range(len(lines))
     var trimmed: string = trim(lines[i])
@@ -306,7 +306,7 @@ enddef
 # ── Generic fallback parser ──────────────────────────────────────────
 # Shows the first 50 non-blank lines, each truncated to 40 characters.
 
-def ParseGeneric()
+def ParseGeneric(): void
   var lines: list<string> = getbufline(SourceBuf, 1, '$')
   var count: number = 0
   for i in range(len(lines))

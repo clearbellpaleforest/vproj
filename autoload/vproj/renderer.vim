@@ -2,11 +2,11 @@ vim9script
 
 var SeparatorLine: string = ''
 
-export def Setup(cfg: dict<any>)
+export def Setup(cfg: dict<any>): void
   SeparatorLine = repeat(nr2char(0x2500), cfg.width)
 enddef
 
-export def RenderFull(buf: number, mode_name: string, modes: list<dict<any>>, body: list<string>)
+export def RenderFull(buf: number, mode_name: string, modes: list<dict<any>>, body: list<string>): void
   if !bufexists(buf)
     return
   endif

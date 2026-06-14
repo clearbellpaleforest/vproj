@@ -87,7 +87,7 @@ enddef
 
 # EnsureCacheDir creates the cache directory for the given project root
 # if it does not already exist. Parent directories are created as needed.
-def EnsureCacheDir(project_root: string)
+def EnsureCacheDir(project_root: string): void
   var filepath: string = GetStateFile(project_root)
   var dir: string = fnamemodify(filepath, ':h')
   if dir !~# '/vproj$'
@@ -350,7 +350,7 @@ enddef
 
 # Clear deletes the session state file for the given project root, including
 # any stale .tmp.* files from interrupted atomic writes.
-export def Clear(project_root: string = '')
+export def Clear(project_root: string = ''): void
   var root: string = project_root
   if empty(root)
     try
@@ -376,7 +376,7 @@ enddef
 
 # ClearAll deletes all known per-project session files and their stale
 # .tmp.* files, then resets the internal StateFiles cache.
-export def ClearAll()
+export def ClearAll(): void
   for key in keys(StateFiles)
     var filepath: string = StateFiles[key]
     if !ValidateSessionPath(filepath)
@@ -406,7 +406,7 @@ enddef
 # Configuration dict (cfg) may contain:
 #   workspace.auto_restore - bool, restore previous session on startup
 #   workspace.auto_save    - bool, save session on VimLeave
-export def Setup(cfg: dict<any>)
+export def Setup(cfg: dict<any>): void
   if type(cfg) != v:t_dict
     return
   endif

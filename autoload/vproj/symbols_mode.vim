@@ -50,7 +50,7 @@ export def Create(cfg: dict<any>): dict<any>
 enddef
 
 # Refresh — parse ctags output for the current file and populate Items.
-export def Refresh()
+export def Refresh(): void
   Items = []
 
   var filepath: string = expand('%:p')

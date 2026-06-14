@@ -81,7 +81,7 @@ enddef
 
 # Refresh scans all buffer numbers, collecting listed buffers and their
 # status indicators.  Populates the module-level Items list.
-export def Refresh()
+export def Refresh(): void
   Items = []
   for buf in range(1, bufnr('$'))
     if !bufexists(buf) || bufname(buf) ==# 'vproj://sidebar'
@@ -114,8 +114,8 @@ enddef
 export def RenderBuf(): dict<any>
   var labels_result: dict<any> =
       vproj#labels#BuildMap(Items, Config->get('labels', {}))
-  LabelMap = labels_result['label_map']
-  Lines = labels_result['lines']
+  LabelMap = labels_result.label_map
+  Lines = labels_result.lines
   return labels_result
 enddef
 

@@ -30,7 +30,7 @@ export def Create(cfg: dict<any>): dict<any>
 enddef
 
 # Refresh scans the project and sets up paging.
-export def Refresh()
+export def Refresh(): void
   var root = vproj#project#FindRoot(getcwd())
   AllFiles = vproj#project#ScanFiles(root, {max_files: 5000})
   CurrentPage = 0

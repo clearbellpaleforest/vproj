@@ -10,14 +10,14 @@ var SidebarWidth: number = 35
 var MainWinId: number = 0
 
 # Set SidebarWidth from configuration dict.
-export def Setup(cfg: dict<any>)
+export def Setup(cfg: dict<any>): void
   if has_key(cfg, 'width')
     SidebarWidth = cfg.width
   endif
 enddef
 
 # Create the scratch buffer and sidebar window.
-export def Open()
+export def Open(): void
   if IsOpen()
     return
   endif
@@ -54,7 +54,7 @@ export def Open()
 enddef
 
 # Close the sidebar: close the window, wipe the scratch buffer, reset state.
-export def Close()
+export def Close(): void
   if !IsOpen()
     return
   endif
@@ -83,7 +83,7 @@ export def IsOpen(): bool
 enddef
 
 # Close an orphaned window whose scratch buffer was lost.
-def CleanupOrphan()
+def CleanupOrphan(): void
   if WinId > 0 && win_id2win(WinId) > 0 && winnr('$') > 1
     win_execute(WinId, 'close!')
   endif
@@ -109,7 +109,7 @@ export def GetMainWin(): number
 enddef
 
 # Toggle sidebar open/close.
-export def Toggle()
+export def Toggle(): void
   if IsOpen()
     Close()
   else

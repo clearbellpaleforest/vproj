@@ -10,7 +10,7 @@ var Config: dict<any> = {}
 # Setup
 # ──────────────────────────────────────────────
 
-export def Setup(cfg: dict<any>)
+export def Setup(cfg: dict<any>): void
   Config = cfg
   Pins = []
   Bookmarks = []
@@ -160,7 +160,7 @@ export def GetState(): dict<any>
   return state
 enddef
 
-export def Save()
+export def Save(): void
   vproj#persistence#Save()
 enddef
 
@@ -180,17 +180,17 @@ export def Restore(): dict<any>
 enddef
 
 # RestorePins replaces the internal pin list (called by persistence.Restore).
-export def RestorePins(pins: list<string>)
+export def RestorePins(pins: list<string>): void
   Pins = copy(pins)
 enddef
 
 # RestoreBookmarks replaces the internal bookmark list (called by persistence.Restore).
-export def RestoreBookmarks(bms: list<dict<any>>)
+export def RestoreBookmarks(bms: list<dict<any>>): void
   Bookmarks = copy(bms)
 enddef
 
 # RestoreSymbols replaces the internal symbol list (called by persistence.Restore).
-export def RestoreSymbols(syms: list<dict<any>>)
+export def RestoreSymbols(syms: list<dict<any>>): void
   RecentSymbols = copy(syms)
 enddef
 

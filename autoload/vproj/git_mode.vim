@@ -47,7 +47,7 @@ enddef
 
 # Refresh git status and rebuild the Items list.
 # Falls back to an error item when the current directory is not a git repo.
-export def Refresh()
+export def Refresh(): void
   var status = vproj#git#GetStatus()
 
   if type(status) != v:t_dict || !get(status, 'ok', false)

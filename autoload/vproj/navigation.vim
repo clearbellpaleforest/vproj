@@ -16,7 +16,7 @@ var EventsMod: dict<any>
 # Setup(cfg, events_mod):
 #   Populate TierChars from cfg.labels.tiers (split each tier string into chars)
 #   Store events_mod reference for event emission in page controls
-export def Setup(cfg: dict<any>, events_mod: dict<any>)
+export def Setup(cfg: dict<any>, events_mod: dict<any>): void
   TierChars = []
   if has_key(cfg, 'labels') && has_key(cfg.labels, 'tiers')
     for tier in cfg.labels.tiers
@@ -35,7 +35,7 @@ enddef
 #     routing through the handler bridge (vproj#handler#Handle)
 #   - Maps <Esc> to close the sidebar
 #   - Maps [ and ] for page-up/page-down through the handler bridge
-export def Attach(buf: number)
+export def Attach(buf: number): void
   if !bufexists(buf)
     return
   endif
@@ -55,7 +55,7 @@ enddef
 # SetHandler(Fn):
 #   Store the active dispatch handler function reference.
 #   Accepts any callable (vim9script func or legacy Funcref).
-export def SetHandler(Fn: any)
+export def SetHandler(Fn: any): void
   HandlerFn = Fn
 enddef
 
@@ -77,7 +77,7 @@ enddef
 # PagePrev():
 #   If the current mode exposes a PrevPage function, call it, then
 #   re-render the mode display and emit a mode_rerender event.
-export def PagePrev()
+export def PagePrev(): void
   if has_key(CurrentMode, 'PrevPage')
     CurrentMode.PrevPage()
     if has_key(CurrentMode, 'Render')
@@ -92,7 +92,7 @@ enddef
 # PageNext():
 #   If the current mode exposes a NextPage function, call it, then
 #   re-render the mode display and emit a mode_rerender event.
-export def PageNext()
+export def PageNext(): void
   if has_key(CurrentMode, 'NextPage')
     CurrentMode.NextPage()
     if has_key(CurrentMode, 'Render')
@@ -106,12 +106,12 @@ enddef
 
 # SetCurrentMode(mode):
 #   Store a reference to the currently active mode (for page-up/page-down controls).
-export def SetCurrentMode(mode: dict<any>)
+export def SetCurrentMode(mode: dict<any>): void
   CurrentMode = mode
 enddef
 
 # ResetHandler():
 #   Clear the dispatch handler back to null. Useful for testing.
-export def ResetHandler()
+export def ResetHandler(): void
   HandlerFn = v:null
 enddef

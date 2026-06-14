@@ -1,243 +1,139 @@
-# Vproj — Development Plan
+# vproj Implementation Plan
 
-## Methodology
+## Context
+vproj is a Vim project manager. Full design in `doc/design.md`. Architecture decisions in `docs/adr/005` through `012`. This plan builds incrementally — each phase produces something testable.
 
-1. **Skeleton first** — Design the module structure with human reasoning. Use AI only for
-   comments during this phase. Each file gets its interface contract (exports,
-   function signatures, type annotations) before any implementation.
-2. **Stage by stage** — Fill in one module at a time. Test before moving on.
-3. **Validate all input** — Every function that accepts external data (env vars,
-   user config, file contents, JSON) must validate before acting. Never assume
-   input is well-formed.
-4. **Negative paths** — Every code path that can fail must fail gracefully. No
-   silent corruption, no crash loops, no `:catch` without a fallback.
+**Target:** Vim 9.0+. `vim9script` throughout autoload. Plugin entry in legacy VimScript for compat.
 
-## Validation Rule (mandatory)
+## Files
+- `src/plugin/vproj.vim` — guard, default keymap (F4), `:VprojToggle` command, highlight defines
+- `src/autoload/vproj.vim` — all logic behind `vproj#` namespace; organized so it can split into `workspace.vim`, `navigation.vim`, `display.vim`, `project.vim` later
 
-Every function receiving data from outside the module MUST validate:
-- **Type** — is this the Vim type we expect? (v:t_string, v:t_dict, v:t_list, v:t_bool, v:t_number)
-- **Shape** — if dict: does it have required keys of correct types? if list: is length bounded?
-- **Content** — if a path: does it look like a real path? if a command: does it match a known set?
-- **Bounds** — if a count or size: is it within reasonable limits?
+## Core Data Structures
 
-Validation failures must abort the operation and return a safe default or error,
-never proceed with unvalidated data.
-
-## Architecture Skeleton
-
+**Script-local** (autoload, the workspace — single source of truth per ADR-005):
 ```
-autoload/vproj/
-├── init.vim           Entry point, user commands, setup dispatch
-├── config.vim         Configuration defaults, validation, merge
-├── labels.vim         DSN label engine (tier system, overflow)
-├── renderer.vim       Virtual buffer rendering, highlight groups
-├── sidebar.vim        Window management (split, resize, toggle)
-├── handler.vim        Key handler dispatch (mode hotkeys, DSN keys)
-├── modes.vim          Mode registry (register, switch, get current)
-├── project.vim        Project root detection, file tree scanner
-├── navigation.vim     Label→action dispatch
-├── events.vim         Internal decoupled event bus
-├── cache.vim          TTL-based generic caching
-├── git.vim            Git porcelain parser, status model
-├── workspace.vim      Workspace manager (save/restore session bundle)
-├── persistence.vim    Per-project JSON session file I/O
-│
-├── buffers_mode.vim   Mode: open buffer list with status indicators
-├── files_mode.vim     Mode: project file tree with labels
-├── git_mode.vim       Mode: git status with stage/unstage/diff
-├── symbols_mode.vim   Mode: ctags symbol outline
-└── outline_mode.vim   Mode: buffer-local outline (folds, sections)
+var ws = {
+  pane_bufnr: -1,
+  pane_width: 40,
+  current_mode: 'file',
+  selected_line: 1,
+  nav_offset: 0,
+  project: {
+    name: '',
+    root: '',
+    display_root: '',
+    included_dirs: [],
+    included_files: [],
+    excluded_dirs: [],
+    excluded_files: [],
+    vproj_file: '',
+  },
+}
 ```
+- `ws` owns all runtime state. Nothing outside it may hold a diverging copy (ADR-005).
+- Every function that changes `ws` is a Command. Every function that reads `ws` is a Query. Never both (ADR-006).
+- Every Command emits exactly one named event on completion (ADR-007).
 
-### Interface Contracts
+## Build Phases
 
-Each module exports a known set of public functions. Internal helpers are
-script-local (`def` without `export`). No module may call another module's
-internal functions.
+### Phase 1: Pane Toggle
+- `vproj#PaneToggle()` — if pane is open (bufwinnr > 0) → close; else → open
+- `vproj#PaneOpen()` — `topleft vert new`, set buftype=nofile bufhidden=wipe nobuflisted noswapfile nomodifiable nowrap cursorline winfixwidth, `keepalt file VPROJ`, `vert resize` to `ws.pane_width`, store bufnr in `ws.pane_bufnr`
+- `vproj#PaneClose()` — close pane window, reset `ws.pane_bufnr` to -1
+- `vproj#IsPaneVisible()` — Query: returns bufwinnr(ws.pane_bufnr) > 0
+- `vproj#DefineHighlights()` — VprojModeCurrent highlight group (bold,underline), idempotent via hlexists()
+- Events emitted: `pane_opened`, `pane_closed`
+- **Test:** F4 opens empty 40-col sidebar on left, F4 again closes it, `:VprojToggle` does the same
 
-| Module | Exports | Dependencies |
-|--------|---------|--------------|
-| `config.vim` | `Setup()`, `Get()` | none |
-| `events.vim` | `Emit()`, `On()` | none |
-| `cache.vim` | `New()`, `Get()`, `Set()`, `Invalidate()` | none |
-| `sidebar.vim` | `Open()`, `Close()`, `Toggle()`, `IsOpen()` | renderer |
-| `labels.vim` | `Generate()`, `Lookup()` | none |
-| `renderer.vim` | `Render()`, `Clear()` | none |
-| `handler.vim` | `OnKey()`, `OnModeKey()` | labels, navigation, modes |
-| `modes.vim` | `Register()`, `Switch()`, `GetCurrent()` | none |
-| `project.vim` | `FindRoot()`, `ScanFiles()` | cache |
-| `navigation.vim` | `Dispatch()` | labels |
-| `git.vim` | `Status()`, `StageFile()`, `UnstageFile()`, `DiffFile()` | none |
-| `workspace.vim` | `SaveWorkspace()`, `RestoreWorkspace()` | persistence, project |
-| `persistence.vim` | `Setup()`, `Save()`, `Restore()`, `Clear()`, `ClearAll()` | none |
-| `*_mode.vim` | Mode interface (`refresh`, `render`, `select`, `actions`) | modes, renderer |
+### Phase 2: Mode Menu Display
+- `vproj#Render()` — setbufvar modifiable=1 → deletebufline all → BuildModeMenu + separator line → setbufline → setbufvar modifiable=0. Full redraw per ADR-011 Option A.
+- `vproj#BuildModeMenu()` — `[F]ile  [D]oc  [C]ode` joined with two spaces, padded to pane_width with trailing spaces
+- Separator: `repeat('─', ws.pane_width)` on line 2
+- `vproj#HighlightCurrentMode()` — matchadd('VprojModeCurrent', pattern) for the active mode label on the menu line. Cleared via clearmatches() before re-render.
+- `vproj#SetupPaneKeymaps()` — buffer-local nnoremap in the pane buffer:
+  - `<Down>/j` → `vproj#SelectNext()`, `<Up>/k` → `vproj#SelectPrev()` (wrapping, skip separator line)
+  - `<Right>` → `vproj#PaneGrow()`, `<Left>` → `vproj#PaneShrink()` (clamped 20–80)
+  - `<CR>` → `vproj#SelectCurrent()` (dispatch based on cursor position in menu)
+  - `<F4>/q` → `vproj#PaneClose()`
+  - Block edit keys: i a o O r R c C d D x s p P u U all mapped to `<Nop>`
+- `vproj#SwitchMode(key)` — set `ws.current_mode`, re-render, emit `mode_changed`
+- `vproj#SelectCurrent()` — if on menu line (line 1), determine mode under cursor by column position and call `vproj#SwitchMode()`
+- `vproj#SetupAutocommands()` — BufWipeout autocmd on pane buffer → `vproj#HandleBufWipeout()` resets state
+- `vproj#PaneGrow()` / `vproj#PaneShrink()` — adjust `ws.pane_width` ±1, call `win_execute(wid, 'vert resize ' .. width)`, re-render, emit `width_changed`
+- **Test:** F4 opens pane showing mode menu line + separator. Up/Down wrap between lines. Left/Right resize. Enter on `[F]ile` vs `[D]oc` vs `[C]ode` changes highlight. F4 closes. Reopen remembers width.
 
-## Development Stages
+### Phase 3: .vproj File I/O
+- `vproj#FindVprojFile(dir)` — glob `*.vproj` in dir, traverse parents, stop at `/home` or `/`. Returns path or empty string.
+- `vproj#ParseVprojFile(path)` — readfile, line-oriented parser. State machine matching the format in ADR-008:
+  - `Project Name: ...` → `ws.project.name`
+  - `Project Root: ...` → `ws.project.root`
+  - `Included Directories:` → next lines are dirs until next section
+  - `Included Files:` → next lines are files
+  - `Excluded Directories:` → next lines are dirs
+  - `Excluded Files:` → next lines are files
+  - Returns project dict. Malformed file → return empty dict with error logged.
+- `vproj#WriteVprojFile(project)` — build line list from project dict, writefile(). Atomic: write to temp file, rename over target.
+- `vproj#PromptCreateProject(dir)` — confirm("No .vproj found, create one? y/N"). If yes → input("Create project: ", fnamemodify(dir, ':t')). If non-empty → create .vproj, call ParseVprojFile, re-render.
+- Wire into `vproj#PaneOpen()`: after opening pane, call FindVprojFile. If found → parse → set `ws.project`. If not found → PromptCreateProject.
+- Events emitted: `project_loaded`, `project_created`
+- **Test:** Create a .vproj manually. F4 → confirm parsed (echo ws.project.name). Delete .vproj, F4 in a dir → prompted to create. Create flow writes valid .vproj.
 
-### Stage 0 — Foundation (skeleton + contracts)
-**Goal:** All files exist with correct `vim9script` header, module-level vars,
-exported function signatures, and doc comments. Zero implementation.
-Functions return stub values (empty dicts, false, empty strings).
-**Validation gate:** Every file passes `:source` without errors.
+### Phase 4: File Mode
+- `vproj#FileModeGetItems()` — Query. readdir(current_dir), filter out `.` and `..`. Classify dirs first (sorted), then files (sorted). For each: `{type, name, path, size, nav_key: ''}`. File sizes via getfsize(), formatted as 5-char right-aligned (e.g. ` 324K`, `  45M`, ` 1023`).
+- `vproj#RenderFileMode()` — BuildModeMenu + separator + `..` line + item list + page nav row. Each item line: `a  src/` with nav indicator (cyan), one space, name, right-padded to width minus info column. Info column right-aligned in green.
+- Status label: current path, right-aligned if it doesn't fit within pane width.
+- `vproj#FileModeEnter()` — dispatch:
+  - `..` → `vproj#NavigateUp()` (cd to parent, re-render FileModeGetItems)
+  - Dir → `vproj#NavigateInto(name)` (cd into dir, re-render)
+  - File → `vproj#OpenFile(path)` (switch to existing buffer or edit, close pane)
+  - Binary file → echo status message, don't open
+- Ctrl-K → NavigateUp, Ctrl-J → NavigateInto first subdir (no-op if none)
+- F1 → toggle info column (set a flag in ws, re-render without the info column)
+- Event emitted: `file_opened`, `root_changed`
+- **Test:** F4 → File mode shows dir listing with `..` at top. Enter on dir descends. Enter on .. ascends. Enter on file opens it in previous window. Ctrl-K/J work. F1 toggles size column.
 
-### Stage 1 — Config & Events
-**Files:** `config.vim`, `events.vim`
-**What:** Configuration validation/merge and the event bus.
-**Tests:** `config_spec.vim`, `events_spec.vim`
-**Validation checkpoints:**
-- `config.Setup()` rejects non-dict, missing required keys, wrong types
-- `events.Emit()` no-ops when no listeners registered (no crash)
-- `events.On()` validates callback is a Funcref
+### Phase 5: Document Mode
+- `vproj#DocModeGetItems()` — Query. getbufinfo() → filter listed buffers. For each: `{type, name, path, bufnr, flags, linecount, nav_key: ''}`. Flags from buffer attributes: `%` (current), `#` (alternate), `a` (active), `h` (hidden), `+` (modified), `-` (modifiable off), `=` (readonly). Linecount from getbufinfo().linecount (only valid when loaded).
+- `vproj#RenderDocMode()` — same chrome as File mode. Info column shows flags + line count.
+- `vproj#DocModeEnter()` — `execute 'buffer ' .. bufnr`, close pane. Emit `buffer_switched`.
+- `vproj#SwitchMode(key)` updated — Shift-D switches to doc mode, calls `vproj#DocModeGetItems()` + `vproj#RenderDocMode()`
+- **Test:** Open a few buffers. Shift-D → shows them with flags. Modified buffer shows `+`. Enter switches. Current buffer shows `%`.
 
-### Stage 2 — Cache & Project
-**Files:** `cache.vim`, `project.vim`
-**What:** TTL cache with weak references, project root detection, file scanning.
-**Tests:** `cache_spec.vim`, `project_spec.vim` (if test file exists)
-**Validation checkpoints:**
-- `cache.New()` validates TTL is a positive number
-- `project.FindRoot()` handles non-directories, non-git repos, missing ctags
-- File scanner handles unreadable directories, symlink loops (depth cap)
-- All paths validated before `readdir()`/`glob()` calls
+### Phase 6: Navigation Indicators
+- `vproj#AssignNavIndicators(items, offset)` — build list of 58 keys: `a-z` (26) + `A-Z` minus `F/D/C` (23) + `1-9` (9). Apply starting from offset. Items beyond position 57 get blank indicator. Return items with `nav_key` set.
+- BuildItemList updated: first assign `*` to project name row, no indicator to `..` row, then call AssignNavIndicators for remaining items. Apply `ws.nav_offset`.
+- `vproj#SetupNavKeymaps()` — buffer-local nnoremap for every lowercase letter a-z, every uppercase A-Z minus F/D/C, every digit 1-9. Each maps to `vproj#SelectByNavKey(key)`. Also `*` → select project name, `.` → NavigateUp.
+- `vproj#SelectByNavKey(key)` — find item with matching nav_key in current item list, move cursor to its line, set ws.selected_line. If no match, no-op.
+- `vproj#ShiftNavDown()` (TAB) — if total navigable items ≤ 58, no-op. Otherwise increment ws.nav_offset by 58, wrap to 0 if past end. Re-assign indicators, re-render. Emit `nav_shifted`.
+- `vproj#ShiftNavUp()` (Shift-TAB) — reverse: decrement ws.nav_offset by 58, wrap to last page if negative.
+- Page navigation: Ctrl-N/Ctrl-P adjust a page_offset (visual page, independent of nav_offset). Page nav row shown as last line: `>>> Page 1/4 CTRL-N CTRL-P <<<`. Page height = pane height - 3 (menu + separator + page row, with page row only shown when needed).
+- **Test:** Dir with 100+ files. First 58 get a-z, A-Z, 1-9. TAB relabels next 58. Shift-TAB goes back. Wrapping works. Paging and relabeling are independent — Ctrl-N pages through items, TAB shifts labels.
 
-### Stage 3 — Labels & Renderer
-**Files:** `labels.vim`, `renderer.vim`
-**What:** DSN label generation (4 tiers + overflow), virtual buffer rendering.
-**Tests:** `labels_spec.vim`
-**Validation checkpoints:**
-- Label generator handles 0 items, 1 item, >36 items (overflow)
-- Renderer validates bufnum before `setbufline()`/`matchaddpos()`
-- Renderer handles empty input list without crash
-- Config label tiers validated (each tier is a string, no duplicate chars)
+### Phase 7: Code Mode + Include/Exclude
+- `vproj#CodeModeGetItems()` — Query. Build tree relative to `ws.project.display_root`. For each dir/file in current root: check against project.included_dirs/files and project.excluded_dirs/files. Included items shown normally. Non-included items listed last with parentheses around name.
+- Project name displayed on line 2 (below menu). `.. [dir name]` on line 3 for parent nav (within project root).
+- `vproj#CodeModeEnter()` — dispatch: directory → set display_root, re-render. `..` → ascend display_root (stop at project root). File → open.
+- `vproj#IncludeItem()` (Shift+I) — if selected item is not in included lists, add to included_dirs or included_files (path relative to project root). Remove from excluded if present. Save .vproj. Re-render. Emit `item_included`.
+- `vproj#ExcludeItem()` (Shift+X) — add to excluded_dirs or excluded_files. Remove from included if present. Save .vproj. Re-render. Emit `item_excluded`.
+- `vproj#RenameProject()` — `*` key selects project name. Enter → input("Rename project: ", ws.project.name). If non-empty and changed → rename .vproj file, update ws.project.name, re-render. Emit `project_renamed`.
+- **Test:** Shift-C → project tree. Non-included items in parens. I on a paren item includes it (moves to normal). X on an included item excludes it (moves to parens). `*` + Enter renames. `..` navigates up. Dir descends change root.
 
-### Stage 4 — Sidebar & Handler
-**Files:** `sidebar.vim`, `handler.vim`
-**What:** Window management (split, resize, toggle), key dispatch.
-**Tests:** Integration with renderer + labels
-**Validation checkpoints:**
-- `sidebar.Open()` validates width is a positive integer
-- `sidebar.Open()` handles already-open (no double split)
-- Handler validates key before dispatch (no crash on unknown keys)
-- Handler routes mode hotkeys to `modes.Switch()`, DSN keys to `navigation.Dispatch()`
+### Phase 8: Configuration + Polish
+- `vproj#ReadConfig()` — read environment variables:
+  - `VPROJ_pane-width_default` | `VPROJ_pane-width_file` | `VPROJ_pane-width_doc` | `VPROJ_pane-width_code` — each parsed as number, clamped 20–80, defaults to 40
+  - `VPROJ_mode-display-location` — "TOP" or "BOTTOM" (case-insensitive, takes `t`/`b` prefix). Controls whether mode menu renders on line 1 or last line.
+- `vproj#ApplyModeWidth(mode)` — when switching mode, apply mode-specific width from env vars (fall back to default)
+- Handle pane deleted externally: before any pane operation, check bufwinnr(ws.pane_bufnr) and bufexists(). If buffer wiped externally, reset ws.pane_bufnr.
+- Handle missing parent window: when closing pane, verify the window we're returning to still exists
+- Filter out `.` and `..` from all readdir() calls
+- Prevent duplicate entries in project include/exclude lists
+- Graceful handling of malformed .vproj files (return partial dict, log warning)
+- Add `exists('*vproj#...')` guards where cross-module calls happen (for future file split)
 
-### Stage 5 — Modes Registry & Navigation
-**Files:** `modes.vim`, `navigation.vim`
-**What:** Mode registration/switching, label→action dispatch.
-**Tests:** `modes_spec.vim`, `navigation_spec.vim`
-**Validation checkpoints:**
-- `modes.Register()` validates mode dict has required fields (name, key, render, select)
-- `modes.Switch()` handles unknown mode key gracefully (no-op, not crash)
-- `navigation.Dispatch()` validates label exists in label_map before acting
-- Navigation handles label_map reload (stale labels after mode switch)
-
-### Stage 6 — Git Adapter
-**Files:** `git.vim`
-**What:** Git porcelain parser, status model extraction.
-**Tests:** `git_mode_spec.vim` (integration)
-**Validation checkpoints:**
-- Git status parser handles empty repo, detached HEAD, merge conflicts
-- Parser validates `git status --porcelain` output line format before indexing
-- All git command calls wrapped in try/catch with fallback to empty status
-- Handles git-not-installed (returns empty, not crash)
-
-### Stage 7 — Mode Implementations
-**Files:** `buffers_mode.vim`, `files_mode.vim`, `git_mode.vim`, `symbols_mode.vim`, `outline_mode.vim`
-**What:** Each mode implements the Mode interface (`refresh`, `render`, `select`, `actions`).
-**Tests:** `buffers_mode_spec.vim`, `files_mode_spec.vim`, `git_mode_spec.vim`, `symbols_mode_spec.vim`, `outline_mode_spec.vim`
-**Validation checkpoints:**
-- Every mode's `refresh()` handles no data (empty project, no buffers, no git)
-- Every mode's `render()` handles empty refresh results
-- Every mode's `select()` validates the label exists before acting
-- `files_mode` handles unreadable directories (skip, don't crash)
-- `symbols_mode` handles missing ctags (graceful degradation)
-- `git_mode` actions (stage/unstage/diff) validate file path before shelling out
-
-### Stage 8 — Persistence & Workspace
-**Files:** `persistence.vim`, `workspace.vim`
-**What:** Session JSON I/O with atomic writes, workspace save/restore bundle.
-**Tests:** `persistence_spec.vim`, `workspace_spec.vim`
-**Validation checkpoints:**
-- `persistence.Save()` validates state dict before `json_encode()`
-- `persistence.Restore()` validates JSON schema before acting on any field
-- `persistence.Restore()` caps buffer count (MAX_RESTORE_BUFFERS = 50)
-- `persistence.Restore()` validates each buffer path starts with `/` or `~`
-- `persistence.Clear()`/`ClearAll()` validate filepath before `delete()`
-- `persistence.Setup()` validates cfg is a dict, workspace sub-fields have correct types
-- All environment variable reads (`XDG_CACHE_HOME`) fall back gracefully when unset/empty/invalid
-- `workspace.RestoreWorkspace()` validates persisted window_layout before `:execute`
-
-### Stage 9 — Init & Integration
-**Files:** `init.vim`, `plugin/vproj.vim`
-**What:** Entry point wiring, user commands (`:Vproj`), autocmd setup.
-**Tests:** `integration_spec.vim`
-**Validation checkpoints:**
-- `init.Setup()` validates entire config dict before dispatching to subsystems
-- User commands validate arguments before forwarding
-- All autocmds have guard conditions (don't fire in special buffers)
-- Graceful degradation when optional dependencies (ctags, git) are missing
-
-## Test Gate
-
-Before marking any stage complete:
-
-```bash
-vim -N -u NONE -S tests/run_tests.vim
-```
-
-Must exit 0 with no failures. Each stage adds its own spec files to the test
-suite. A stage is not complete until its tests pass.
-
-## Input Validation Patterns
-
-These patterns must appear at every external-data boundary:
-
-```vim
-# 1. Type check at function entry
-def SomeFunc(data: any): bool
-  if type(data) != v:t_dict
-    return false
-  endif
-  # ... proceed with validated data
-enddef
-
-# 2. Environment variable with fallback
-def GetDir(): string
-  var raw: string = getenv('SOME_VAR')
-  if empty(raw) || raw ==# ''
-    return expand('~') .. '/.local/share/default'
-  endif
-  var expanded: string = expand(raw)
-  if empty(expanded) || expanded !~# '^/\|^~/'
-    return expand('~') .. '/.local/share/default'
-  endif
-  return expanded
-enddef
-
-# 3. JSON schema validation before field access
-var decoded: any = json_decode(raw)
-if type(decoded) != v:t_dict
-  return false
-endif
-var state: dict<any> = decoded
-if !has_key(state, 'version') || type(state.version) != v:t_number
-  return false
-endif
-
-# 4. Path validation before filesystem operations
-if filepath !~# '/expected_dir/expected_prefix_'
-  return
-endif
-if filereadable(filepath)
-  delete(filepath)
-endif
-
-# 5. Bounded iteration over external data
-const MAX_ITEMS: number = 50
-var count: number = 0
-for item in external_list
-  if count >= MAX_ITEMS | break | endif
-  if type(item) == v:t_string && item != '' && item =~# '^[/~]'
-    # ... process item
-    count += 1
-  endif
-endfor
-```
+## Verification
+After each phase:
+1. `vim --clean --cmd 'set rtp+=src' --cmd 'runtime! plugin/vproj.vim'`
+2. Press F4, test the phase's specific behavior
+3. `:messages` — should be clean, no errors
+4. All prior phase behavior must still work (no regressions)

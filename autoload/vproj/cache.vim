@@ -7,12 +7,12 @@ vim9script
 export var Caches: dict<any> = {}
 
 # Create a named cache with specified TTL
-export def Create(name: string, ttl_seconds: number)
+export def Create(name: string, ttl_seconds: number): void
   Caches[name] = {ttl: ttl_seconds, entries: {}}
 enddef
 
 # Store a value with expiration
-export def Set(name: string, key: string, value: any)
+export def Set(name: string, key: string, value: any): void
   if !Caches->has_key(name)
     return
   endif
@@ -41,7 +41,7 @@ export def Get(name: string, key: string): any
 enddef
 
 # Clear all entries in a named cache
-export def Invalid(name: string)
+export def Invalid(name: string): void
   if Caches->has_key(name)
     Caches[name].entries = {}
   endif
