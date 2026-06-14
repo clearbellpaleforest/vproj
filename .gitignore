@@ -1,26 +1,4 @@
-# Vim
 *.swp
 *.swo
 *~
-.netrwhist
-
-# Lua
-*.luac
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Cache / State
-.cache/
-*.log
-
-# Test artifacts
-tests/.test_results/
-
-# Claude local config
 .claude/
-vim-nox.tar.gz
-
-# MkDocs build output
-site/

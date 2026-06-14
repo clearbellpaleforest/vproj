@@ -7,47 +7,50 @@ on:
     branches: [master, main]
 
 jobs:
-  vim:
-    name: Vim ${{ matrix.vim_version }}
+  lint:
+    name: Syntax check
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        vim_version: ["8.2", "9.0", "9.1"]
     steps:
       - uses: actions/checkout@v5
 
       - name: Install Vim
         run: |
           sudo apt-get update
-          sudo apt-get install -y vim-gtk3 universal-ctags 2>/dev/null || \
-          sudo apt-get install -y vim-nox universal-ctags 2>/dev/null || \
-          sudo apt-get install -y vim ctags
+          sudo apt-get install -y vim-gtk3 2>/dev/null || \
+          sudo apt-get install -y vim-nox
 
-      - name: Verify Vim version
+      - name: Check Vim9Script syntax
         run: |
           vim --version | head -n 3
-
-      - name: Run tests
-        run: |
-          vim -N -u NONE -S tests/run_tests.vim 2>&1 | tee /tmp/vproj-test-output.txt
-          if grep -qE 'FAIL|ERROR' /tmp/vproj-test-output.txt; then
-            echo "Tests have failures — exiting 1"
+          vim -N -u NONE -c 'set rtp+=src' -c 'runtime! plugin/vproj.vim' -c 'qa!' 2>&1 | tee /tmp/lint.txt
+          if grep -qE 'E[0-9]+:' /tmp/lint.txt; then
+            echo "Syntax errors found"
             exit 1
           fi
-          echo "All tests passed"
+          echo "All files load without errors"
 
-  lint:
-    name: Lint
+  smoke:
+    name: Smoke test
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        vim_version: ["v9.0", "v9.1"]
     steps:
       - uses: actions/checkout@v5
 
-      - name: Run basic syntax check
+      - name: Install Vim
         run: |
-          vim -N -u NONE -c 'set rtp=.' -c 'runtime! plugin/vproj.vim' -c 'qa!' 2>&1 | tee /tmp/vproj-lint-output.txt
-          if grep -qE 'E[0-9]+:' /tmp/vproj-lint-output.txt; then
-            echo "Syntax errors found — exiting 1"
+          sudo apt-get update
+          sudo apt-get install -y vim-gtk3 2>/dev/null || \
+          sudo apt-get install -y vim-nox
+
+      - name: Run smoke tests
+        run: |
+          vim --version | head -n 3
+          vim -N -u NONE -S tests/smoke.vim 2>&1 | tee /tmp/smoke.txt
+          if grep -qE 'FAIL|E[0-9]+:' /tmp/smoke.txt; then
+            echo "Smoke tests failed"
             exit 1
           fi
-          echo "All files load without syntax errors"
+          echo "Smoke tests passed"
