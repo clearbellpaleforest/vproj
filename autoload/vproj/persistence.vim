@@ -33,7 +33,7 @@ def Hash(str: string): string
   return printf('%x', h)
 enddef
 
-# ResolveCacheHome returns the base cache directory for nam state files,
+# ResolveCacheHome returns the base cache directory for vproj state files,
 # reading $XDG_CACHE_HOME and falling back to ~/.cache when unset or empty.
 # The returned path is validated: it must expand to a plausible directory
 # path. If $XDG_CACHE_HOME is set but empty or non-absolute, the fallback
@@ -55,8 +55,8 @@ def ResolveCacheHome(): string
 enddef
 
 # ValidateSessionPath guards Clear/ClearAll against accidentally deleting
-# files outside the expected nam cache directory. Returns true if the given
-# filepath is under a valid nam session directory (has '/vproj/session_' in it
+# files outside the expected vproj cache directory. Returns true if the given
+# filepath is under a valid vproj session directory (has '/vproj/session_' in it
 # and the base directory exists), false otherwise.
 def ValidateSessionPath(filepath: string): bool
   if empty(filepath) || filepath !~# '/vproj/session_'
