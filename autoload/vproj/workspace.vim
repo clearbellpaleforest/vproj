@@ -181,6 +181,10 @@ def ValidateWorkspaceDir(dir: string): bool
   if empty(expanded) || expanded !~# '^/'
     return false
   endif
+  # Reject path traversal and glob metacharacters (mirrors persistence.vim)
+  if expanded =~# '/\.\./\|/\.\.$\|/\./\|/\.$\|[\*\?\[\]]'
+    return false
+  endif
   return true
 enddef
 

@@ -26,6 +26,9 @@ enddef
 # Register adds a mode to the registry.
 # The mode dict must have a string 'key' field.
 export def Register(mode: dict<any>)
+  if !has_key(mode, 'key') || type(mode.key) != v:t_string || empty(mode.key)
+    return
+  endif
   Modes[mode.key] = mode
   ModeOrder->add(mode.key)
 enddef

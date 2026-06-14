@@ -42,7 +42,7 @@ export def Attach(buf: number)
   setbufvar(buf, '&modifiable', 0)
   for ch in TierChars
     # Skip characters that would break the mapping template syntax
-    if ch =~# '["\|<>]'
+    if ch =~# '["\|<>]' || ch =~# '[[:cntrl:]]'
       continue
     endif
     execute $'nnoremap <buffer> <nowait> {ch} <Cmd>call vproj#handler#Handle("{ch}")<CR>'

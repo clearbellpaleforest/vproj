@@ -19,8 +19,8 @@ export def GetStatus(): dict<any>
 
   var items: list<dict<any>> = []
   for line in lines
-    # Minimum line length: 2 chars XY + 1 space separator.
-    if line->len() < 3
+    # Minimum line length: 2 chars XY + 1 space + ≥1 filename char.
+    if line->len() < 4
       continue
     endif
 

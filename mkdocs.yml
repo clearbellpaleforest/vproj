@@ -1,0 +1,39 @@
+site_name: Vproj
+site_description: Direct Selection Navigation for Vim
+repo_url: https://github.com/clearbellpaleforest/vproj
+repo_name: clearbellpaleforest/vproj
+edit_uri: edit/main/docs/
+
+theme:
+    name: material
+    palette:
+        scheme: slate
+        primary: indigo
+        accent: indigo
+    features:
+        - navigation.instant
+        - navigation.tracking
+        - navigation.expand
+        - navigation.indexes
+        - content.code.copy
+
+plugins:
+    - search
+
+markdown_extensions:
+    - admonition
+    - pymdownx.highlight:
+          anchor_linenums: true
+    - pymdownx.superfences
+    - pymdownx.inlinehilite
+    - toc:
+          permalink: true
+
+exclude_docs: |
+    superpowers/
+
+nav:
+    - Home: index.md
+    - Architecture:
+          - Overview: architecture/overview.md
+          - ADRs: adr/index.md

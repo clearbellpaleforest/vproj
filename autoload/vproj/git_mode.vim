@@ -50,24 +50,18 @@ enddef
 export def Refresh()
   var status = vproj#git#GetStatus()
 
-  if status == v:null
+  if type(status) != v:t_dict || !get(status, 'ok', false)
     Items = [{name: '(not a git repository)', path: '', category: 'error'}]
     return
   endif
 
   Items = []
 
-  for entry in status->get('staged', [])
-    add(Items, {name: 'S ' .. entry.file, path: entry.file, category: 'staged'})
-  endfor
-  for entry in status->get('unstaged', [])
-    add(Items, {name: 'M ' .. entry.file, path: entry.file, category: 'unstaged'})
-  endfor
-  for entry in status->get('untracked', [])
-    add(Items, {name: '? ' .. entry.file, path: entry.file, category: 'untracked'})
-  endfor
-  for entry in status->get('conflicts', [])
-    add(Items, {name: 'C ' .. entry.file, path: entry.file, category: 'conflict'})
+  for entry in status->get('items', [])
+    var prefix: string = entry->get('prefix', '?')
+    var path: string = entry->get('path', '')
+    var name: string = prefix .. ' ' .. path
+    add(Items, {name: name, path: path, category: entry->get('category', 'unknown')})
   endfor
 enddef
 
@@ -166,8 +160,8 @@ export def ShowDiffItem(label: string): bool
   setbufline(buf, 1, diff_lines)
 
   # Open the scratch buffer in a new split window.
-  exe 'belowright split'
-  exe 'buffer ' .. buf
+  execute 'belowright split'
+  execute 'buffer ' .. buf
 
   return true
 enddef

@@ -100,8 +100,12 @@ export def ScanFiles(root: string, opts: dict<any> = {}): list<dict<any>>
     endfor
 
     # Sort dirs by name, then files by name.
-    sort(dirs, (a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
-    sort(files, (a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
+    sort(dirs, (a, b) => a.name < b.name ? -1
+          \ : a.name > b.name ? 1
+          \ : 0)
+    sort(files, (a, b) => a.name < b.name ? -1
+          \ : a.name > b.name ? 1
+          \ : 0)
 
     for d in dirs
       if len(result) >= max_files

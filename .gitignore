@@ -21,3 +21,6 @@ tests/.test_results/
 # Claude local config
 .claude/
 vim-nox.tar.gz
+
+# MkDocs build output
+site/

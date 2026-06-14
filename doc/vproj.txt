@@ -1,4 +1,4 @@
-*vproj.txt*    Nam - Direct Selection Navigation for Vim
+*vproj.txt*    Vproj — Direct Selection Navigation for Vim
 
 ==============================================================================
 CONTENTS                                                         *vproj* *vproj-contents*
@@ -17,7 +17,7 @@ CONTENTS                                                         *vproj* *vproj-
 ==============================================================================
 1. INTRODUCTION                                                 *vproj-intro*
 
-Nam is a Vim plugin that replaces cursor-based tree navigation with
+Vproj is a Vim plugin that replaces cursor-based tree navigation with
 **Direct Selection Navigation (DSN)** — single-keystroke file access
 that eliminates cursor traversal.
 
@@ -28,7 +28,7 @@ No cursor movement, no tree expansion, no search.
 The sidebar is a command palette disguised as an IDE panel. Selection
 cost is O(1) regardless of list size.
 
-Nam is written in pure VimScript (vim9script). No +lua, no Python,
+Vproj is written in pure VimScript (vim9script). No +lua, no Python,
 no external dependencies required. Works on Vim 8.2+.
 
 ==============================================================================
@@ -50,14 +50,14 @@ Quick install:
 
 Manual (Vim packages):
 >   git clone https://github.com/clearbellpaleforest/vproj.git \
->     ~/.vim/pack/bundle/start/nam
+>     ~/.vim/pack/bundle/start/vproj
 
 vim-plug:
 >   Plug 'clearbellpaleforest/vproj'
 
 Built-in packages:
 >   git submodule add https://github.com/clearbellpaleforest/vproj.git \
->     pack/bundle/start/nam
+>     pack/bundle/start/vproj
 
 ==============================================================================
 4. QUICK START                                              *vproj-quickstart*
@@ -232,7 +232,7 @@ When the sidebar is open:
 ==============================================================================
 10. ARCHITECTURE                                          *vproj-architecture*
 
-Nam is a pure VimScript (vim9script) plugin.
+Vproj is a pure VimScript (vim9script) plugin.
 
     autoload/vproj/
     ├── init.vim              Setup(), Toggle(), Open(), Close()
