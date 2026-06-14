@@ -1,4 +1,4 @@
-# Contributing to Nam
+# Contributing to Vproj
 
 ## Development Setup
 
@@ -11,7 +11,7 @@
 ### Clone and test
 
 ```bash
-git clone https://github.com/clearbellpaleforest/nam.git
+git clone https://github.com/clearbellpaleforest/vproj.git
 cd nam
 
 # Run the full test suite

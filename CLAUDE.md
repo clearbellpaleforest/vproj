@@ -109,7 +109,7 @@ Beyond 36 items: `aa`, `ab`, `ac` ... (two-char labels, EasyMotion-style).
 ### Selection Model
 
 - **Existing trees:** O(n) cursor traversal
-- **Nam:** O(1) label lookup via `label_map[label] = item`
+- **Vproj:** O(1) label lookup via `label_map[label] = item`
 - Subsequent open: standard Vim buffer switching (fast but not part of selection)
 
 ### Key Handler

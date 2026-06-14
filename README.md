@@ -7,9 +7,9 @@
 
 ---
 
-## What is Nam?
+## What is Vproj?
 
-Nam replaces cursor-based tree navigation with **Direct Selection Navigation (DSN)** — single-keystroke file access that eliminates cursor traversal. Every file, buffer, symbol, and git status entry is addressed by a keyboard label in a flat sidebar. Press the label, open the file. No cursor movement, no tree expansion, no search.
+Vproj replaces cursor-based tree navigation with **Direct Selection Navigation (DSN)** — single-keystroke file access that eliminates cursor traversal. Every file, buffer, symbol, and git status entry is addressed by a keyboard label in a flat sidebar. Press the label, open the file. No cursor movement, no tree expansion, no search.
 
 The sidebar is a command palette disguised as an IDE panel. Selection cost is O(1) regardless of list size.
 
@@ -80,13 +80,13 @@ All features degrade gracefully when optional dependencies are absent.
 ### Manual
 
 ```bash
-git clone https://github.com/clearbellpaleforest/nam.git ~/.vim/pack/bundle/start/nam
+git clone https://github.com/clearbellpaleforest/vproj.git ~/.vim/pack/bundle/start/vproj
 ```
 
 ### vim-plug
 
 ```vim
-Plug 'clearbellpaleforest/nam'
+Plug "clearbellpaleforest/vproj"
 ```
 
 ---
@@ -264,7 +264,7 @@ Selecting an entry jumps the cursor to that line.
 
 ## Architecture
 
-Nam is built around a decoupled, event-driven vim9script architecture.
+Vproj is built around a decoupled, event-driven vim9script architecture.
 
 ```
 autoload/vproj/

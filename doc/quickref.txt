@@ -1,4 +1,4 @@
-*nam-quickref.txt*  Nam quick reference — Direct Selection Navigation for Vim
+*nam-quickref.txt*  Vproj quick reference — Direct Selection Navigation for Vim
 
 ==============================================================================
 COMMANDS                                               *nam-quickref-commands*
@@ -105,7 +105,7 @@ NAVIGATION FLOW                                       *nam-quickref-navigation*
                     check hotkey ────┤──> switch mode or noop
 
   Traditional tree:   move cursor -> expand -> select (O(n))
-  Nam DSN:            press key -> open                  (O(1))
+  Vproj DSN:            press key -> open                  (O(1))
 
 ==============================================================================
 TROUBLESHOOTING                                     *nam-quickref-troubleshoot*

@@ -49,14 +49,14 @@ Quick install:
 >   curl -fsSL https://github.com/clearbellpaleforest/vproj/raw/main/install.sh | bash
 
 Manual (Vim packages):
->   git clone https://github.com/clearbellpaleforest/nam.git \
+>   git clone https://github.com/clearbellpaleforest/vproj.git \
 >     ~/.vim/pack/bundle/start/nam
 
 vim-plug:
->   Plug 'clearbellpaleforest/nam'
+>   Plug 'clearbellpaleforest/vproj'
 
 Built-in packages:
->   git submodule add https://github.com/clearbellpaleforest/nam.git \
+>   git submodule add https://github.com/clearbellpaleforest/vproj.git \
 >     pack/bundle/start/nam
 
 ==============================================================================
