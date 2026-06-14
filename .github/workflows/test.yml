@@ -1,0 +1,53 @@
+name: Tests
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  vim:
+    name: Vim ${{ matrix.vim_version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        vim_version: ["8.2", "9.0", "9.1"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Vim
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y vim-gtk3 universal-ctags 2>/dev/null || \
+          sudo apt-get install -y vim-nox universal-ctags 2>/dev/null || \
+          sudo apt-get install -y vim ctags
+
+      - name: Verify Vim version
+        run: |
+          vim --version | head -n 3
+
+      - name: Run tests
+        run: |
+          vim -N -u NONE -S tests/run_tests.vim 2>&1 | tee /tmp/nam-test-output.txt
+          if grep -qE 'FAIL|ERROR' /tmp/nam-test-output.txt; then
+            echo "Tests have failures — exiting 1"
+            exit 1
+          fi
+          echo "All tests passed"
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run basic syntax check
+        run: |
+          vim -N -u NONE -c 'set rtp=.' -c 'runtime! plugin/nam.vim' -c 'qa!' 2>&1 | tee /tmp/nam-lint-output.txt
+          if grep -qE 'E[0-9]+:' /tmp/nam-lint-output.txt; then
+            echo "Syntax errors found — exiting 1"
+            exit 1
+          fi
+          echo "All files load without syntax errors"
