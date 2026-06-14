@@ -4,12 +4,12 @@
 # SECURITY: Do NOT pipe this script directly through bash from the internet.
 # Instead, download it first, inspect it, then run:
 #
-#   wget https://github.com/clearbellpaleforest/nam/raw/main/install.sh
+#   wget https://github.com/clearbellpaleforest/vproj/raw/main/install.sh
 #   chmod +x install.sh
 #   ./install.sh
 #
 # Or clone the repo and run from source:
-#   git clone https://github.com/clearbellpaleforest/nam
+#   git clone https://github.com/clearbellpaleforest/vproj
 #   cd nam && bash install.sh
 #
 # Usage:
@@ -26,34 +26,34 @@
 
 set -euo pipefail
 
-PLUGIN_NAME="nam"
+PLUGIN_NAME="vproj"
 PLUGIN_REPO="https://github.com/clearbellpaleforest/${PLUGIN_NAME}"
 VIM_PACK="${HOME}/.vim/pack/bundle/start/${PLUGIN_NAME}"
 NVIM_PACK="${HOME}/.local/share/nvim/site/pack/bundle/start/${PLUGIN_NAME}"
 
 # All files that must exist for a valid installation
 REQUIRED_FILES=(
-    lua/nam/init.lua
-    lua/nam/config.lua
-    lua/nam/core/navigation.lua
-    lua/nam/core/project.lua
-    lua/nam/core/persistence.lua
-    lua/nam/adapters/compat.lua
-    lua/nam/adapters/git.lua
-    lua/nam/adapters/lsp.lua
-    lua/nam/adapters/treesitter.lua
-    lua/nam/modes/init.lua
-    lua/nam/modes/buffers.lua
-    lua/nam/modes/files.lua
-    lua/nam/modes/git.lua
-    lua/nam/modes/symbols.lua
-    lua/nam/modes/outline.lua
-    lua/nam/ui/labels.lua
-    lua/nam/ui/renderer.lua
-    lua/nam/ui/sidebar.lua
-    lua/nam/utils/events.lua
-    lua/nam/utils/cache.lua
-    plugin/nam.lua
+    lua/vproj/init.lua
+    lua/vproj/config.lua
+    lua/vproj/core/navigation.lua
+    lua/vproj/core/project.lua
+    lua/vproj/core/persistence.lua
+    lua/vproj/adapters/compat.lua
+    lua/vproj/adapters/git.lua
+    lua/vproj/adapters/lsp.lua
+    lua/vproj/adapters/treesitter.lua
+    lua/vproj/modes/init.lua
+    lua/vproj/modes/buffers.lua
+    lua/vproj/modes/files.lua
+    lua/vproj/modes/git.lua
+    lua/vproj/modes/symbols.lua
+    lua/vproj/modes/outline.lua
+    lua/vproj/ui/labels.lua
+    lua/vproj/ui/renderer.lua
+    lua/vproj/ui/sidebar.lua
+    lua/vproj/utils/events.lua
+    lua/vproj/utils/cache.lua
+    plugin/vproj.lua
 )
 
 # ── Terminal colors ────────────────────────────────────────────────
@@ -99,8 +99,8 @@ trap _cleanup EXIT
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || pwd)"
 
 is_repo_root() {
-    # True if we are inside the nam source tree
-    [ -f "${SCRIPT_DIR}/lua/nam/init.lua" ] && [ -f "${SCRIPT_DIR}/plugin/nam.lua" ]
+    # True if we are inside the vproj source tree
+    [ -f "${SCRIPT_DIR}/lua/vproj/init.lua" ] && [ -f "${SCRIPT_DIR}/plugin/vproj.lua" ]
 }
 
 # ── Verification helpers ───────────────────────────────────────────
@@ -214,7 +214,7 @@ install_from_local() {
     mkdir -p "${dir}/lua" "${dir}/plugin"
 
     cp -r "${SCRIPT_DIR}/lua/nam" "${dir}/lua/"
-    cp "${SCRIPT_DIR}/plugin/nam.lua" "${dir}/plugin/"
+    cp "${SCRIPT_DIR}/plugin/vproj.lua" "${dir}/plugin/"
 
     if [ -f "${SCRIPT_DIR}/SHA256SUMS" ]; then
         cp "${SCRIPT_DIR}/SHA256SUMS" "${dir}/"
@@ -382,8 +382,8 @@ do_uninstall() {
 
     echo ""
     info "Workspace data may persist at:"
-    info "  ~/.local/share/nam/"
-    info "Remove with:  rm -rf ~/.local/share/nam/"
+    info "  ~/.local/share/vproj/"
+    info "Remove with:  rm -rf ~/.local/share/vproj/"
 }
 
 # ── Install entry points ───────────────────────────────────────────
@@ -437,7 +437,7 @@ print_post_install() {
   ── Setup ────────────────────────────────────────────────────
   Add this to your ~/.vimrc or ~/.config/nvim/init.lua:
 
-      require("nam").setup({ hotkey = "<F2>" })
+      require("vproj").setup({ hotkey = "<F2>" })
 
   Then press F2 to open the sidebar. Press 'b' for buffers,
   'f' for files, 'g' for git status, 's' for symbols,

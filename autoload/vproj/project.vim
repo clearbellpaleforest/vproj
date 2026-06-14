@@ -1,6 +1,6 @@
 vim9script
 
-# autoload/nam/project.vim — vim9script project root detection and file scanner.
+# autoload/vproj/project.vim — vim9script project root detection and file scanner.
 
 export const RootMarkers: list<string> = [
   '.git',

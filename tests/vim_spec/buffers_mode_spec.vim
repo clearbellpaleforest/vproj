@@ -1,8 +1,8 @@
-" tests/vim_spec/buffers_mode_spec.vim — Pure VimScript tests for nam#buffers_mode#*
+" tests/vim_spec/buffers_mode_spec.vim — Pure VimScript tests for vproj#buffers_mode#*
 
 let g:CurrentTest = 'buffers_mode: create returns mode dict with correct values'
 let cfg = {'modes': {'buffers': {'enabled': v:true}}}
-let mode = nam#buffers_mode#Create(cfg)
+let mode = vproj#buffers_mode#Create(cfg)
 call g:AssertEquals(mode.name, 'Buffers', 'mode name is Buffers')
 call g:AssertEquals(mode.key, 'b', 'mode key is b')
 call g:AssertEquals(mode.icon, 'B', 'mode icon is B')

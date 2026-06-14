@@ -23,7 +23,7 @@ All 50 tests across 11 spec files must pass before opening a pull request.
 ### Directory structure in brief
 
 ```
-lua/nam/          -- Source code
+lua/vproj/          -- Source code
 plugin/nam.lua    -- Autoload entry point and user commands
 tests/spec/       -- Plenary test files
 tests/minimal_init.lua -- Minimal VimL init for test isolation
@@ -52,15 +52,15 @@ Mode = {
 }
 ```
 
-Modes are registered in `lua/nam/modes/init.lua`. Adding a new mode means creating a new file in `modes/` and registering it. No core framework code changes are needed.
+Modes are registered in `lua/vproj/modes/init.lua`. Adding a new mode means creating a new file in `modes/` and registering it. No core framework code changes are needed.
 
 ### 2. Compat Layer
 
-`lua/nam/adapters/compat.lua` provides a unified API for Vim and Neovim. Every platform-specific operation flows through this module. Modes, core modules, and UI components must never branch on `vim.fn.has('nvim')` directly. See the Vim 8.2 compatibility rules below.
+`lua/vproj/adapters/compat.lua` provides a unified API for Vim and Neovim. Every platform-specific operation flows through this module. Modes, core modules, and UI components must never branch on `vim.fn.has('nvim')` directly. See the Vim 8.2 compatibility rules below.
 
 ### 3. Direct Selection Navigation (DSN) Engine
 
-Labels are generated in four keyboard tiers (36 single-character labels) with two-character overflow for larger lists. Selection is O(1) via a `label_map` hash table. The label engine in `lua/nam/ui/labels.lua` is the single source of truth for label generation -- no other module should produce or parse label strings.
+Labels are generated in four keyboard tiers (36 single-character labels) with two-character overflow for larger lists. Selection is O(1) via a `label_map` hash table. The label engine in `lua/vproj/ui/labels.lua` is the single source of truth for label generation -- no other module should produce or parse label strings.
 
 ---
 
@@ -92,7 +92,7 @@ Nam targets Vim compiled with `+lua` and Neovim >= 0.10 from a single codebase. 
 
 ### Step 1: Create the mode module
 
-Create `lua/nam/modes/your_mode.lua`. Implement the full Mode interface:
+Create `lua/vproj/modes/your_mode.lua`. Implement the full Mode interface:
 
 ```lua
 local M = {}
@@ -126,7 +126,7 @@ return M
 
 ### Step 2: Register in the mode registry
 
-Open `lua/nam/modes/init.lua` and add your mode:
+Open `lua/vproj/modes/init.lua` and add your mode:
 
 ```lua
 -- In the registry setup:
@@ -136,7 +136,7 @@ registry:register(your_mode)
 
 ### Step 3: Add configuration (optional)
 
-If your mode needs user-configurable options, add defaults in `lua/nam/config.lua` under the `modes` table:
+If your mode needs user-configurable options, add defaults in `lua/vproj/config.lua` under the `modes` table:
 
 ```lua
 modes = {
@@ -187,7 +187,7 @@ Add `print(vim.inspect(value))` calls in test or source code and check the termi
 If modifying the compat layer, verify the plugin loads under classic Vim:
 
 ```bash
-vim --cmd "set nocompatible" --cmd "packadd nam" -c "call nam#NamOpen()" -c "q"
+vim --cmd "set nocompatible" --cmd "packadd nam" -c "call vproj#NamOpen()" -c "q"
 ```
 
 ### Benchmarks
@@ -288,4 +288,4 @@ These targets are **contractual** -- a change that regresses below these thresho
 | Label lookup               | O(1)     | hash table access, no iteration     |
 | End-to-end file access     | <300 ms  | keypress to file open, cognitive    |
 
-If your change introduces a new data-gathering or rendering step, check its impact against the targets above. Cache aggressively but honor TTLs. Use weak references in caches where possible (`lua/nam/utils/cache.lua`).
+If your change introduces a new data-gathering or rendering step, check its impact against the targets above. Cache aggressively but honor TTLs. Use weak references in caches where possible (`lua/vproj/utils/cache.lua`).

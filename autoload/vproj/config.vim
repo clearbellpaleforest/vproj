@@ -34,7 +34,7 @@ export def Setup(user_opts: dict<any>): dict<any>
     workspace: {
       auto_save: true,
       auto_restore: true,
-      path: expand('~/.local/share/nam/workspaces/'),
+      path: expand('~/.local/share/vproj/workspaces/'),
     },
     cache: {
       project_ttl: 30,

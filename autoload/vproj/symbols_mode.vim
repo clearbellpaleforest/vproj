@@ -1,6 +1,6 @@
 vim9script
 
-# autoload/nam/symbols_mode.vim — vim9script symbols mode using ctags
+# autoload/vproj/symbols_mode.vim — vim9script symbols mode using ctags
 # Provides Direct Selection Navigation over symbols in the current file.
 
 # Module-level state
@@ -42,9 +42,9 @@ export def Create(cfg: dict<any>): dict<any>
     actions: {},
   }
 
-  mode.Refresh = function('nam#symbols_mode#Refresh')
-  mode.Render = function('nam#symbols_mode#RenderSym')
-  mode.Select = function('nam#symbols_mode#SelectSym')
+  mode.Refresh = function('vproj#symbols_mode#Refresh')
+  mode.Render = function('vproj#symbols_mode#RenderSym')
+  mode.Select = function('vproj#symbols_mode#SelectSym')
 
   return mode
 enddef
@@ -123,7 +123,7 @@ enddef
 # RenderSym — call labels#BuildMap on Items, prepend source line.
 export def RenderSym(): dict<any>
   var label_cfg: dict<any> = get(Config, 'labels', {})
-  var result: dict<any> = nam#labels#BuildMap(Items, label_cfg)
+  var result: dict<any> = vproj#labels#BuildMap(Items, label_cfg)
 
   LabelMap = result.label_map
   Lines = result.lines
@@ -151,28 +151,28 @@ export def SelectSym(label: string): any
   endif
 
   # Jump to the file and line in the main editing window
-  var main_win = nam#sidebar#GetMainWin()
+  var main_win = vproj#sidebar#GetMainWin()
   if main_win > 0
     win_gotoid(main_win)
   endif
   execute 'edit ' .. fnameescape(item.path)
   execute '' .. item.line
 
-  var side_win = nam#sidebar#GetWin()
+  var side_win = vproj#sidebar#GetWin()
   if side_win > 0
     win_gotoid(side_win)
   endif
 
   # Record in workspace if available (graceful fallback)
   try
-    call nam#workspace#RecordSymbol({
+    call vproj#workspace#RecordSymbol({
       name: item->get('symbol_name', ''),
       path: item.path,
       line: item.line,
       kind: item->get('kind', '?'),
     })
   catch
-    # nam#workspace may not exist yet — silently ignore
+    # vproj#workspace may not exist yet — silently ignore
   endtry
 
   return true

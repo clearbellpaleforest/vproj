@@ -1,9 +1,9 @@
 vim9script
 
-# autoload/nam/persistence.vim — vim9script per-project session persistence
+# autoload/vproj/persistence.vim — vim9script per-project session persistence
 #
 # Saves and restores workspace state to JSON files in
-# $XDG_CACHE_HOME/nam/ or ~/.cache/nam/. Each project gets its own session
+# $XDG_CACHE_HOME/vproj/ or ~/.cache/vproj/. Each project gets its own session
 # file keyed by a djb2 hash of the project root. A special "global" session
 # is used when no project root is available.
 #
@@ -52,10 +52,10 @@ enddef
 
 # ValidateSessionPath guards Clear/ClearAll against accidentally deleting
 # files outside the expected nam cache directory. Returns true if the given
-# filepath is under a valid nam session directory (has '/nam/session_' in it
+# filepath is under a valid nam session directory (has '/vproj/session_' in it
 # and the base directory exists), false otherwise.
 def ValidateSessionPath(filepath: string): bool
-  if empty(filepath) || filepath !~# '/nam/session_'
+  if empty(filepath) || filepath !~# '/vproj/session_'
     return false
   endif
   var dir: string = fnamemodify(filepath, ':h')
@@ -66,9 +66,9 @@ def ValidateSessionPath(filepath: string): bool
 enddef
 
 # GetStateFile resolves the path to the session state file for a given
-# project root. Uses $XDG_CACHE_HOME/nam/session_<hash>.json when a project
-# root is provided, or $XDG_CACHE_HOME/nam/session_global.json for global
-# state. Falls back to ~/.cache/nam/ when $XDG_CACHE_HOME is not set.
+# project root. Uses $XDG_CACHE_HOME/vproj/session_<hash>.json when a project
+# root is provided, or $XDG_CACHE_HOME/vproj/session_global.json for global
+# state. Falls back to ~/.cache/vproj/ when $XDG_CACHE_HOME is not set.
 # Results are cached in StateFiles to avoid re-computation.
 def GetStateFile(project_root: string): string
   var key: string = empty(project_root) ? 'global' : Hash(project_root)
@@ -147,7 +147,7 @@ export def GetState(): dict<any>
 
   # Determine current mode from the mode registry
   try
-    var mode: dict<any> = nam#modes#GetCurrent()
+    var mode: dict<any> = vproj#modes#GetCurrent()
     if !empty(mode) && has_key(mode, 'key')
       state.current_mode = mode.key
     endif
@@ -157,15 +157,15 @@ export def GetState(): dict<any>
 
   # Determine sidebar state
   try
-    state.sidebar_open = nam#sidebar#IsOpen()
+    state.sidebar_open = vproj#sidebar#IsOpen()
   catch
     # Sidebar not available
   endtry
 
   # Determine current project root
   try
-    if exists('*nam#project#FindRoot')
-      state.project_root = nam#project#FindRoot()
+    if exists('*vproj#project#FindRoot')
+      state.project_root = vproj#project#FindRoot()
     endif
   catch
     # Project module not available
@@ -183,13 +183,13 @@ enddef
 
 # Save serialises the current workspace state and writes it to the per-project
 # session file. If project_root is empty, it auto-detects the current project
-# root via nam#project#FindRoot(). Returns true on success, false on failure.
+# root via vproj#project#FindRoot(). Returns true on success, false on failure.
 export def Save(project_root: string = ''): bool
   var root: string = project_root
   if empty(root)
     try
-      if exists('*nam#project#FindRoot')
-        root = nam#project#FindRoot()
+      if exists('*vproj#project#FindRoot')
+        root = vproj#project#FindRoot()
       endif
     catch
     endtry
@@ -209,8 +209,8 @@ export def Restore(project_root: string = ''): bool
   var root: string = project_root
   if empty(root)
     try
-      if exists('*nam#project#FindRoot')
-        root = nam#project#FindRoot()
+      if exists('*vproj#project#FindRoot')
+        root = vproj#project#FindRoot()
       endif
     catch
     endtry
@@ -280,7 +280,7 @@ export def Restore(project_root: string = ''): bool
   # Restore the current mode in the sidebar
   if has_key(state, 'current_mode') && type(state.current_mode) == v:t_string && state.current_mode != ''
     try
-      call nam#modes#Switch(state.current_mode)
+      call vproj#modes#Switch(state.current_mode)
     catch
     endtry
   endif
@@ -288,8 +288,8 @@ export def Restore(project_root: string = ''): bool
   # Restore sidebar state (open if it was open when saved)
   if has_key(state, 'sidebar_open') && type(state.sidebar_open) == v:t_bool && state.sidebar_open
     try
-      if !nam#sidebar#IsOpen()
-        call nam#sidebar#Open()
+      if !vproj#sidebar#IsOpen()
+        call vproj#sidebar#Open()
       endif
     catch
     endtry
@@ -304,8 +304,8 @@ export def Clear(project_root: string = '')
   var root: string = project_root
   if empty(root)
     try
-      if exists('*nam#project#FindRoot')
-        root = nam#project#FindRoot()
+      if exists('*vproj#project#FindRoot')
+        root = vproj#project#FindRoot()
       endif
     catch
     endtry
@@ -379,8 +379,8 @@ export def Setup(cfg: dict<any>)
         && Config.workspace.auto_restore
       try
         var project_root: string = ''
-        if exists('*nam#project#FindRoot')
-          project_root = nam#project#FindRoot()
+        if exists('*vproj#project#FindRoot')
+          project_root = vproj#project#FindRoot()
         endif
         Restore(project_root)
       catch
@@ -394,9 +394,9 @@ export def Setup(cfg: dict<any>)
     if has_key(Config.workspace, 'auto_save')
         && type(Config.workspace.auto_save) == v:t_bool
         && Config.workspace.auto_save
-      augroup NamPersistence
+      augroup VprojPersistence
         autocmd!
-        autocmd VimLeave * call nam#persistence#Save()
+        autocmd VimLeave * call vproj#persistence#Save()
       augroup END
     endif
   endif

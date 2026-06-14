@@ -4,17 +4,17 @@
 COMMANDS                                               *nam-quickref-commands*
 
 Command                  Action                                    ~
-:Nam                     Toggle sidebar open/closed
-:NamOpen                 Open sidebar
-:NamClose                Close sidebar
-:NamWorkspace            List saved workspaces
-:NamWorkspaceSave <name> Save current workspace
-:NamWorkspaceLoad <name> Load a named workspace
-:NamWorkspaceDelete <n>  Delete a named workspace
-:NamPin                  Pin current buffer (survives restarts)
-:NamUnpin                Unpin current buffer
-:NamBookmark <name>      Bookmark current cursor position
-:NamBookmarkJump <name>  Jump to a named bookmark
+:Vproj                     Toggle sidebar open/closed
+:VprojOpen                 Open sidebar
+:VprojClose                Close sidebar
+:VprojWorkspace            List saved workspaces
+:VprojWorkspaceSave <name> Save current workspace
+:VprojWorkspaceLoad <name> Load a named workspace
+:VprojWorkspaceDelete <n>  Delete a named workspace
+:VprojPin                  Pin current buffer (survives restarts)
+:VprojUnpin                Unpin current buffer
+:VprojBookmark <name>      Bookmark current cursor position
+:VprojBookmarkJump <name>  Jump to a named bookmark
 
 ==============================================================================
 MODE HOTKEYS                                             *nam-quickref-modes*
@@ -74,7 +74,7 @@ P          Pinned (preserved across buffer management)
 ==============================================================================
 CONFIGURATION QUICK REF                              *nam-quickref-config*
 
->  call nam#init#Setup({
+>  call vproj#init#Setup({
 >      \ 'hotkey':     '<F2>',
 >      \ 'width':      35,
 >      \ 'auto_open':  v:false,

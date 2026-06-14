@@ -1,6 +1,6 @@
 vim9script
 
-# autoload/nam/git.vim — Git porcelain parser
+# autoload/vproj/git.vim — Git porcelain parser
 # Provides status, stage, unstage, and diff operations via git CLI.
 # Uses systemlist() / system() with shellescape() for all git commands.
 
@@ -10,7 +10,7 @@ vim9script
 # Category is one of: 'staged', 'unstaged', 'untracked', 'conflict'.
 # Prefix is one of:   'S',        'M',        'U',         'C'.
 export def GetStatus(): dict<any>
-  var root: string = nam#project#FindRoot()
+  var root: string = vproj#project#FindRoot()
   var lines: list<string> = systemlist(
       'git -C ' .. shellescape(root) .. ' status --porcelain 2>/dev/null')
   if v:shell_error != 0
@@ -62,7 +62,7 @@ enddef
 # StageFile stages a file using git add.
 # Returns true on success (exit code 0), false otherwise.
 export def StageFile(filepath: string): bool
-  var root: string = nam#project#FindRoot()
+  var root: string = vproj#project#FindRoot()
   system('git -C ' .. shellescape(root) .. ' add ' .. shellescape(filepath)
       .. ' 2>/dev/null')
   return v:shell_error == 0
@@ -71,7 +71,7 @@ enddef
 # UnstageFile unstages a file using git reset HEAD.
 # Returns true on success (exit code 0), false otherwise.
 export def UnstageFile(filepath: string): bool
-  var root: string = nam#project#FindRoot()
+  var root: string = vproj#project#FindRoot()
   system('git -C ' .. shellescape(root) .. ' reset HEAD ' .. shellescape(filepath)
       .. ' 2>/dev/null')
   return v:shell_error == 0
@@ -80,7 +80,7 @@ enddef
 # GetDiff returns the git diff for a file as a list of lines.
 # Returns an empty list on error.
 export def GetDiff(filepath: string, staged: bool = false): list<string>
-  var root: string = nam#project#FindRoot()
+  var root: string = vproj#project#FindRoot()
   var flag: string = staged ? ' --cached' : ''
   var lines: list<string> = systemlist(
       'git -C ' .. shellescape(root) .. ' diff' .. flag .. ' ' .. shellescape(filepath)

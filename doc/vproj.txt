@@ -46,7 +46,7 @@ All features degrade gracefully when optional dependencies are absent.
 3. INSTALLATION                                          *nam-installation*
 
 Quick install:
->   curl -fsSL https://github.com/clearbellpaleforest/nam/raw/main/install.sh | bash
+>   curl -fsSL https://github.com/clearbellpaleforest/vproj/raw/main/install.sh | bash
 
 Manual (Vim packages):
 >   git clone https://github.com/clearbellpaleforest/nam.git \
@@ -63,7 +63,7 @@ Built-in packages:
 4. QUICK START                                              *nam-quickstart*
 
 Minimal ~/.vimrc:
->   call nam#init#Setup({
+>   call vproj#init#Setup({
 >       \ 'hotkey': '<F2>',
 >       \ 'width': 35,
 >       \ })
@@ -72,24 +72,24 @@ Press F2 to open the sidebar. Buffers mode loads by default. Press a
 label key to open a buffer. Press f for Files, g for Git, s for Symbols,
 o for Outline. Press <Esc> to close.
 
-Use `:NamPin` to pin the current buffer, `:NamBookmark <name>` to
-bookmark a location, and `:NamWorkspaceSave <name>` to save your entire
+Use `:VprojPin` to pin the current buffer, `:VprojBookmark <name>` to
+bookmark a location, and `:VprojWorkspaceSave <name>` to save your entire
 workspace state.
 
 ==============================================================================
 5. COMMANDS                                                  *nam-commands*
 
-    :Nam                    Toggle sidebar open/closed
-    :NamOpen                Open sidebar
-    :NamClose               Close sidebar
-    :NamWorkspace           List saved workspaces
-    :NamWorkspaceSave <n>   Save workspace with name <n>
-    :NamWorkspaceLoad <n>   Load workspace <n>
-    :NamWorkspaceDelete <n> Delete workspace <n>
-    :NamPin                 Pin current buffer
-    :NamUnpin               Unpin current buffer
-    :NamBookmark <n>        Bookmark current position
-    :NamBookmarkJump <n>    Jump to bookmark <n>
+    :Vproj                    Toggle sidebar open/closed
+    :VprojOpen                Open sidebar
+    :VprojClose               Close sidebar
+    :VprojWorkspace           List saved workspaces
+    :VprojWorkspaceSave <n>   Save workspace with name <n>
+    :VprojWorkspaceLoad <n>   Load workspace <n>
+    :VprojWorkspaceDelete <n> Delete workspace <n>
+    :VprojPin                 Pin current buffer
+    :VprojUnpin               Unpin current buffer
+    :VprojBookmark <n>        Bookmark current position
+    :VprojBookmarkJump <n>    Jump to bookmark <n>
 
 ==============================================================================
 6. MODES                                                       *nam-modes*
@@ -176,7 +176,7 @@ The key handler maps every single-character label to its target:
 8. CONFIGURATION                                             *nam-config*
 
 Setup is called once in your ~/.vimrc:
->   call nam#init#Setup({ ... })
+>   call vproj#init#Setup({ ... })
 
 The dict is deep-merged over defaults.
 
@@ -234,7 +234,7 @@ When the sidebar is open:
 
 Nam is a pure VimScript (vim9script) plugin.
 
-    autoload/nam/
+    autoload/vproj/
     ├── init.vim              Setup(), Toggle(), Open(), Close()
     ├── config.vim            Defaults and deep merge
     ├── sidebar.vim           Window and buffer management
@@ -256,7 +256,7 @@ Nam is a pure VimScript (vim9script) plugin.
     └── cache.vim             TTL cache
 
     plugin/
-    └── nam.vim               Entry point and commands
+    └── vproj.vim               Entry point and commands
 
 Design decisions:
     - No mode performs direct rendering — renderer owns all screen updates

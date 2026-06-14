@@ -1,4 +1,4 @@
-" tests/run_tests.vim — Simple VimScript test runner for Nam
+" tests/run_tests.vim — Simple VimScript test runner for Vproj
 " Usage: vim -u NONE -S tests/run_tests.vim
 
 set nocompatible
@@ -58,7 +58,7 @@ for s:file in s:spec_files
 endfor
 
 echo '========================================'
-echo '  Nam VimScript Test Results'
+echo '  Vproj VimScript Test Results'
 echo '========================================'
 echo '  Passed: ' .. g:TestsPassed
 echo '  Failed: ' .. g:TestsFailed

@@ -30,8 +30,8 @@ jobs:
 
       - name: Run tests
         run: |
-          vim -N -u NONE -S tests/run_tests.vim 2>&1 | tee /tmp/nam-test-output.txt
-          if grep -qE 'FAIL|ERROR' /tmp/nam-test-output.txt; then
+          vim -N -u NONE -S tests/run_tests.vim 2>&1 | tee /tmp/vproj-test-output.txt
+          if grep -qE 'FAIL|ERROR' /tmp/vproj-test-output.txt; then
             echo "Tests have failures — exiting 1"
             exit 1
           fi
@@ -45,8 +45,8 @@ jobs:
 
       - name: Run basic syntax check
         run: |
-          vim -N -u NONE -c 'set rtp=.' -c 'runtime! plugin/nam.vim' -c 'qa!' 2>&1 | tee /tmp/nam-lint-output.txt
-          if grep -qE 'E[0-9]+:' /tmp/nam-lint-output.txt; then
+          vim -N -u NONE -c 'set rtp=.' -c 'runtime! plugin/vproj.vim' -c 'qa!' 2>&1 | tee /tmp/vproj-lint-output.txt
+          if grep -qE 'E[0-9]+:' /tmp/vproj-lint-output.txt; then
             echo "Syntax errors found — exiting 1"
             exit 1
           fi

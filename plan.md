@@ -1,4 +1,4 @@
-# Nam — Development Plan
+# Vproj — Development Plan
 
 ## Methodology
 
@@ -26,7 +26,7 @@ never proceed with unvalidated data.
 ## Architecture Skeleton
 
 ```
-autoload/nam/
+autoload/vproj/
 ├── init.vim           Entry point, user commands, setup dispatch
 ├── config.vim         Configuration defaults, validation, merge
 ├── labels.vim         DSN label engine (tier system, overflow)
@@ -166,8 +166,8 @@ Functions return stub values (empty dicts, false, empty strings).
 - `workspace.RestoreWorkspace()` validates persisted window_layout before `:execute`
 
 ### Stage 9 — Init & Integration
-**Files:** `init.vim`, `plugin/nam.vim`
-**What:** Entry point wiring, user commands (`:Nam`), autocmd setup.
+**Files:** `init.vim`, `plugin/vproj.vim`
+**What:** Entry point wiring, user commands (`:Vproj`), autocmd setup.
 **Tests:** `integration_spec.vim`
 **Validation checkpoints:**
 - `init.Setup()` validates entire config dict before dispatching to subsystems

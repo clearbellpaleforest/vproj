@@ -1,4 +1,4 @@
-# Nam — Direct Selection Navigation for Vim
+# Vproj — Direct Selection Navigation for Vim
 
 [![Tests](https://img.shields.io/badge/tests-174%2F174-passing-brightgreen)](#)
 [![Version](https://img.shields.io/badge/version-0.2.0-blue)](#)
@@ -97,7 +97,7 @@ No configuration required — the plugin works out of the box:
 
 ```vim
 " Optional: customize (shown with defaults)
-call nam#init#Setup({
+call vproj#init#Setup({
     \ 'hotkey': '<F2>',
     \ 'width': 45,
     \ })
@@ -105,7 +105,7 @@ call nam#init#Setup({
 
 Press `F2` to open the sidebar. Files mode loads by default. Press a label key to open a file. Press `b` for Buffers, `g` for Git, `s` for Symbols, `o` for Outline. Press `<Esc>` to close.
 
-Use `:NamPin` to pin the current buffer, `:NamBookmark <name>` to bookmark a location, and `:NamWorkspaceSave <name>` to save your entire workspace state.
+Use `:VprojPin` to pin the current buffer, `:VprojBookmark <name>` to bookmark a location, and `:VprojWorkspaceSave <name>` to save your entire workspace state.
 
 ---
 
@@ -115,17 +115,17 @@ Use `:NamPin` to pin the current buffer, `:NamBookmark <name>` to bookmark a loc
 
 | Command               | Action                      |
 |-----------------------|-----------------------------|
-| `:Nam`                | Toggle sidebar              |
-| `:NamOpen`            | Open sidebar                |
-| `:NamClose`           | Close sidebar               |
-| `:NamWorkspace`       | List saved named workspaces |
-| `:NamWorkspaceSave`   | Save current state as named workspace |
-| `:NamWorkspaceLoad`   | Restore a named workspace   |
-| `:NamWorkspaceDelete` | Delete a named workspace    |
-| `:NamPin`             | Pin the current buffer      |
-| `:NamUnpin`           | Unpin the current buffer    |
-| `:NamBookmark`        | Bookmark current position   |
-| `:NamBookmarkJump`    | Jump to a named bookmark    |
+| `:Vproj`                | Toggle sidebar              |
+| `:VprojOpen`            | Open sidebar                |
+| `:VprojClose`           | Close sidebar               |
+| `:VprojWorkspace`       | List saved named workspaces |
+| `:VprojWorkspaceSave`   | Save current state as named workspace |
+| `:VprojWorkspaceLoad`   | Restore a named workspace   |
+| `:VprojWorkspaceDelete` | Delete a named workspace    |
+| `:VprojPin`             | Pin the current buffer      |
+| `:VprojUnpin`           | Unpin the current buffer    |
+| `:VprojBookmark`        | Bookmark current position   |
+| `:VprojBookmarkJump`    | Jump to a named bookmark    |
 
 ### Mode hotkeys
 
@@ -150,7 +150,7 @@ Use `:NamPin` to pin the current buffer, `:NamBookmark <name>` to bookmark a loc
 
 ## Configuration
 
-`call nam#init#Setup({ ... })` accepts a dict that is deep-merged over the defaults.
+`call vproj#init#Setup({ ... })` accepts a dict that is deep-merged over the defaults.
 
 ### Options reference
 
@@ -164,7 +164,7 @@ Use `:NamPin` to pin the current buffer, `:NamBookmark <name>` to bookmark a loc
 | `modes.*.enabled`        | `boolean` | `true` each                      | Enable or disable a mode           |
 | `workspace.auto_save`    | `boolean` | `true`                           | Auto-save workspace on exit        |
 | `workspace.auto_restore` | `boolean` | `true`                           | Auto-restore workspace on startup  |
-| `workspace.path`         | `string`  | `$XDG_DATA_HOME/nam/workspaces/` | Named workspace storage directory  |
+| `workspace.path`         | `string`  | `$XDG_DATA_HOME/vproj/workspaces/` | Named workspace storage directory  |
 | `cache.project_ttl`      | `number`  | `30`                             | File tree cache TTL (seconds)      |
 | `cache.git_ttl`          | `number`  | `5`                              | Git status cache TTL (seconds)     |
 
@@ -267,7 +267,7 @@ Selecting an entry jumps the cursor to that line.
 Nam is built around a decoupled, event-driven vim9script architecture.
 
 ```
-autoload/nam/
+autoload/vproj/
 ├── init.vim              Entry point, Setup(), user commands
 ├── config.vim            Configuration defaults and deep merge
 ├── sidebar.vim           Window management (open/close/toggle)
@@ -289,7 +289,7 @@ autoload/nam/
 └── cache.vim             TTL cache
 
 plugin/
-└── nam.vim               Plugin entry, commands
+└── vproj.vim               Plugin entry, commands
 ```
 
 ### Design decisions

@@ -1,6 +1,6 @@
 vim9script
 
-# autoload/nam/outline_mode.vim — filetype-aware structural outline parser
+# autoload/vproj/outline_mode.vim — filetype-aware structural outline parser
 # Generates structural outlines for the current buffer based on filetype.
 # Part of the Nam plugin's Direct Selection Navigation system.
 
@@ -31,9 +31,9 @@ export def Create(cfg: dict<any>): dict<any>
     items: [],
     label_map: {},
     lines: [],
-    Refresh: function(nam#outline_mode#Refresh),
-    Render: function(nam#outline_mode#RenderOut),
-    Select: function(nam#outline_mode#SelectOut),
+    Refresh: function(vproj#outline_mode#Refresh),
+    Render: function(vproj#outline_mode#RenderOut),
+    Select: function(vproj#outline_mode#SelectOut),
   }
   ModeDict = mode
   return mode
@@ -69,10 +69,10 @@ export def Refresh()
   endif
 enddef
 
-# RenderOut — builds label_map and display lines via nam#labels#BuildMap.
+# RenderOut — builds label_map and display lines via vproj#labels#BuildMap.
 export def RenderOut(): dict<any>
   var lbl_cfg: dict<any> = get(Config, 'labels', {})
-  var result: dict<any> = nam#labels#BuildMap(Items, lbl_cfg)
+  var result: dict<any> = vproj#labels#BuildMap(Items, lbl_cfg)
   LabelMap = result.label_map
   Lines = result.lines
   if !empty(ModeDict)
@@ -94,7 +94,7 @@ export def SelectOut(label: string): any
   if item.line == 0
     return false
   endif
-  var main_win = nam#sidebar#GetMainWin()
+  var main_win = vproj#sidebar#GetMainWin()
   if main_win > 0
     win_gotoid(main_win)
   endif
@@ -102,7 +102,7 @@ export def SelectOut(label: string): any
     execute 'buffer ' .. SourceBuf
   endif
   cursor(item.line + 1, 1)
-  var side_win = nam#sidebar#GetWin()
+  var side_win = vproj#sidebar#GetWin()
   if side_win > 0
     win_gotoid(side_win)
   endif

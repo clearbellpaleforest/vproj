@@ -27,10 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Event bus** (`utils/events.lua`) — decoupled emit/on/off with listener isolation
 - **TTL-based caching system** (`utils/cache.lua`) — weak-reference cache with configurable time-to-live, force-invalidation support
 - **Table utility** (`utils/table.lua`) — deep copy with Vim 8.2 compatibility
-- **Workspace persistence module** (`core/persistence.lua`) — JSON session save/restore with auto-save via `VimLeave` autocmd and auto-restore on setup, validation, path under `$XDG_CACHE_HOME/nam/session.json`
+- **Workspace persistence module** (`core/persistence.lua`) — JSON session save/restore with auto-save via `VimLeave` autocmd and auto-restore on setup, validation, path under `$XDG_CACHE_HOME/vproj/session.json`
 - **Sidebar UI** — floating/vertical split window via `compat.open_sidebar_win()`, configurable width (default 35), non-focus-stealing, virtual buffer backing
 - **Renderer** — virtual buffer line production, header/tabs, extmarks and highlights, label-aware item rendering
-- **User commands** — `:Nam`, `:NamOpen`, `:NamClose` registered via `plugin/nam.lua`
+- **User commands** — `:Vproj`, `:VprojOpen`, `:VprojClose` registered via `plugin/vproj.lua`
 - **Configuration system** — defaults with deep merge, validation, `require("nam").setup({...})` entry point
 - **Toggle hotkey** — configurable (default `<F2>`), global keymap via `compat.set_global_keymap()`
 

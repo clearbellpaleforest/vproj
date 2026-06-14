@@ -1,4 +1,4 @@
-# Nam — CLAUDE.md
+# Vproj — CLAUDE.md
 
 ## Project Overview
 
@@ -18,7 +18,7 @@ Production-grade Vim plugin providing IDE-class project/workspace management wit
 ## Architecture
 
 ```
-autoload/nam/
+autoload/vproj/
 ├── init.lua              Entry point, setup(), user commands
 ├── config.lua            Configuration defaults and validation
 ├── ui/
@@ -43,7 +43,7 @@ autoload/nam/
     └── events.lua        Internal event bus (emit/on)
 
 plugin/
-└── nam.vim  Autoload entry, user commands (:Nam)
+└── vproj.vim  Autoload entry, user commands (:Vproj)
 
 tests/
 ├── spec/
@@ -149,7 +149,7 @@ Equivalent to Eclipse/VSCode workspace concept:
 
 - Stores: open files, window layout, pinned buffers, recent symbols, bookmarks
 - Auto-save on exit, auto-restore on open
-- Per-project workspace files (`~/.local/share/nam/workspaces/<name>.json`)
+- Per-project workspace files (`~/.local/share/vproj/workspaces/<name>.json`)
 - JSON format for portability
 
 ## Performance Targets
@@ -186,7 +186,7 @@ Modes subscribe to relevant events. No direct coupling between subsystems.
 ## Configuration
 
 ```vim
-call nam#init#Setup({
+call vproj#init#Setup({
     \ 'width': 45,
     \ 'hotkey': '<F2>',
     \ 'auto_open': v:false,
@@ -209,7 +209,7 @@ call nam#init#Setup({
     \ 'workspace': {
     \     'auto_save': v:true,
     \     'auto_restore': v:true,
-    \     'path': expand('~/.local/share/nam/workspaces/'),
+    \     'path': expand('~/.local/share/vproj/workspaces/'),
     \ },
     \ 'cache': {
     \     'project_ttl': 30,
@@ -221,7 +221,7 @@ call nam#init#Setup({
 
 ## Implementation Status
 
-All five phases complete. VimScript codebase in `autoload/nam/`. Tests in `tests/vim_spec/` use Vim's built-in test assertions.
+All five phases complete. VimScript codebase in `autoload/vproj/`. Tests in `tests/vim_spec/` use Vim's built-in test assertions.
 
 ## Testing
 

@@ -133,7 +133,7 @@ enddef
 # ──────────────────────────────────────────────
 
 export def GetState(): dict<any>
-  var state = nam#persistence#GetState()
+  var state = vproj#persistence#GetState()
   state->extend({
     pinned_buffers: copy(Pins),
     bookmarks: copy(Bookmarks),
@@ -143,12 +143,12 @@ export def GetState(): dict<any>
 enddef
 
 export def Save()
-  nam#persistence#Save()
+  vproj#persistence#Save()
 enddef
 
 export def Restore(): dict<any>
-  nam#persistence#Restore()
-  var state = nam#persistence#GetState()
+  vproj#persistence#Restore()
+  var state = vproj#persistence#GetState()
   if has_key(state, 'pinned_buffers') && type(state.pinned_buffers) == v:t_list
     Pins = state.pinned_buffers
   endif
@@ -167,7 +167,7 @@ enddef
 
 def WorkspaceDir(): string
   return get(Config, 'workspace', {})->get('path',
-      expand('~/.local/share/nam/workspaces/'))
+      expand('~/.local/share/vproj/workspaces/'))
 enddef
 
 def ValidateWorkspaceDir(dir: string): bool
@@ -198,7 +198,7 @@ export def SaveWorkspace(name: string): bool
     mkdir(dir, 'p')
   endif
   try
-    writefile([json_encode(nam#workspace#GetState())], dir .. '/' .. safe .. '.json')
+    writefile([json_encode(vproj#workspace#GetState())], dir .. '/' .. safe .. '.json')
     return true
   catch
     return false

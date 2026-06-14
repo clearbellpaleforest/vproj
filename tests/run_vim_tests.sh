@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# run_vim_tests.sh — Run nam Vim-compatible tests (Vim 8.2+ with +lua)
+# run_vim_tests.sh — Run vproj Vim-compatible tests (Vim 8.2+ with +lua)
 #
 # Runs all *.vim test files from tests/vim_spec/ through the Vim test
 # infrastructure defined in tests/run_tests.vim.
@@ -71,7 +71,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ── 1. Check Vim prerequisites ───────────────────────────────────────────────
-echo "=== nam Vim test runner ==="
+echo "=== vproj Vim test runner ==="
 echo ""
 
 if ! command -v "$VIM_BIN" &>/dev/null; then

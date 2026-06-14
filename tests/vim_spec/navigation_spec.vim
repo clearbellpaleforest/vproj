@@ -1,4 +1,4 @@
-" navigation_spec.vim -- VimScript tests for nam#navigation# (Direct Selection Navigation)
+" navigation_spec.vim -- VimScript tests for vproj#navigation# (Direct Selection Navigation)
 "
 " Tests: handler dispatch, no-handler fallback, handler replacement, setup, false propagation.
 
@@ -37,7 +37,7 @@ function! s:TestSetup() abort
   let g:CurrentTest = 'navigation setup'
   let events_mod = {}
   let cfg = {'labels': {'tiers': ['1234567890'], 'overflow_style': 'double'}}
-  call nam#navigation#Setup(cfg, events_mod)
+  call vproj#navigation#Setup(cfg, events_mod)
   call g:AssertTrue(1, 'navigation.setup() completes without error')
 endfunction
 
@@ -46,8 +46,8 @@ endfunction
 " ---------------------------------------------------------------------------
 function! s:TestNoHandler() abort
   let g:CurrentTest = 'navigation no handler'
-  call nam#navigation#ResetHandler()
-  let result = nam#navigation#Dispatch('1')
+  call vproj#navigation#ResetHandler()
+  let result = vproj#navigation#Dispatch('1')
   call g:AssertFalse(result, 'dispatch() returns false with no handler')
 endfunction
 
@@ -58,8 +58,8 @@ function! s:TestHandlerDispatch() abort
   let g:CurrentTest = 'navigation handler dispatch'
   let g:handler_called = 0
   let g:handler_label = ''
-  call nam#navigation#SetHandler(function('s:RecordHandler'))
-  let result = nam#navigation#Dispatch('1')
+  call vproj#navigation#SetHandler(function('s:RecordHandler'))
+  let result = vproj#navigation#Dispatch('1')
   call g:AssertTrue(g:handler_called, 'dispatch() calls the handler')
   call g:AssertEquals(g:handler_label, '1', 'dispatch() forwards the label to handler')
   call g:AssertTrue(result, 'dispatch() returns handler result')
@@ -72,9 +72,9 @@ function! s:TestHandlerReplace() abort
   let g:CurrentTest = 'navigation handler replace'
   let g:first_called = 0
   let g:second_called = 0
-  call nam#navigation#SetHandler(function('s:FirstHandler'))
-  call nam#navigation#SetHandler(function('s:SecondHandler'))
-  call nam#navigation#Dispatch('1')
+  call vproj#navigation#SetHandler(function('s:FirstHandler'))
+  call vproj#navigation#SetHandler(function('s:SecondHandler'))
+  call vproj#navigation#Dispatch('1')
   call g:AssertFalse(g:first_called, 'set_handler() replaces first handler')
   call g:AssertTrue(g:second_called, 'second handler is called after replacement')
 endfunction
@@ -84,8 +84,8 @@ endfunction
 " ---------------------------------------------------------------------------
 function! s:TestHandlerReturnsFalse() abort
   let g:CurrentTest = 'navigation handler returns false'
-  call nam#navigation#SetHandler(function('s:FalseHandler'))
-  let result = nam#navigation#Dispatch('x')
+  call vproj#navigation#SetHandler(function('s:FalseHandler'))
+  let result = vproj#navigation#Dispatch('x')
   call g:AssertFalse(result, 'dispatch() returns false when handler returns false')
 endfunction
 

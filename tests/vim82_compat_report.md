@@ -73,7 +73,7 @@ These files have some direct `vim.api.nvim_*` calls, but the majority of tests a
 | Direct nvim_* calls | 1 |
 | compat layer calls | ~12 |
 
-- **Problematic calls:** `vim.api.nvim_buf_get_keymap(buf, "n")` at line 820, inside test "sidebar buffer has label keymaps after :Nam command"
+- **Problematic calls:** `vim.api.nvim_buf_get_keymap(buf, "n")` at line 820, inside test "sidebar buffer has label keymaps after :Vproj command"
 - **Fix:** Replace with `compat.buf_get_keymap(buf, "n")` (which returns `{}` on Vim 8.2) -- the assertion would need adjustment from `#maps >= 3` to a weaker check, or the test guarded by `compat.is_nvim`
 - **Verdict:** Easy fix. Single call, single test affected.
 

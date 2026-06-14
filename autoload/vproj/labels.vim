@@ -20,7 +20,7 @@ export const DefaultTiers: list<string> = [
 # generated (aa, ab, ac, ..., ba, bb, ...).
 # When count exceeds available label combinations, the result is shorter than
 # count. Callers must check the result length.
-# Called via nam#labels#Generate() (Vim autoload resolves the path).
+# Called via vproj#labels#Generate() (Vim autoload resolves the path).
 export def Generate(
     count: number,
     tiers: list<string> = DefaultTiers,
@@ -78,7 +78,7 @@ enddef
 #
 # The returned label_map maps each label string to its item.
 # The returned lines are formatted as "label name" strings.
-# Called via nam#labels#BuildMap() (Vim autoload resolves the path).
+# Called via vproj#labels#BuildMap() (Vim autoload resolves the path).
 export def BuildMap(
     items: list<dict<any>>,
     label_cfg: dict<any> = {}

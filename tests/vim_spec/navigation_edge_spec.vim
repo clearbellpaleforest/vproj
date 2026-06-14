@@ -1,4 +1,4 @@
-" navigation_edge_spec.vim -- Pure VimScript edge case tests for nam#navigation#*
+" navigation_edge_spec.vim -- Pure VimScript edge case tests for vproj#navigation#*
 "
 " Tests: key handling edge cases, dispatch edge cases, mode dispatch
 " integration, buffer state and keymap lifecycle, error resilience.
@@ -53,12 +53,12 @@ let s:ok = v:true
 function! s:TestAttachInvalidBuffer() abort
   let g:CurrentTest = 'navigation_attach: invalid buffer'
   let cfg = {'labels': {'tiers': ['1234567890'], 'overflow_style': 'double'}}
-  call nam#navigation#Setup(cfg, {})
+  call vproj#navigation#Setup(cfg, {})
 
   " attach with non-existent buffer number should not error
   let s:ok = v:true
   try
-    call nam#navigation#Attach(99999)
+    call vproj#navigation#Attach(99999)
   catch
     let s:ok = v:false
   endtry
@@ -71,7 +71,7 @@ function! s:TestAttachBeforeSetup() abort
   " the non-tier keymaps are created.  Should not error.
   let s:ok = v:true
   try
-    call nam#navigation#Attach(1)
+    call vproj#navigation#Attach(1)
   catch
     let s:ok = v:false
   endtry
@@ -85,7 +85,7 @@ function! s:TestAttachNilTiers() abort
   " the Vim9Script implementation does not iterate over null).
   let s:has_error = v:false
   try
-    call nam#navigation#Setup({'labels': {'tiers': v:null, 'overflow_style': 'double'}}, {})
+    call vproj#navigation#Setup({'labels': {'tiers': v:null, 'overflow_style': 'double'}}, {})
   catch
     let s:has_error = v:true
   endtry
@@ -94,11 +94,11 @@ endfunction
 
 function! s:TestAttachEmptyTiers() abort
   let g:CurrentTest = 'navigation_attach: empty tiers'
-  call nam#navigation#Setup({'labels': {'tiers': [], 'overflow_style': 'double'}}, {})
+  call vproj#navigation#Setup({'labels': {'tiers': [], 'overflow_style': 'double'}}, {})
 
   let s:ok = v:true
   try
-    call nam#navigation#Attach(1)
+    call vproj#navigation#Attach(1)
   catch
     let s:ok = v:false
   endtry
@@ -112,67 +112,67 @@ endfunction
 function! s:TestDispatchEdgeCases() abort
   " Use a config with known tiers so TierChars is populated
   let cfg = {'labels': {'tiers': ['1234567890'], 'overflow_style': 'double'}}
-  call nam#navigation#Setup(cfg, {})
+  call vproj#navigation#Setup(cfg, {})
 
   " 1. handler receives correct label
   let g:CurrentTest = 'dispatch: correct label forwarding'
   let s:received = ''
-  call nam#navigation#SetHandler({label -> s:record_label(label)})
-  call nam#navigation#Dispatch('a')
+  call vproj#navigation#SetHandler({label -> s:record_label(label)})
+  call vproj#navigation#Dispatch('a')
   call g:AssertEquals(s:received, 'a', 'dispatch("a") forwards "a" to handler')
 
   " 2. handler receives multi-char label
   let g:CurrentTest = 'dispatch: multi-char label'
   let s:received = ''
-  call nam#navigation#Dispatch('aa')
+  call vproj#navigation#Dispatch('aa')
   call g:AssertEquals(s:received, 'aa', 'dispatch("aa") forwards "aa" to handler')
 
   " 3. handler receives empty string
   let g:CurrentTest = 'dispatch: empty string'
   let s:received = ''
-  call nam#navigation#Dispatch('')
+  call vproj#navigation#Dispatch('')
   call g:AssertEquals(s:received, '', 'dispatch("") forwards empty string to handler')
 
   " 4. handler returning false through dispatch
   let g:CurrentTest = 'dispatch: handler returns false'
-  call nam#navigation#SetHandler({label -> v:false})
-  let result = nam#navigation#Dispatch('1')
+  call vproj#navigation#SetHandler({label -> v:false})
+  let result = vproj#navigation#Dispatch('1')
   call g:AssertTrue(result is v:false, 'dispatch returns false when handler returns false')
 
   " 5. handler returning null through dispatch
   let g:CurrentTest = 'dispatch: handler returns null'
-  call nam#navigation#SetHandler({label -> v:null})
-  let result = nam#navigation#Dispatch('1')
+  call vproj#navigation#SetHandler({label -> v:null})
+  let result = vproj#navigation#Dispatch('1')
   call g:AssertTrue(result is v:null, 'dispatch returns null when handler returns null')
 
   " 6. handler returning true through dispatch
   let g:CurrentTest = 'dispatch: handler returns true'
-  call nam#navigation#SetHandler({label -> v:true})
-  let result = nam#navigation#Dispatch('1')
+  call vproj#navigation#SetHandler({label -> v:true})
+  let result = vproj#navigation#Dispatch('1')
   call g:AssertTrue(result is v:true, 'dispatch returns true when handler returns true')
 
   " 7. no handler returns false
   let g:CurrentTest = 'dispatch: no handler'
-  call nam#navigation#SetHandler(v:null)
-  let result = nam#navigation#Dispatch('1')
+  call vproj#navigation#SetHandler(v:null)
+  let result = vproj#navigation#Dispatch('1')
   call g:AssertTrue(result is v:false, 'dispatch returns false with no handler')
 
   " 8. handler replacement
   let g:CurrentTest = 'dispatch: handler replacement'
   let s:first_called = v:false
   let s:second_called = v:false
-  call nam#navigation#SetHandler({label -> s:mark_first(label)})
-  call nam#navigation#SetHandler({label -> s:mark_second(label)})
-  call nam#navigation#Dispatch('1')
+  call vproj#navigation#SetHandler({label -> s:mark_first(label)})
+  call vproj#navigation#SetHandler({label -> s:mark_second(label)})
+  call vproj#navigation#Dispatch('1')
   call g:AssertFalse(s:first_called, 'set_handler() replaces previous handler')
   call g:AssertTrue(s:second_called, 'replacement handler is called after set_handler()')
 
   " 9. 50 rapid dispatch calls
   let g:CurrentTest = 'dispatch: 50 rapid calls'
   let s:count = 0
-  call nam#navigation#SetHandler({label -> s:count_calls(label)})
+  call vproj#navigation#SetHandler({label -> s:count_calls(label)})
   for i in range(50)
-    call nam#navigation#Dispatch(string(i))
+    call vproj#navigation#Dispatch(string(i))
   endfor
   call g:AssertEquals(s:count, 50, '50 rapid dispatch calls all succeed')
 endfunction
@@ -183,69 +183,69 @@ endfunction
 
 function! s:TestModeDispatchIntegration() abort
   let g:CurrentTest = 'mode_dispatch: setup'
-  call nam#modes#Setup({}, {})
+  call vproj#modes#Setup({}, {})
   let cfg = {'labels': {'tiers': ['1234567890'], 'overflow_style': 'double'}}
-  call nam#navigation#Setup(cfg, {})
+  call vproj#navigation#Setup(cfg, {})
 
   " Register a mode with a label_map
   let s:mode_t = {'key': 't', 'name': 'Test', 'enabled': v:true,
       \ 'label_map': {'a': {'name': 'item_a'}}}
-  call nam#modes#Register(s:mode_t)
-  call nam#modes#Switch('t')
+  call vproj#modes#Register(s:mode_t)
+  call vproj#modes#Switch('t')
 
   " 1. handler dispatches a label found in the current mode's label_map
   let g:CurrentTest = 'mode_dispatch: valid label'
-  call nam#navigation#SetHandler({label ->
+  call vproj#navigation#SetHandler({label ->
       \ has_key(s:mode_t.label_map, label) ? v:true : v:false})
-  let result = nam#navigation#Dispatch('a')
+  let result = vproj#navigation#Dispatch('a')
   call g:AssertTrue(result is v:true, 'dispatch returns true for valid mode label')
 
   " 2. handler dispatches an unregistered label
   let g:CurrentTest = 'mode_dispatch: unregistered label'
-  let result = nam#navigation#Dispatch('zz')
+  let result = vproj#navigation#Dispatch('zz')
   call g:AssertTrue(result is v:false, 'dispatch returns false for unregistered label')
 
   " 3. handler dispatches empty string
   let g:CurrentTest = 'mode_dispatch: empty label'
-  let result = nam#navigation#Dispatch('')
+  let result = vproj#navigation#Dispatch('')
   call g:AssertTrue(result is v:false, 'dispatch returns false for empty label')
 
   " 4. handler dispatches whitespace
   let g:CurrentTest = 'mode_dispatch: whitespace label'
-  let result = nam#navigation#Dispatch(' ')
+  let result = vproj#navigation#Dispatch(' ')
   call g:AssertTrue(result is v:false, 'dispatch returns false for whitespace label')
 
   " 5. handler falls back to mode registry when current mode returns false
   let g:CurrentTest = 'mode_dispatch: fallback to registry'
   let s:mode_a = {'key': 'a', 'name': 'ModeA', 'enabled': v:true, 'label_map': {}}
   let s:mode_b = {'key': 'b', 'name': 'ModeB', 'enabled': v:true, 'label_map': {}}
-  call nam#modes#Register(s:mode_a)
-  call nam#modes#Register(s:mode_b)
-  call nam#modes#Switch('a')
+  call vproj#modes#Register(s:mode_a)
+  call vproj#modes#Register(s:mode_b)
+  call vproj#modes#Switch('a')
 
-  call nam#navigation#SetHandler({label ->
+  call vproj#navigation#SetHandler({label ->
       \ has_key(s:mode_a.label_map, label) ? v:true :
-      \ !empty(nam#modes#Get(label)) ? v:true : v:false})
-  let result = nam#navigation#Dispatch('b')
+      \ !empty(vproj#modes#Get(label)) ? v:true : v:false})
+  let result = vproj#navigation#Dispatch('b')
   call g:AssertTrue(result is v:true, 'fallback: mode key lookup succeeds via registry')
 
   " 6. mode with no label_map -- missing key gracefully returns false
   let g:CurrentTest = 'mode_dispatch: mode lacks label_map'
   let s:mode_nil = {'key': 'n', 'name': 'Nil', 'enabled': v:true}
-  call nam#modes#Register(s:mode_nil)
-  call nam#navigation#SetHandler({label ->
+  call vproj#modes#Register(s:mode_nil)
+  call vproj#navigation#SetHandler({label ->
       \ has_key(get(s:mode_nil, {}, 'label_map'), label) ? v:true : v:false})
-  let result = nam#navigation#Dispatch('1')
+  let result = vproj#navigation#Dispatch('1')
   call g:AssertTrue(result is v:false,
       \ 'dispatch returns false for mode with no label_map')
 
   " 7. mode with empty label_map
   let g:CurrentTest = 'mode_dispatch: empty label_map'
   let s:mode_empty = {'key': 'e', 'name': 'Empty', 'enabled': v:true, 'label_map': {}}
-  call nam#modes#Register(s:mode_empty)
-  call nam#navigation#SetHandler({label ->
+  call vproj#modes#Register(s:mode_empty)
+  call vproj#navigation#SetHandler({label ->
       \ has_key(s:mode_empty.label_map, label) ? v:true : v:false})
-  let result = nam#navigation#Dispatch('1')
+  let result = vproj#navigation#Dispatch('1')
   call g:AssertTrue(result is v:false,
       \ 'dispatch returns false for mode with empty label_map')
 endfunction
@@ -257,45 +257,45 @@ endfunction
 function! s:TestErrorResilience() abort
   let g:CurrentTest = 'error_resilience: setup'
   let cfg = {'labels': {'tiers': ['1234567890'], 'overflow_style': 'double'}}
-  call nam#navigation#Setup(cfg, {})
+  call vproj#navigation#Setup(cfg, {})
 
   " 1. handler errors are caught by Dispatch and return false
   let g:CurrentTest = 'error_resilience: handler error caught'
-  call nam#navigation#SetHandler({label -> s:throw_error(label)})
-  let result = nam#navigation#Dispatch('1')
+  call vproj#navigation#SetHandler({label -> s:throw_error(label)})
+  let result = vproj#navigation#Dispatch('1')
   call g:AssertTrue(result is v:false,
       \ 'dispatch catches handler error and returns false')
 
   " 2. dispatch after re-setup with a fresh handler
   let g:CurrentTest = 'error_resilience: after re-setup'
-  call nam#navigation#Setup(cfg, {})
-  call nam#navigation#SetHandler({label -> v:true})
-  let result = nam#navigation#Dispatch('x')
+  call vproj#navigation#Setup(cfg, {})
+  call vproj#navigation#SetHandler({label -> v:true})
+  let result = vproj#navigation#Dispatch('x')
   call g:AssertTrue(result is v:true,
       \ 'dispatch works after re-setup with new handler')
 
   " 3. dispatch continues to work after a handler error
   let g:CurrentTest = 'error_resilience: dispatch after error'
-  call nam#navigation#SetHandler({label ->
+  call vproj#navigation#SetHandler({label ->
       \ label == 'bad' ? s:throw_error(label) : v:true})
-  call nam#navigation#Dispatch('bad')
-  let result = nam#navigation#Dispatch('good')
+  call vproj#navigation#Dispatch('bad')
+  let result = vproj#navigation#Dispatch('good')
   call g:AssertTrue(result is v:true,
       \ 'dispatch works after previous handler error')
 
   " 4. handler can be replaced after a previous handler error
   let g:CurrentTest = 'error_resilience: handler replacement after error'
-  call nam#navigation#SetHandler({label -> v:true})
-  let result = nam#navigation#Dispatch('1')
+  call vproj#navigation#SetHandler({label -> v:true})
+  let result = vproj#navigation#Dispatch('1')
   call g:AssertTrue(result is v:true,
       \ 'set_handler and dispatch work after replacing error-throwing handler')
 
   " 5. state isolation between dispatch calls
   let g:CurrentTest = 'error_resilience: state isolation'
-  call nam#navigation#SetHandler({label -> s:update_shared(label)})
+  call vproj#navigation#SetHandler({label -> s:update_shared(label)})
   let s:shared_state = {'count': 0, 'last': ''}
-  call nam#navigation#Dispatch('a')
-  call nam#navigation#Dispatch('b')
+  call vproj#navigation#Dispatch('a')
+  call vproj#navigation#Dispatch('b')
   call g:AssertEquals(s:shared_state.count, 2,
       \ 'handler state: count is 2 after two dispatches')
   call g:AssertEquals(s:shared_state.last, 'b',

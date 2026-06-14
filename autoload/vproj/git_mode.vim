@@ -1,12 +1,12 @@
 vim9script
 
-# autoload/nam/git_mode.vim — vim9script git status mode
+# autoload/vproj/git_mode.vim — vim9script git status mode
 # Displays staged/unstaged/untracked/conflict files with DSN labels.
 # Supports actions: stage file, unstage file, view diff.
 #
 # Mode interface:
 #   Create(cfg) -> mode dict
-#   Refresh()   — fetch git status via nam#git
+#   Refresh()   — fetch git status via vproj#git
 #   RenderGit() — build labeled lines
 #   SelectGit() — open a file by label
 #   StageItem() — stage a file by label
@@ -36,19 +36,19 @@ export def Create(cfg: dict<any>): dict<any>
     key: 'g',
     icon: 'G',
     enabled: get(git_cfg, 'enabled', true),
-    StageFile: function('nam#git_mode#StageItem'),
-    UnstageFile: function('nam#git_mode#UnstageItem'),
-    ShowDiff: function('nam#git_mode#ShowDiffItem'),
-    Refresh: function('nam#git_mode#Refresh'),
-    Render: function('nam#git_mode#RenderGit'),
-    Select: function('nam#git_mode#SelectGit'),
+    StageFile: function('vproj#git_mode#StageItem'),
+    UnstageFile: function('vproj#git_mode#UnstageItem'),
+    ShowDiff: function('vproj#git_mode#ShowDiffItem'),
+    Refresh: function('vproj#git_mode#Refresh'),
+    Render: function('vproj#git_mode#RenderGit'),
+    Select: function('vproj#git_mode#SelectGit'),
   }
 enddef
 
 # Refresh git status and rebuild the Items list.
 # Falls back to an error item when the current directory is not a git repo.
 export def Refresh()
-  var status = nam#git#GetStatus()
+  var status = vproj#git#GetStatus()
 
   if status == v:null
     Items = [{name: '(not a git repository)', path: '', category: 'error'}]
@@ -76,9 +76,9 @@ enddef
 #   {label_map: dict<any>, lines: list<string>}
 export def RenderGit(): dict<any>
   if empty(Items)
-    return nam#labels#BuildMap([{name: '(no changes)'}], get(Config, 'labels', {}))
+    return vproj#labels#BuildMap([{name: '(no changes)'}], get(Config, 'labels', {}))
   endif
-  var result = nam#labels#BuildMap(Items, get(Config, 'labels', {}))
+  var result = vproj#labels#BuildMap(Items, get(Config, 'labels', {}))
   LabelMap = result.label_map
   Lines = result.lines
   return result
@@ -97,12 +97,12 @@ export def SelectGit(label: string): any
   if item.category == 'error'
     return false
   endif
-  var main_win = nam#sidebar#GetMainWin()
+  var main_win = vproj#sidebar#GetMainWin()
   if main_win > 0
     win_gotoid(main_win)
   endif
   exe 'edit ' .. fnameescape(item.path)
-  var side_win = nam#sidebar#GetWin()
+  var side_win = vproj#sidebar#GetWin()
   if side_win > 0
     win_gotoid(side_win)
   endif
@@ -119,7 +119,7 @@ export def StageItem(label: string): bool
   if item.path == ''
     return false
   endif
-  nam#git#StageFile(item.path)
+  vproj#git#StageFile(item.path)
   Refresh()
   return true
 enddef
@@ -134,7 +134,7 @@ export def UnstageItem(label: string): bool
   if item.path == ''
     return false
   endif
-  nam#git#UnstageFile(item.path)
+  vproj#git#UnstageFile(item.path)
   Refresh()
   return true
 enddef
@@ -152,7 +152,7 @@ export def ShowDiffItem(label: string): bool
     return false
   endif
   var staged: bool = item.category == 'staged'
-  var diff_lines: list<string> = nam#git#GetDiff(item.path, staged)
+  var diff_lines: list<string> = vproj#git#GetDiff(item.path, staged)
   if empty(diff_lines)
     return false
   endif

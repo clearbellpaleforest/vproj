@@ -1,6 +1,6 @@
 vim9script
 
-# autoload/nam/files_mode.vim — vim9script Files mode with paging.
+# autoload/vproj/files_mode.vim — vim9script Files mode with paging.
 # Module-level state: Items, LabelMap, Lines, Config, CurrentPage (number),
 # TotalPages (number), AllFiles (list<dict<any>>).
 
@@ -31,8 +31,8 @@ enddef
 
 # Refresh scans the project and sets up paging.
 export def Refresh()
-  var root = nam#project#FindRoot(getcwd())
-  AllFiles = nam#project#ScanFiles(root, {max_files: 5000})
+  var root = vproj#project#FindRoot(getcwd())
+  AllFiles = vproj#project#ScanFiles(root, {max_files: 5000})
   CurrentPage = 0
   TotalPages = max([1, float2nr(ceil(len(AllFiles) / 30.0))])
 enddef
@@ -46,7 +46,7 @@ export def RenderFiles(): dict<any>
     page_items = AllFiles[start : end]
   endif
   var labels_cfg = Config->get('labels', {})
-  var result = nam#labels#BuildMap(page_items, labels_cfg)
+  var result = vproj#labels#BuildMap(page_items, labels_cfg)
   LabelMap = result->get('label_map', {})
   Lines = result->get('lines', [])
   Lines->add('')
@@ -62,12 +62,12 @@ export def SelectFile(label: string): any
   endif
   if item->has_key('path')
     # Switch to main editing window before opening the file.
-    var main_win = nam#sidebar#GetMainWin()
+    var main_win = vproj#sidebar#GetMainWin()
     if main_win > 0
       win_gotoid(main_win)
     endif
     execute $'edit {fnameescape(item->get("path"))}'
-    var side_win = nam#sidebar#GetWin()
+    var side_win = vproj#sidebar#GetWin()
     if side_win > 0
       win_gotoid(side_win)
     endif

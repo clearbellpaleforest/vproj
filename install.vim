@@ -9,7 +9,7 @@
 "   vim -c 'source install.vim'
 "   nvim -c 'source install.vim'
 "
-" After sourcing, the :NamInstall command is also available.
+" After sourcing, the :VprojInstall command is also available.
 "
 " This script detects whether you are running Vim or Neovim, determines
 " the correct pack directory, clones the plugin from GitHub (or copies
@@ -17,42 +17,42 @@
 " that all required files are present.
 "
 " SECURITY: Like any installer, verify the contents of this file before
-" sourcing it. If you obtained it from the official Nam repository, you
+" sourcing it. If you obtained it from the official Vproj repository, you
 " can trust it — but verify.
 
-if exists('g:nam_install_loaded')
+if exists('g:vproj_install_loaded')
     finish
 endif
-let g:nam_install_loaded = 1
+let g:vproj_install_loaded = 1
 
 " ── Configuration ──────────────────────────────────────────────────
 
-let s:plugin_name = 'nam'
-let s:plugin_repo = 'https://github.com/clearbellpaleforest/nam'
+let s:plugin_name = "vproj"
+let s:plugin_repo = 'https://github.com/clearbellpaleforest/vproj'
 
 " Every plugin file that must exist for a valid installation.
 let s:required_files = [
-    \ 'lua/nam/init.lua',
-    \ 'lua/nam/config.lua',
-    \ 'lua/nam/core/navigation.lua',
-    \ 'lua/nam/core/project.lua',
-    \ 'lua/nam/core/persistence.lua',
-    \ 'lua/nam/adapters/compat.lua',
-    \ 'lua/nam/adapters/git.lua',
-    \ 'lua/nam/adapters/lsp.lua',
-    \ 'lua/nam/adapters/treesitter.lua',
-    \ 'lua/nam/modes/init.lua',
-    \ 'lua/nam/modes/buffers.lua',
-    \ 'lua/nam/modes/files.lua',
-    \ 'lua/nam/modes/git.lua',
-    \ 'lua/nam/modes/symbols.lua',
-    \ 'lua/nam/modes/outline.lua',
-    \ 'lua/nam/ui/labels.lua',
-    \ 'lua/nam/ui/renderer.lua',
-    \ 'lua/nam/ui/sidebar.lua',
-    \ 'lua/nam/utils/events.lua',
-    \ 'lua/nam/utils/cache.lua',
-    \ 'plugin/nam.lua',
+    \ 'lua/vproj/init.lua',
+    \ 'lua/vproj/config.lua',
+    \ 'lua/vproj/core/navigation.lua',
+    \ 'lua/vproj/core/project.lua',
+    \ 'lua/vproj/core/persistence.lua',
+    \ 'lua/vproj/adapters/compat.lua',
+    \ 'lua/vproj/adapters/git.lua',
+    \ 'lua/vproj/adapters/lsp.lua',
+    \ 'lua/vproj/adapters/treesitter.lua',
+    \ 'lua/vproj/modes/init.lua',
+    \ 'lua/vproj/modes/buffers.lua',
+    \ 'lua/vproj/modes/files.lua',
+    \ 'lua/vproj/modes/git.lua',
+    \ 'lua/vproj/modes/symbols.lua',
+    \ 'lua/vproj/modes/outline.lua',
+    \ 'lua/vproj/ui/labels.lua',
+    \ 'lua/vproj/ui/renderer.lua',
+    \ 'lua/vproj/ui/sidebar.lua',
+    \ 'lua/vproj/utils/events.lua',
+    \ 'lua/vproj/utils/cache.lua',
+    \ 'plugin/vproj.lua',
 \]
 
 " ── Internal helpers ───────────────────────────────────────────────
@@ -81,16 +81,16 @@ function! s:report_platform() abort
 endfunction
 
 " Find the repo source directory if install.vim is being sourced from
-" within the nam repository tree.
+" within the vproj repository tree.
 function! s:find_source_dir() abort
     " Check the directory containing this script
     let l:script = expand('<sfile>')
     let l:script_dir = fnamemodify(l:script, ':h')
-    if filereadable(l:script_dir . '/lua/nam/init.lua')
+    if filereadable(l:script_dir . '/lua/vproj/init.lua')
         return l:script_dir
     endif
     " Check the current working directory
-    if filereadable(getcwd() . '/lua/nam/init.lua')
+    if filereadable(getcwd() . '/lua/vproj/init.lua')
         return getcwd()
     endif
     return ''
@@ -139,7 +139,7 @@ function! s:install_from_local(src, dest) abort
     endif
 
     " Copy plugin file
-    let l:cp_plugin = 'cp ' . shellescape(a:src . '/plugin/nam.lua') . ' ' . shellescape(a:dest . '/plugin/')
+    let l:cp_plugin = 'cp ' . shellescape(a:src . '/plugin/vproj.lua') . ' ' . shellescape(a:dest . '/plugin/')
     silent let l:out = system(l:cp_plugin)
     if v:shell_error
         echohl ErrorMsg
@@ -192,7 +192,7 @@ function! s:print_post_install(dir) abort
     echo ''
     echo 'Add this to your ~/.vimrc or ~/.config/nvim/init.lua:'
     echo ''
-    echo '    require("nam").setup({ hotkey = "<F2>" })'
+    echo '    require("vproj").setup({ hotkey = "<F2>" })'
     echo ''
     echo 'Then press F2 to open the sidebar.'
     echo 'Press b/f/g/s/o for modes, then a label key to jump.'
@@ -202,7 +202,7 @@ endfunction
 
 " ── Main installer ─────────────────────────────────────────────────
 
-function! s:NamInstall() abort
+function! s:VprojInstall() abort
     let l:pack_dir = s:detect_pack_dir()
 
     call s:report_platform()
@@ -265,8 +265,8 @@ endfunction
 
 " ── Commands ───────────────────────────────────────────────────────
 
-command! NamInstall call s:NamInstall()
+command! VprojInstall call s:VprojInstall()
 
 " ── Auto-run when sourced ──────────────────────────────────────────
 
-call s:NamInstall()
+call s:VprojInstall()

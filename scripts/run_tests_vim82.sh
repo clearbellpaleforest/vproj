@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nam -- Vim test runner
+# Vproj -- Vim test runner
 # Runs the VimScript test suite. No external dependencies required.
 #
 # Usage:
@@ -10,29 +10,29 @@
 
 set -euo pipefail
 
-NAM_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-readonly NAM_ROOT
+VPROJ_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+readonly VPROJ_ROOT
 
 VIM="${VIM:-vim}"
 info() { echo "==> $*"; }
 die() { echo "ERROR: $*" >&2; exit 1; }
 
 info "Using Vim: $(command -v "$VIM")"
-info "Nam root: $NAM_ROOT"
+info "Vproj root: $VPROJ_ROOT"
 
 # Run the VimScript test suite
 info "Running tests..."
 
-cd "$NAM_ROOT"
-"$VIM" -N -u NONE -S tests/run_tests.vim 2>&1 | tee /tmp/nam-vim-test-output.txt
+cd "$VPROJ_ROOT"
+"$VIM" -N -u NONE -S tests/run_tests.vim 2>&1 | tee /tmp/vproj-vim-test-output.txt
 VIM_EXIT=$?
 
 echo ""
 echo "============================================"
-echo "  Nam Vim Test Results"
+echo "  Vproj Vim Test Results"
 echo "============================================"
 
-OUTPUT_TEXT=$(cat /tmp/nam-vim-test-output.txt)
+OUTPUT_TEXT=$(cat /tmp/vproj-vim-test-output.txt)
 
 # Extract pass/fail counts
 PASSED=$(echo "$OUTPUT_TEXT" | grep -c "OK" || true)

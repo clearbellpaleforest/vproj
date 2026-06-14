@@ -1,12 +1,12 @@
 vim9script
 
-# autoload/nam/init.vim — vim9script top-level orchestrator for Nam.
+# autoload/vproj/init.vim — vim9script top-level orchestrator for Nam.
 #
 # Called by plugin/nam.vim commands and user setup().
 # Exports: Setup, Toggle, Open, Close
 #
 # Setup flow:
-#   1. Merge user options with defaults via nam#config#Setup
+#   1. Merge user options with defaults via vproj#config#Setup
 #   2. Clear event bus and create subsystem caches
 #   3. Initialize all subsystems (sidebar, renderer, navigation, modes)
 #   4. Register each enabled mode (buffers, files, symbols, git, outline)
@@ -28,40 +28,40 @@ export def Setup(user_opts: dict<any>)
   endif
 
   # 1. Merge user options with defaults
-  var cfg: dict<any> = nam#config#Setup(user_opts)
+  var cfg: dict<any> = vproj#config#Setup(user_opts)
 
   # 2. Clear event bus
-  nam#events#Clear()
+  vproj#events#Clear()
 
   # 3. Create named caches with configured TTLs
-  nam#cache#Create('project', cfg.cache.project_ttl)
-  nam#cache#Create('git', cfg.cache.git_ttl)
+  vproj#cache#Create('project', cfg.cache.project_ttl)
+  vproj#cache#Create('git', cfg.cache.git_ttl)
 
   # 4. Build an events module reference for subsystems that need emit/subscribe
   var events_mod: dict<any> = {
-    On: function(nam#events#On),
-    Off: function(nam#events#Off),
-    Emit: function(nam#events#Emit),
-    Clear: function(nam#events#Clear),
+    On: function(vproj#events#On),
+    Off: function(vproj#events#Off),
+    Emit: function(vproj#events#Emit),
+    Clear: function(vproj#events#Clear),
   }
 
   # 5. Initialize all subsystems
-  nam#sidebar#Setup(cfg)
-  nam#renderer#Setup(cfg)
-  nam#navigation#Setup(cfg, events_mod)
-  nam#modes#Setup(cfg, events_mod)
+  vproj#sidebar#Setup(cfg)
+  vproj#renderer#Setup(cfg)
+  vproj#navigation#Setup(cfg, events_mod)
+  vproj#modes#Setup(cfg, events_mod)
 
   # 6. Register each enabled mode.
-  #    Mode files follow the naming convention autoload/nam/{name}_mode.vim and
+  #    Mode files follow the naming convention autoload/vproj/{name}_mode.vim and
   #    export a Create(cfg) function that returns a mode dict.
   var mode_names: list<string> = ['files', 'buffers', 'symbols', 'git', 'outline']
   for mode_name in mode_names
     if has_key(cfg.modes, mode_name) && cfg.modes[mode_name]->get('enabled', false)
       try
-        var create_fn_name: string = 'nam#' .. mode_name .. '_mode#Create'
+        var create_fn_name: string = 'vproj#' .. mode_name .. '_mode#Create'
         var CreateFn = function(create_fn_name)
         var mode: dict<any> = CreateFn(cfg)
-        nam#modes#Register(mode)
+        vproj#modes#Register(mode)
       catch
         echom $"[nam] Failed to load mode '{mode_name}': {v:exception}"
       endtry
@@ -73,11 +73,11 @@ export def Setup(user_opts: dict<any>)
   events_mod.On('mode_rerender', ModeRerenderHandler)
 
   # 8. Set up persistence and workspace modules
-  nam#persistence#Setup(cfg)
-  nam#workspace#Setup(cfg)
+  vproj#persistence#Setup(cfg)
+  vproj#workspace#Setup(cfg)
 
   # 9. Set global hotkey mapping (Normal mode)
-  execute 'nnoremap ' .. cfg.hotkey .. ' :<C-U>call nam#init#Toggle()<CR>'
+  execute 'nnoremap ' .. cfg.hotkey .. ' :<C-U>call vproj#init#Toggle()<CR>'
 
   # 10. Auto-open if configured
   if cfg.auto_open
@@ -92,8 +92,8 @@ enddef
 # After opening, attaches navigation mappings and switches to the default mode.
 # ---------------------------------------------------------------------------
 export def Toggle()
-  nam#sidebar#Toggle()
-  if nam#sidebar#IsOpen()
+  vproj#sidebar#Toggle()
+  if vproj#sidebar#IsOpen()
     AttachAndShow()
   endif
 enddef
@@ -102,8 +102,8 @@ enddef
 # Open — open the sidebar and prepare for interaction.
 # ---------------------------------------------------------------------------
 export def Open()
-  nam#sidebar#Open()
-  if nam#sidebar#IsOpen()
+  vproj#sidebar#Open()
+  if vproj#sidebar#IsOpen()
     AttachAndShow()
   endif
 enddef
@@ -112,7 +112,7 @@ enddef
 # Close — close the sidebar and tear down its buffer.
 # ---------------------------------------------------------------------------
 export def Close()
-  nam#sidebar#Close()
+  vproj#sidebar#Close()
 enddef
 
 # ---------------------------------------------------------------------------
@@ -121,18 +121,18 @@ enddef
 # to the first registered (default) mode.
 # ---------------------------------------------------------------------------
 def AttachAndShow()
-  var buf: number = nam#sidebar#GetBuf()
+  var buf: number = vproj#sidebar#GetBuf()
   if buf <= 0
     return
   endif
 
   # Attach navigation mappings to the sidebar scratch buffer
-  nam#navigation#Attach(buf)
+  vproj#navigation#Attach(buf)
 
   # Switch to the default (first registered enabled) mode
-  var default_mode: dict<any> = nam#modes#GetDefault()
+  var default_mode: dict<any> = vproj#modes#GetDefault()
   if !empty(default_mode)
-    nam#modes#Switch(default_mode.key)
+    vproj#modes#Switch(default_mode.key)
   endif
 enddef
 
@@ -142,7 +142,7 @@ enddef
 # 1. Verifies the sidebar is still open and retrieves the buffer.
 # 2. Calls the mode's Refresh() to gather current data.
 # 3. Calls the mode's Render() to produce display lines and a label map.
-# 4. Delegates full rendering to nam#renderer#RenderFull.
+# 4. Delegates full rendering to vproj#renderer#RenderFull.
 # 5. Sets the mode as current on the navigation engine.
 # 6. Registers a label-dispatch handler that:
 #    a. Attempts mode.Select(label).  If it returns a value (truthy or false
@@ -151,7 +151,7 @@ enddef
 #       registered mode hotkey and switches to that mode.
 # ---------------------------------------------------------------------------
 def ModeChangedHandler(data: dict<any>)
-  if !nam#sidebar#IsOpen()
+  if !vproj#sidebar#IsOpen()
     return
   endif
 
@@ -160,7 +160,7 @@ def ModeChangedHandler(data: dict<any>)
     return
   endif
 
-  var buf: number = nam#sidebar#GetBuf()
+  var buf: number = vproj#sidebar#GetBuf()
   if buf <= 0
     return
   endif
@@ -180,16 +180,16 @@ def ModeChangedHandler(data: dict<any>)
 
   # Push rendered content into the sidebar buffer
   if !empty(result)
-    nam#renderer#RenderFull(buf, mode.name, nam#modes#All(), get(result, 'lines', []))
+    vproj#renderer#RenderFull(buf, mode.name, vproj#modes#All(), get(result, 'lines', []))
   endif
 
   # Tell the navigation engine which mode is active
-  nam#navigation#SetCurrentMode(mode)
+  vproj#navigation#SetCurrentMode(mode)
 
   # Register the label-dispatch handler.
   #   - If mode.Select(label) returns non-null the label was consumed.
   #   - Otherwise the label is checked against mode hotkeys.
-  nam#navigation#SetHandler(HandleLabel)
+  vproj#navigation#SetHandler(HandleLabel)
 enddef
 
 # ---------------------------------------------------------------------------
@@ -199,16 +199,16 @@ enddef
 # Useful after page-turn operations (prev_page/next_page).
 # ---------------------------------------------------------------------------
 def ModeRerenderHandler(data: dict<any>)
-  if !nam#sidebar#IsOpen()
+  if !vproj#sidebar#IsOpen()
     return
   endif
 
-  var mode: dict<any> = nam#modes#GetCurrent()
+  var mode: dict<any> = vproj#modes#GetCurrent()
   if empty(mode)
     return
   endif
 
-  var buf: number = nam#sidebar#GetBuf()
+  var buf: number = vproj#sidebar#GetBuf()
   if buf <= 0
     return
   endif
@@ -221,12 +221,12 @@ def ModeRerenderHandler(data: dict<any>)
   endif
 
   if !empty(result)
-    nam#renderer#RenderFull(buf, mode.name, nam#modes#All(), get(result, 'lines', []))
+    vproj#renderer#RenderFull(buf, mode.name, vproj#modes#All(), get(result, 'lines', []))
   endif
 enddef
 
 # ---------------------------------------------------------------------------
-# HandleLabel — label dispatch function registered with nam#navigation.
+# HandleLabel — label dispatch function registered with vproj#navigation.
 #
 # @param label: string — the single or multi-character label pressed.
 # @returns bool — true if the label was consumed, false otherwise.
@@ -237,7 +237,7 @@ enddef
 #      and, if found, switch to that mode.
 # ---------------------------------------------------------------------------
 def HandleLabel(label: string): bool
-  var mode: dict<any> = nam#modes#GetCurrent()
+  var mode: dict<any> = vproj#modes#GetCurrent()
   if empty(mode)
     return false
   endif
@@ -256,9 +256,9 @@ def HandleLabel(label: string): bool
   endif
 
   # Label was not consumed by the current mode — check mode hotkeys
-  var target_mode: dict<any> = nam#modes#Get(label)
+  var target_mode: dict<any> = vproj#modes#Get(label)
   if !empty(target_mode)
-    nam#modes#Switch(label)
+    vproj#modes#Switch(label)
     return true
   endif
 

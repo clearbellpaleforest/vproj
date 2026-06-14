@@ -99,7 +99,7 @@ if [ -z "$PLENARY_DIR" ]; then
 fi
 
 echo "============================================="
-echo "  nam — Combined Test Runner"
+echo "  vproj — Combined Test Runner"
 echo "============================================="
 echo ""
 

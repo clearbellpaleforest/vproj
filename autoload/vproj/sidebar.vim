@@ -1,6 +1,6 @@
 vim9script
 
-# autoload/nam/sidebar.vim — vim9script sidebar window/buffer management
+# autoload/vproj/sidebar.vim — vim9script sidebar window/buffer management
 # Uses leftabove {width}vsplit (no floating windows — this is Vim, not Neovim).
 
 # Module-level state
@@ -27,7 +27,7 @@ export def Open()
 
   # Create a scratch buffer if we don't have one already.
   if BufNr <= 0 || !bufexists(BufNr)
-    BufNr = bufadd('nam://sidebar')
+    BufNr = bufadd('vproj://sidebar')
     if BufNr <= 0
       return
     endif

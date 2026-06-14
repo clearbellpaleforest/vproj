@@ -1,6 +1,6 @@
 vim9script
 
-# autoload/nam/navigation.vim — vim9script key dispatch and mapping manager
+# autoload/vproj/navigation.vim — vim9script key dispatch and mapping manager
 #
 # Module-level state
 #   TierChars:    list<string>  — all single-char label keys, populated in Setup()
@@ -32,7 +32,7 @@ enddef
 #   Configures a buffer for DSN key dispatch.
 #   - Marks the buffer as not modifiable
 #   - Creates a buffer-local nnoremap for every tier character,
-#     routing through the handler bridge (nam#handler#Handle)
+#     routing through the handler bridge (vproj#handler#Handle)
 #   - Maps <Esc> to close the sidebar
 #   - Maps [ and ] for page-up/page-down through the handler bridge
 export def Attach(buf: number)
@@ -41,11 +41,11 @@ export def Attach(buf: number)
   endif
   setbufvar(buf, '&modifiable', 0)
   for ch in TierChars
-    execute $'nnoremap <buffer> <nowait> {ch} <Cmd>call nam#handler#Handle("{ch}")<CR>'
+    execute $'nnoremap <buffer> <nowait> {ch} <Cmd>call vproj#handler#Handle("{ch}")<CR>'
   endfor
-  execute 'nnoremap <buffer> <nowait> <Esc> <Cmd>call nam#handler#HandleClose()<CR>'
-  execute 'nnoremap <buffer> <nowait> [ <Cmd>call nam#handler#HandlePagePrev()<CR>'
-  execute 'nnoremap <buffer> <nowait> ] <Cmd>call nam#handler#HandlePageNext()<CR>'
+  execute 'nnoremap <buffer> <nowait> <Esc> <Cmd>call vproj#handler#HandleClose()<CR>'
+  execute 'nnoremap <buffer> <nowait> [ <Cmd>call vproj#handler#HandlePagePrev()<CR>'
+  execute 'nnoremap <buffer> <nowait> ] <Cmd>call vproj#handler#HandlePageNext()<CR>'
 enddef
 
 # SetHandler(Fn):

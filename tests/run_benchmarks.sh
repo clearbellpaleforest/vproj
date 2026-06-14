@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Nam Plugin — Performance Benchmark Runner
+# Vproj Plugin — Performance Benchmark Runner
 #
 # Runs all benchmarks via Neovim headless and checks results.
 #
@@ -44,7 +44,7 @@ done
 
 echo ""
 echo "================================================================"
-echo "  Nam Plugin — Performance Benchmarks"
+echo "  Vproj Plugin — Performance Benchmarks"
 echo "================================================================"
 echo "  Date:      $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 echo "  Host:      $(uname -n -s -m 2>/dev/null || echo 'unknown')"

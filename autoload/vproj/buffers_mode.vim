@@ -17,7 +17,7 @@ var Config: dict<any> = {}
 #   *  modified
 #   R  readonly
 #   T  terminal
-#   P  pinned (via nam#workspace#IsPinned, if available)
+#   P  pinned (via vproj#workspace#IsPinned, if available)
 def GetBufferStatus(buf: number): string
   if buf <= 0 || !bufexists(buf)
     return ''
@@ -41,10 +41,10 @@ def GetBufferStatus(buf: number): string
     endif
   catch
   endtry
-  if exists('*nam#workspace#IsPinned')
+  if exists('*vproj#workspace#IsPinned')
     try
       var bname: string = bufname(buf)
-      if bname != '' && nam#workspace#IsPinned(bname)
+      if bname != '' && vproj#workspace#IsPinned(bname)
         status ..= 'P'
       endif
     catch
@@ -72,9 +72,9 @@ export def Create(cfg: dict<any>): dict<any>
     enabled: enabled,
   }
   mode->extend({
-    Refresh: function('nam#buffers_mode#Refresh'),
-    Render: function('nam#buffers_mode#RenderBuf'),
-    Select: function('nam#buffers_mode#SelectBuf'),
+    Refresh: function('vproj#buffers_mode#Refresh'),
+    Render: function('vproj#buffers_mode#RenderBuf'),
+    Select: function('vproj#buffers_mode#SelectBuf'),
   })
   return mode
 enddef
@@ -84,11 +84,11 @@ enddef
 export def Refresh()
   Items = []
   for buf in range(1, bufnr('$'))
-    if !bufexists(buf) || bufname(buf) ==# 'nam://sidebar'
+    if !bufexists(buf) || bufname(buf) ==# 'vproj://sidebar'
       continue
     endif
     # Skip sidebar and unlisted buffers
-    if bufname(buf) ==# '' || bufname(buf) ==# 'nam://sidebar'
+    if bufname(buf) ==# '' || bufname(buf) ==# 'vproj://sidebar'
       continue
     endif
     var name: string = bufname(buf)
@@ -107,13 +107,13 @@ enddef
 
 # RenderBuf feeds the current Items through the DSN label engine.
 #
-# Calls nam#labels#BuildMap to produce a label_map dict and display
+# Calls vproj#labels#BuildMap to produce a label_map dict and display
 # lines list.  Both are stored in module-level state.
 #
 # @returns {dict<any>} result with keys 'label_map' and 'lines'.
 export def RenderBuf(): dict<any>
   var labels_result: dict<any> =
-      nam#labels#BuildMap(Items, Config->get('labels', {}))
+      vproj#labels#BuildMap(Items, Config->get('labels', {}))
   LabelMap = labels_result['label_map']
   Lines = labels_result['lines']
   return labels_result
@@ -134,12 +134,12 @@ export def SelectBuf(label: string): any
   if has_key(item, 'buf')
     var nr: number = item.buf
     if bufexists(nr)
-      var main_win = nam#sidebar#GetMainWin()
+      var main_win = vproj#sidebar#GetMainWin()
       if main_win > 0
         win_gotoid(main_win)
       endif
       execute 'buffer ' .. nr
-      var side_win = nam#sidebar#GetWin()
+      var side_win = vproj#sidebar#GetWin()
       if side_win > 0
         win_gotoid(side_win)
       endif
