@@ -165,7 +165,7 @@ export def SelectSym(label: string): any
 
   # Record in workspace if available (graceful fallback)
   try
-    call vproj#workspace#RecordSymbol({
+    vproj#workspace#RecordSymbol({
       name: item->get('symbol_name', ''),
       path: item.path,
       line: item.line,

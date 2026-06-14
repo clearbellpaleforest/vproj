@@ -12,7 +12,7 @@
 
 ```bash
 git clone https://github.com/clearbellpaleforest/vproj.git
-cd nam
+cd vproj
 
 # Run the full test suite
 nvim --headless -c "PlenaryBustedDirectory tests/spec/ {minimal_init = 'tests/minimal_init.lua'}"
@@ -24,7 +24,7 @@ All 50 tests across 11 spec files must pass before opening a pull request.
 
 ```
 lua/vproj/          -- Source code
-plugin/nam.lua    -- Autoload entry point and user commands
+plugin/vproj.vim    -- Autoload entry point and user commands
 tests/spec/       -- Plenary test files
 tests/minimal_init.lua -- Minimal VimL init for test isolation
 ```
@@ -33,7 +33,7 @@ tests/minimal_init.lua -- Minimal VimL init for test isolation
 
 ## Architecture Overview
 
-Nam is built around three pillars.
+Vproj is built around three pillars.
 
 ### 1. Mode System
 
@@ -66,7 +66,7 @@ Labels are generated in four keyboard tiers (36 single-character labels) with tw
 
 ## Vim 8.2 Compatibility Rules
 
-Nam targets Vim compiled with `+lua` and Neovim >= 0.10 from a single codebase. Code must not call Neovim-only APIs. The following APIs are **forbidden** outside of `adapters/compat.lua`. If you need one of these, add a compat wrapper instead of calling it directly.
+Vproj targets Vim compiled with `+lua` and Neovim >= 0.10 from a single codebase. Code must not call Neovim-only APIs. The following APIs are **forbidden** outside of `adapters/compat.lua`. If you need one of these, add a compat wrapper instead of calling it directly.
 
 | Forbidden API              | Use Instead                               |
 |----------------------------|--------------------------------------------|
@@ -130,7 +130,7 @@ Open `lua/vproj/modes/init.lua` and add your mode:
 
 ```lua
 -- In the registry setup:
-local your_mode = require("nam.modes.your_mode")
+local your_mode = require("vproj.modes.your_mode")
 registry:register(your_mode)
 ```
 
@@ -187,7 +187,7 @@ Add `print(vim.inspect(value))` calls in test or source code and check the termi
 If modifying the compat layer, verify the plugin loads under classic Vim:
 
 ```bash
-vim --cmd "set nocompatible" --cmd "packadd nam" -c "call vproj#NamOpen()" -c "q"
+vim --cmd "set nocompatible" --cmd "packadd vproj" -c "call vproj#init#Open()" -c "q"
 ```
 
 ### Benchmarks
@@ -247,8 +247,8 @@ return M
 Order imports from leaf to root: stdlib, adapters, utils, modes, core, ui.
 
 ```lua
-local compat = require("nam.adapters.compat")
-local events = require("nam.utils.events")
+local compat = require("vproj.adapters.compat")
+local events = require("vproj.utils.events")
 ```
 
 ---

@@ -47,6 +47,10 @@ def ResolveCacheHome(): string
   if empty(expanded) || expanded !~# '^/\|^~/'
     return expand('~') .. '/.cache'
   endif
+  # Reject path traversal components and glob metacharacters
+  if expanded =~# '/\.\./\|/\.\.$\|/\./\|/\.$\|[\*\?\[\]]'
+    return expand('~') .. '/.cache'
+  endif
   return expanded
 enddef
 
@@ -75,7 +79,7 @@ def GetStateFile(project_root: string): string
   if has_key(StateFiles, key)
     return StateFiles[key]
   endif
-  var dir: string = ResolveCacheHome() .. '/nam'
+  var dir: string = ResolveCacheHome() .. '/vproj'
   var filepath: string = dir .. '/session_' .. key .. '.json'
   StateFiles[key] = filepath
   return filepath
@@ -86,7 +90,7 @@ enddef
 def EnsureCacheDir(project_root: string)
   var filepath: string = GetStateFile(project_root)
   var dir: string = fnamemodify(filepath, ':h')
-  if dir !~# '/nam$'
+  if dir !~# '/vproj$'
     return
   endif
   if !isdirectory(dir)
@@ -224,7 +228,12 @@ export def Restore(project_root: string = ''): bool
     return false
   endif
   var json_text: string = lines->join("\n")
-  var decoded: any = json_decode(json_text)
+  var decoded: any
+  try
+    decoded = json_decode(json_text)
+  catch
+    return false
+  endtry
   if type(decoded) != v:t_dict
     return false
   endif
@@ -256,12 +265,12 @@ export def Restore(project_root: string = ''): bool
   if has_key(state, 'cursor_positions') && type(state.cursor_positions) == v:t_dict
     for bufpath in keys(state.cursor_positions)
       var pos: any = state.cursor_positions[bufpath]
-      if type(pos) == v:t_dict && has_key(pos, 'line')
+      if type(pos) == v:t_dict && has_key(pos, 'line') && type(pos.line) == v:t_number
         var bufnr: number = bufnr(bufpath)
         if bufnr > 0
           var col: number = get(pos, 'col', 1)
           try
-            call setpos('.', [bufnr, pos.line, col, 0])
+            setpos('.', [bufnr, pos.line, col, 0])
           catch
           endtry
         endif
@@ -269,10 +278,21 @@ export def Restore(project_root: string = ''): bool
     endfor
   endif
 
-  # Restore window layout (split sizes and positions)
+  # Restore window layout (split sizes and positions).
+  # Validate against a strict pattern: only resize and vertical resize
+  # commands that winrestcmd() produces. Rejects any injected Ex commands.
   if has_key(state, 'window_layout') && type(state.window_layout) == v:t_string && state.window_layout != ''
     try
-      execute state.window_layout
+      var valid_layout: bool = true
+      for cmd_line in split(state.window_layout, '\n')
+        if cmd_line !~# '^\(resize\|vertical resize\)\s\+\d\+$'
+          valid_layout = false
+          break
+        endif
+      endfor
+      if valid_layout
+        execute state.window_layout
+      endif
     catch
     endtry
   endif
@@ -280,7 +300,7 @@ export def Restore(project_root: string = ''): bool
   # Restore the current mode in the sidebar
   if has_key(state, 'current_mode') && type(state.current_mode) == v:t_string && state.current_mode != ''
     try
-      call vproj#modes#Switch(state.current_mode)
+      vproj#modes#Switch(state.current_mode)
     catch
     endtry
   endif
@@ -289,7 +309,7 @@ export def Restore(project_root: string = ''): bool
   if has_key(state, 'sidebar_open') && type(state.sidebar_open) == v:t_bool && state.sidebar_open
     try
       if !vproj#sidebar#IsOpen()
-        call vproj#sidebar#Open()
+        vproj#sidebar#Open()
       endif
     catch
     endtry
@@ -364,9 +384,9 @@ export def Setup(cfg: dict<any>)
 
   # Clean up stale .tmp.* files left by interrupted atomic writes.
   # Vim crashes between writefile() and rename() orphan these files.
-  var nam_dir: string = ResolveCacheHome() .. '/nam'
-  if isdirectory(nam_dir)
-    var stale: list<string> = glob(nam_dir .. '/session_*.tmp.*', false, true)
+  var vproj_dir: string = ResolveCacheHome() .. '/vproj'
+  if isdirectory(vproj_dir)
+    var stale: list<string> = glob(vproj_dir .. '/session_*.tmp.*', false, true)
     for f in stale
       delete(f)
     endfor

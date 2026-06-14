@@ -1,21 +1,21 @@
-*nam.txt*    Nam - Direct Selection Navigation for Vim
+*vproj.txt*    Nam - Direct Selection Navigation for Vim
 
 ==============================================================================
-CONTENTS                                                         *nam* *nam-contents*
+CONTENTS                                                         *vproj* *vproj-contents*
 
-  1.  Introduction ........................ |nam-intro|
-  2.  Requirements ........................ |nam-requirements|
-  3.  Installation ........................ |nam-installation|
-  4.  Quick Start ........................ |nam-quickstart|
-  5.  Commands ............................ |nam-commands|
-  6.  Modes .............................. |nam-modes|
-  7.  Navigation ......................... |nam-navigation|
-  8.  Configuration ...................... |nam-config|
-  9.  Key Bindings ....................... |nam-keybindings|
- 10.  Architecture ........................ |nam-architecture|
+  1.  Introduction ........................ |vproj-intro|
+  2.  Requirements ........................ |vproj-requirements|
+  3.  Installation ........................ |vproj-installation|
+  4.  Quick Start ........................ |vproj-quickstart|
+  5.  Commands ............................ |vproj-commands|
+  6.  Modes .............................. |vproj-modes|
+  7.  Navigation ......................... |vproj-navigation|
+  8.  Configuration ...................... |vproj-config|
+  9.  Key Bindings ....................... |vproj-keybindings|
+ 10.  Architecture ........................ |vproj-architecture|
 
 ==============================================================================
-1. INTRODUCTION                                                 *nam-intro*
+1. INTRODUCTION                                                 *vproj-intro*
 
 Nam is a Vim plugin that replaces cursor-based tree navigation with
 **Direct Selection Navigation (DSN)** — single-keystroke file access
@@ -32,7 +32,7 @@ Nam is written in pure VimScript (vim9script). No +lua, no Python,
 no external dependencies required. Works on Vim 8.2+.
 
 ==============================================================================
-2. REQUIREMENTS                                            *nam-requirements*
+2. REQUIREMENTS                                            *vproj-requirements*
 
     Vim 8.2 or later
 
@@ -43,7 +43,7 @@ Optional but recommended:
 All features degrade gracefully when optional dependencies are absent.
 
 ==============================================================================
-3. INSTALLATION                                          *nam-installation*
+3. INSTALLATION                                          *vproj-installation*
 
 Quick install:
 >   curl -fsSL https://github.com/clearbellpaleforest/vproj/raw/main/install.sh | bash
@@ -60,7 +60,7 @@ Built-in packages:
 >     pack/bundle/start/nam
 
 ==============================================================================
-4. QUICK START                                              *nam-quickstart*
+4. QUICK START                                              *vproj-quickstart*
 
 Minimal ~/.vimrc:
 >   call vproj#init#Setup({
@@ -77,7 +77,7 @@ bookmark a location, and `:VprojWorkspaceSave <name>` to save your entire
 workspace state.
 
 ==============================================================================
-5. COMMANDS                                                  *nam-commands*
+5. COMMANDS                                                  *vproj-commands*
 
     :Vproj                    Toggle sidebar open/closed
     :VprojOpen                Open sidebar
@@ -92,7 +92,7 @@ workspace state.
     :VprojBookmarkJump <n>    Jump to bookmark <n>
 
 ==============================================================================
-6. MODES                                                       *nam-modes*
+6. MODES                                                       *vproj-modes*
 
 All views implement the Mode dict interface:
 
@@ -106,7 +106,7 @@ Mode hotkeys:
     o  — Outline (per-file structural outline)
 
 ------------------------------------------------------------------------------
-6.1 Buffers Mode                                          *nam-mode-buffers*
+6.1 Buffers Mode                                          *vproj-mode-buffers*
 
 Lists all open buffers with status indicators:
     *  Modified    R  Read-only    T  Terminal    P  Pinned
@@ -114,7 +114,7 @@ Lists all open buffers with status indicators:
 Selecting a label switches to that buffer immediately.
 
 ------------------------------------------------------------------------------
-6.2 Files Mode                                            *nam-mode-files*
+6.2 Files Mode                                            *vproj-mode-files*
 
 Flat, labeled file list for the project root. Project root is detected
 from marker files (.git, package.json, Makefile, etc.). Directories
@@ -122,7 +122,7 @@ sorted first, marked with trailing /. Paginated at 30 items per page.
 Use [ and ] to navigate pages. Common noise directories excluded.
 
 ------------------------------------------------------------------------------
-6.3 Git Mode                                              *nam-mode-git*
+6.3 Git Mode                                              *vproj-mode-git*
 
 Working tree status organized by category:
     S  Staged      M  Unstaged      ?  Untracked      C  Conflict
@@ -130,13 +130,13 @@ Working tree status organized by category:
 Select a label to open the file in its current state.
 
 ------------------------------------------------------------------------------
-6.4 Symbols Mode                                        *nam-mode-symbols*
+6.4 Symbols Mode                                        *vproj-mode-symbols*
 
 Document symbols extracted via ctags. Each entry shows kind icon, name,
 and line number. Selecting a symbol jumps the cursor to its definition.
 
 ------------------------------------------------------------------------------
-6.5 Outline Mode                                        *nam-mode-outline*
+6.5 Outline Mode                                        *vproj-mode-outline*
 
 Per-file structural outline based on filetype:
     Markdown    # through ###### headings
@@ -146,12 +146,12 @@ Per-file structural outline based on filetype:
     Other       First 50 non-blank lines (truncated)
 
 ==============================================================================
-7. NAVIGATION                                              *nam-navigation*
+7. NAVIGATION                                              *vproj-navigation*
 
 Direct Selection Navigation (DSN) uses keyboard labels as addresses.
 
 ------------------------------------------------------------------------------
-7.1 Label Tiers                                              *nam-labels*
+7.1 Label Tiers                                              *vproj-labels*
 
     Tier  Keys           Count
     1     1234567890     10
@@ -163,7 +163,7 @@ Direct Selection Navigation (DSN) uses keyboard labels as addresses.
 Beyond 36 items: aa, ab, ac... (two-character overflow).
 
 ------------------------------------------------------------------------------
-7.2 Key Handler                                          *nam-key-handler*
+7.2 Key Handler                                          *vproj-key-handler*
 
 The key handler maps every single-character label to its target:
 >   if label_map has key → call mode's Select()
@@ -173,7 +173,7 @@ The key handler maps every single-character label to its target:
 >   if key is ] → next page
 
 ==============================================================================
-8. CONFIGURATION                                             *nam-config*
+8. CONFIGURATION                                             *vproj-config*
 
 Setup is called once in your ~/.vimrc:
 >   call vproj#init#Setup({ ... })
@@ -181,7 +181,7 @@ Setup is called once in your ~/.vimrc:
 The dict is deep-merged over defaults.
 
 ------------------------------------------------------------------------------
-8.1 Setup Options                                    *nam-config-options*
+8.1 Setup Options                                    *vproj-config-options*
 
     Option              Type      Default   Description
     hotkey              String    '<F2>'    Global toggle mapping
@@ -189,39 +189,39 @@ The dict is deep-merged over defaults.
     auto_open           Boolean   v:false   Open sidebar on startup
 
 ------------------------------------------------------------------------------
-8.2 Label Configuration                             *nam-config-labels*
+8.2 Label Configuration                             *vproj-config-labels*
 
     labels.tiers           List    (4 tiers)   Ordered tier key strings
     labels.overflow_style  String  'double'    Double-char overflow style
 
 ------------------------------------------------------------------------------
-8.3 Mode Configuration                              *nam-config-modes*
+8.3 Mode Configuration                              *vproj-config-modes*
 
     modes.{name}.enabled   Boolean  v:true     Enable/disable a mode
 
 ------------------------------------------------------------------------------
-8.4 Workspace Configuration                    *nam-config-workspace*
+8.4 Workspace Configuration                    *vproj-config-workspace*
 
     workspace.auto_save    Boolean  v:true     Auto-save on exit
     workspace.auto_restore Boolean  v:true     Auto-restore on start
 
 ------------------------------------------------------------------------------
-8.5 Cache Configuration                            *nam-config-cache*
+8.5 Cache Configuration                            *vproj-config-cache*
 
     cache.project_ttl      Number   30         File tree cache (seconds)
     cache.git_ttl          Number   5          Git status cache (seconds)
     cache.ctags_ttl        Number   10         Ctags cache (seconds)
 
 ==============================================================================
-9. KEY BINDINGS                                          *nam-keybindings*
+9. KEY BINDINGS                                          *vproj-keybindings*
 
 ------------------------------------------------------------------------------
-9.1 Global Hotkeys                           *nam-keybindings-global*
+9.1 Global Hotkeys                           *vproj-keybindings-global*
 
     Default: F2 toggles the sidebar.
 
 ------------------------------------------------------------------------------
-9.2 Sidebar Hotkeys                         *nam-keybindings-sidebar*
+9.2 Sidebar Hotkeys                         *vproj-keybindings-sidebar*
 
 When the sidebar is open:
     1-0, a-z, q-p, z-m    Label selection (DSN)
@@ -230,7 +230,7 @@ When the sidebar is open:
     <Esc>                  Close sidebar
 
 ==============================================================================
-10. ARCHITECTURE                                          *nam-architecture*
+10. ARCHITECTURE                                          *vproj-architecture*
 
 Nam is a pure VimScript (vim9script) plugin.
 

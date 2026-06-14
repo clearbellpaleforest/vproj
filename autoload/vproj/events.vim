@@ -1,6 +1,6 @@
 vim9script
 
-# Event bus for Nam plugin.
+# Event bus for Vproj plugin.
 # Provides decoupled communication between subsystems.
 # Listeners dict: event name -> list of {id, fn}
 # NextId counter: monotonically increasing unique IDs.

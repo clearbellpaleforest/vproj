@@ -31,9 +31,9 @@ export def Open()
     if BufNr <= 0
       return
     endif
-    call setbufvar(BufNr, '&buftype', 'nofile')
-    call setbufvar(BufNr, '&bufhidden', 'wipe')
-    call setbufvar(BufNr, '&swapfile', false)
+    setbufvar(BufNr, '&buftype', 'nofile')
+    setbufvar(BufNr, '&bufhidden', 'wipe')
+    setbufvar(BufNr, '&swapfile', false)
   endif
 
   # Remember the main editing window before creating the sidebar.
@@ -46,11 +46,11 @@ export def Open()
   WinId = win_getid(winnr())
 
   # Window-local settings.
-  call setwinvar(WinId, '&winfixwidth', true)
-  call setwinvar(WinId, '&number', false)
-  call setwinvar(WinId, '&relativenumber', false)
-  call setwinvar(WinId, '&signcolumn', 'no')
-  call setwinvar(WinId, '&wrap', false)
+  setwinvar(WinId, '&winfixwidth', true)
+  setwinvar(WinId, '&number', false)
+  setwinvar(WinId, '&relativenumber', false)
+  setwinvar(WinId, '&signcolumn', 'no')
+  setwinvar(WinId, '&wrap', false)
 enddef
 
 # Close the sidebar: close the window, wipe the scratch buffer, reset state.

@@ -3,7 +3,7 @@ vim9script
 # Buffers mode for the Nam plugin.
 #
 # Lists open buffers with status indicators and DSN (Direct Selection
-# Navigation) labels.  Implements the standard Nam mode interface:
+# Navigation) labels.  Implements the standard Vproj mode interface:
 # Create(cfg) -> {Refresh, Render, Select, ...}
 #
 # Module-level state (singleton per session)

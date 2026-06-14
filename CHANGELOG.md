@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sidebar UI** — floating/vertical split window via `compat.open_sidebar_win()`, configurable width (default 35), non-focus-stealing, virtual buffer backing
 - **Renderer** — virtual buffer line production, header/tabs, extmarks and highlights, label-aware item rendering
 - **User commands** — `:Vproj`, `:VprojOpen`, `:VprojClose` registered via `plugin/vproj.lua`
-- **Configuration system** — defaults with deep merge, validation, `require("nam").setup({...})` entry point
+- **Configuration system** — defaults with deep merge, validation, `require("vproj").setup({...})` entry point
 - **Toggle hotkey** — configurable (default `<F2>`), global keymap via `compat.set_global_keymap()`
 
 ### Infrastructure
@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Vim 8.2 spec files** (`tests/vim_spec/`) — 7 spec files for classic Vim platform
 - **GitHub Actions CI** (`.github/workflows/ci.yml`) — Neovim stable + nightly, Vim 8.2 on Ubuntu 22.04, Vim 9.x on Ubuntu 24.04, luacheck lint
 - **Install scripts** — `install.sh` (POSIX shell) and `install.vim` (Vimscript) with SHA256 verification
-- **Vim help documentation** (`doc/nam.txt`)
+- **Vim help documentation** (`doc/vproj.txt`)
 - **README** (`README.md`) — installation, usage, mode reference, key bindings
 - **SHA256SUMS** — checksums for install artifacts
 

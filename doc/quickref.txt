@@ -1,7 +1,7 @@
-*nam-quickref.txt*  Vproj quick reference — Direct Selection Navigation for Vim
+*vproj-quickref.txt*  Vproj quick reference — Direct Selection Navigation for Vim
 
 ==============================================================================
-COMMANDS                                               *nam-quickref-commands*
+COMMANDS                                               *vproj-quickref-commands*
 
 Command                  Action                                    ~
 :Vproj                     Toggle sidebar open/closed
@@ -17,7 +17,7 @@ Command                  Action                                    ~
 :VprojBookmarkJump <name>  Jump to a named bookmark
 
 ==============================================================================
-MODE HOTKEYS                                             *nam-quickref-modes*
+MODE HOTKEYS                                             *vproj-quickref-modes*
 
 Key  Mode      Icon  Description                              ~
 b    Buffers   B     Open buffers with status indicators (*,R,T,P)
@@ -27,7 +27,7 @@ s    Symbols   S     LSP/tree-sitter/ctags document symbols
 o    Outline   O     Filetype-aware structural outline
 
 ==============================================================================
-LABEL TIERS                                             *nam-quickref-labels*
+LABEL TIERS                                             *vproj-quickref-labels*
 
 Tier  Keys                         Count ~
 1     1 2 3 4 5 6 7 8 9 0          10
@@ -37,10 +37,10 @@ Tier  Keys                         Count ~
      Total single-character       36
 
 Beyond 36 items: aa, ab, ac, ... (two-char overflow, EasyMotion-style)
-Tiers and overflow style configurable via |nam-config-labels|.
+Tiers and overflow style configurable via |vproj-config-labels|.
 
 ==============================================================================
-SIDEBAR KEYS                                           *nam-quickref-sidebar*
+SIDEBAR KEYS                                           *vproj-quickref-sidebar*
 
 Key  Action                                 ~
 q    Close sidebar
@@ -55,7 +55,7 @@ o    Outline mode
      Non-matching labels fall through to mode switch.
 
 ==============================================================================
-GIT ACTIONS                                              *nam-quickref-git*
+GIT ACTIONS                                              *vproj-quickref-git*
 
 Key  Action        ~
 s    Stage selected file
@@ -63,7 +63,7 @@ u    Unstage selected file
 d    Show diff of selected file in scratch buffer
 
 ==============================================================================
-BUFFER STATUS                                         *nam-quickref-buffers*
+BUFFER STATUS                                         *vproj-quickref-buffers*
 
 Indicator  Meaning                                   ~
 *          Modified (unsaved changes)
@@ -72,7 +72,7 @@ T          Terminal buffer (Neovim)
 P          Pinned (preserved across buffer management)
 
 ==============================================================================
-CONFIGURATION QUICK REF                              *nam-quickref-config*
+CONFIGURATION QUICK REF                              *vproj-quickref-config*
 
 >  call vproj#init#Setup({
 >      \ 'hotkey':     '<F2>',
@@ -96,7 +96,7 @@ CONFIGURATION QUICK REF                              *nam-quickref-config*
 All fields optional. Deep-merged over defaults.
 
 ==============================================================================
-NAVIGATION FLOW                                       *nam-quickref-navigation*
+NAVIGATION FLOW                                       *vproj-quickref-navigation*
 
   Sidebar ──> Press label key ──> O(1) hash table ──> File opens
                                     │
@@ -108,9 +108,9 @@ NAVIGATION FLOW                                       *nam-quickref-navigation*
   Vproj DSN:            press key -> open                  (O(1))
 
 ==============================================================================
-TROUBLESHOOTING                                     *nam-quickref-troubleshoot*
+TROUBLESHOOTING                                     *vproj-quickref-troubleshoot*
 
-:help nam-quickref doesn't show this page ~
+:help vproj-quickref doesn't show this page ~
   Run >:helptags ALL< to regenerate the help tag database.
 
 Sidebar opens but no labels appear ~

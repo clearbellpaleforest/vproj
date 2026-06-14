@@ -20,7 +20,7 @@ var Lines: list<string> = []
 var Config: dict<any> = {}
 
 # Create a new git mode instance dict.
-# The returned dict conforms to the Nam mode interface and stores
+# The returned dict conforms to the Vproj mode interface and stores
 # funcrefs to the module-level functions below.
 export def Create(cfg: dict<any>): dict<any>
   Config = cfg
@@ -101,7 +101,7 @@ export def SelectGit(label: string): any
   if main_win > 0
     win_gotoid(main_win)
   endif
-  exe 'edit ' .. fnameescape(item.path)
+  execute 'edit ' .. fnameescape(item.path)
   var side_win = vproj#sidebar#GetWin()
   if side_win > 0
     win_gotoid(side_win)

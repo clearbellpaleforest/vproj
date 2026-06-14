@@ -166,8 +166,11 @@ enddef
 # ──────────────────────────────────────────────
 
 def WorkspaceDir(): string
-  return get(Config, 'workspace', {})->get('path',
-      expand('~/.local/share/vproj/workspaces/'))
+  var ws: any = get(Config, 'workspace', {})
+  if type(ws) != v:t_dict
+    return expand('~/.local/share/vproj/workspaces/')
+  endif
+  return ws->get('path', expand('~/.local/share/vproj/workspaces/'))
 enddef
 
 def ValidateWorkspaceDir(dir: string): bool

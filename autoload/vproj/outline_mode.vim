@@ -2,7 +2,7 @@ vim9script
 
 # autoload/vproj/outline_mode.vim — filetype-aware structural outline parser
 # Generates structural outlines for the current buffer based on filetype.
-# Part of the Nam plugin's Direct Selection Navigation system.
+# Part of the Vproj plugin's Direct Selection Navigation system.
 
 # Module-level state (singleton)
 var Items: list<dict<any>> = []

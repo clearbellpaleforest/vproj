@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# NAM plugin installer — one-command setup for Vim/Neovim
+# Vproj plugin installer — one-command setup for Vim/Neovim
 #
 # SECURITY: Do NOT pipe this script directly through bash from the internet.
 # Instead, download it first, inspect it, then run:
@@ -10,7 +10,7 @@
 #
 # Or clone the repo and run from source:
 #   git clone https://github.com/clearbellpaleforest/vproj
-#   cd nam && bash install.sh
+#   cd vproj && bash install.sh
 #
 # Usage:
 #   ./install.sh            Install for any detected platform (default: both)

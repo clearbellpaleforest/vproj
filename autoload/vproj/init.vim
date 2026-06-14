@@ -2,7 +2,7 @@ vim9script
 
 # autoload/vproj/init.vim — vim9script top-level orchestrator for Nam.
 #
-# Called by plugin/nam.vim commands and user setup().
+# Called by plugin/vproj.vim commands and user setup().
 # Exports: Setup, Toggle, Open, Close
 #
 # Setup flow:
@@ -63,7 +63,7 @@ export def Setup(user_opts: dict<any>)
         var mode: dict<any> = CreateFn(cfg)
         vproj#modes#Register(mode)
       catch
-        echom $"[nam] Failed to load mode '{mode_name}': {v:exception}"
+        echom $"[vproj] Failed to load mode '{mode_name}': {v:exception}"
       endtry
     endif
   endfor
@@ -77,7 +77,10 @@ export def Setup(user_opts: dict<any>)
   vproj#workspace#Setup(cfg)
 
   # 9. Set global hotkey mapping (Normal mode)
-  execute 'nnoremap ' .. cfg.hotkey .. ' :<C-U>call vproj#init#Toggle()<CR>'
+  # Validate hotkey to prevent injection via embedded newlines or ex separators
+  if type(cfg.hotkey) == v:t_string && cfg.hotkey !~# '[\n\r|"]' && cfg.hotkey =~# '^\(<[^>]\+>\|[^[:cntrl:]]\)$'
+    execute 'nnoremap ' .. cfg.hotkey .. ' :<C-U>call vproj#init#Toggle()<CR>'
+  endif
 
   # 10. Auto-open if configured
   if cfg.auto_open
