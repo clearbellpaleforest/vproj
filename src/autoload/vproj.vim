@@ -198,7 +198,14 @@ export def SwitchMode(key: string): void
   endif
   current_mode = key
   if key == 'code' && empty(project)
-    LoadProject()
+    var vproj_path: string = FindVprojFile(current_dir)
+    if !empty(vproj_path)
+      project = ParseVprojFile(vproj_path)
+      code_root = !empty(project.root) ? project.root : current_dir
+    else
+      project = {}
+      code_root = current_dir
+    endif
   endif
   selected_line = (key == 'code') ? 2 : 3
   Render()
@@ -272,7 +279,19 @@ def Render(): void
   # Line 2: separator (file/doc) or project status (code)
   if current_mode == 'code'
     items = CodeItems()
-    lines->add(BuildProjectStatusLine())
+    var status: string
+    if empty(project) || empty(project.name)
+      status = '* (no project found)'
+    else
+      status = project.name
+      if !empty(code_root) && code_root != project.root
+        status = status .. '  ' .. code_root
+      endif
+    endif
+    if strwidth(status) < pane_width
+      status = status .. repeat(' ', pane_width - strwidth(status))
+    endif
+    lines->add(status)
     lines->extend(BuildCodeLines(items))
   else
     lines->add(repeat('-', pane_width))
@@ -642,36 +661,13 @@ enddef
 # Code mode
 # ──────────────────────────────────────────────
 
-def LoadProject(): void
-  var vproj_path: string = FindVprojFile(current_dir)
-  if !empty(vproj_path)
-    project = ParseVprojFile(vproj_path)
-    if !empty(project.root)
-      code_root = project.root
-    else
-      code_root = current_dir
-    endif
-  else
-    project = {}
-    code_root = current_dir
-  endif
-enddef
-
 def RelPath(full: string): string
+  var proot: string = get(project, 'root', '')
   var rel: string = full
-  if !empty(project.root) && rel->stridx(project.root) == 0
-    rel = rel[project.root->len() :]->substitute('^/', '', '')
+  if !empty(proot) && rel->stridx(proot) == 0
+    rel = rel[proot->len() :]->substitute('^/', '', '')
   endif
   return rel
-enddef
-
-def IsItemIncluded(item: dict<any>): bool
-  if empty(project) | return false | endif
-  var rel = RelPath(item.path)
-  if project.excluded_dirs->index(rel) >= 0 || project.excluded_files->index(rel) >= 0
-    return false
-  endif
-  return project.included_dirs->index(rel) >= 0 || project.included_files->index(rel) >= 0
 enddef
 
 def CodeItems(): list<dict<any>>
@@ -705,9 +701,16 @@ def CodeItems(): list<dict<any>>
       name: entry,
       path: full,
       is_dir: is_dir,
-      size: is_dir ? 0 : getfsize(full),
     }
-    item.included = IsItemIncluded(item)
+    var rel: string = RelPath(full)
+    if !empty(project)
+        && project.excluded_dirs->index(rel) < 0
+        && project.excluded_files->index(rel) < 0
+        && (project.included_dirs->index(rel) >= 0 || project.included_files->index(rel) >= 0)
+      item.included = true
+    else
+      item.included = false
+    endif
 
     if item.included
       if is_dir
@@ -783,31 +786,6 @@ def BuildCodeLines(code_items: list<dict<any>>): list<string>
   return result
 enddef
 
-def BuildProjectStatusLine(): string
-  if empty(project) || empty(project.name)
-    var line: string = '* (no project found)'
-    if strwidth(line) < pane_width
-      line = line .. repeat(' ', pane_width - strwidth(line))
-    endif
-    return line
-  endif
-
-  var line: string = project.name
-  if !empty(code_root) && code_root != project.root
-    line = line .. '  ' .. code_root
-  endif
-  if strwidth(line) < pane_width
-    line = line .. repeat(' ', pane_width - strwidth(line))
-  endif
-  return line
-enddef
-
-def ToggleList(list_a: list<string>, list_b: list<string>, rel: string): void
-  var i = list_a->index(rel)
-  if i >= 0 | list_a->remove(i) | endif
-  if list_b->index(rel) < 0 | list_b->add(rel) | endif
-enddef
-
 export def ToggleInclude(): void
   if current_mode != 'code' || !IsPaneVisible() | return | endif
   var idx: number = selected_line - 3
@@ -824,9 +802,13 @@ export def ToggleInclude(): void
   endif
 
   if get(item, 'included', false)
-    ToggleList(inc, exc, rel)
+    var i1 = inc->index(rel)
+    if i1 >= 0 | inc->remove(i1) | endif
+    if exc->index(rel) < 0 | exc->add(rel) | endif
   else
-    ToggleList(exc, inc, rel)
+    var i2 = exc->index(rel)
+    if i2 >= 0 | exc->remove(i2) | endif
+    if inc->index(rel) < 0 | inc->add(rel) | endif
   endif
 
   WriteVprojFile()
