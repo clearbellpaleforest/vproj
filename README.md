@@ -32,25 +32,63 @@ vim -c "helptags ~/.vim/pack/bundle/start/vproj/doc" -c q
 Plug 'clearbellpaleforest/vproj'
 ```
 
-## Usage
+## Key Map
 
-`F4` toggles the project pane. Inside the pane:
+`F4` toggles the pane (outside the pane). Inside the pane:
+
+### Navigation
 
 | Key | Action |
 |-----|--------|
-| j / k | Move selection |
-| h | Parent directory |
-| l | Open file or enter directory |
-| Enter | Open file or switch buffer |
-| F | File mode — browse directories |
-| D | Doc mode — switch open buffers |
-| C | Code mode — project tree |
-| r | Refresh |
-| x | Close selected buffer (doc mode) |
-| + / - | Include / exclude item (code mode) |
-| Left / Right | Shrink / grow pane |
-| . | Parent directory |
-| q | Close pane |
+| `j` / `<Down>` | Move selection down |
+| `k` / `<Up>` | Move selection up |
+| `h` | Parent directory |
+| `l` / `Enter` | Open file or enter directory |
+| `.` | Parent directory |
+
+### Mode Switching
+
+| Key | Action |
+|-----|--------|
+| `F` | File mode — browse directories |
+| `D` | Doc mode — switch open buffers |
+| `C` | Code mode — project tree |
+| `Enter` on menu line | Cycle to next mode |
+
+### Actions
+
+| Key | Action |
+|-----|--------|
+| `r` | Refresh listing |
+| `x` | Close selected buffer (doc mode) |
+| `+` / `-` | Include / exclude item (code mode) |
+| `<Left>` / `<Right>` | Shrink / grow pane width |
+
+### Close
+
+| Key | Action |
+|-----|--------|
+| `q` | Close pane |
+| `F4` | Close pane |
+
+### Standard Vim Keys (passthrough)
+
+These work as usual — we don't override them:
+
+| Key(s) | Behavior |
+|--------|----------|
+| `f` `t` `T` | Find character on current line |
+| `w` `b` `e` | Word motions |
+| `0` `^` `$` | Line start / end |
+| `gg` `G` | Buffer top / bottom |
+| `/` `?` `n` `N` | Search |
+| `y` | Yank (copy filename) |
+| `Ctrl-F` `Ctrl-B` | Page down / up |
+| `Ctrl-D` `Ctrl-U` | Half-page down / up |
+| `Ctrl-W` keys | Window management |
+| `%` `{` `}` `(` `)` | Jump / matching pair |
+| `H` `M` `L` | High / middle / low of screen |
+| `zz` `zt` `zb` | Scroll cursor to center / top / bottom |
 
 Or use commands: `:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`.
 
