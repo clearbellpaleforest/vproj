@@ -232,6 +232,31 @@ catch
 endtry
 
 # ──────────────────────────────────────────────
+# SECTION 9: Single-window file open
+# ──────────────────────────────────────────────
+echom '--- Single Window File Open ---'
+Setup()
+
+# Close the non-pane window so only pane remains (winnr('$') == 1)
+wincmd w
+close!
+
+# Move past parent dir (..) and subdirs to a file item
+normal jjj
+
+try
+  execute "normal \<CR>"
+  Assert(winnr('$') >= 2, 'Enter opens split when pane is only window')
+  # OpenFile's wincmd p returns to pane; switch to the file window
+  wincmd w
+  Assert(bufname('%') != 'VPROJ', 'File opened (not pane) in other window')
+  wincmd w
+  Assert(bufnr('VPROJ') > 0, 'Pane buffer still exists')
+catch
+  Assert(false, 'Single-window file open error: ' .. v:exception)
+endtry
+
+# ──────────────────────────────────────────────
 # Cleanup
 # ──────────────────────────────────────────────
 vproj#PaneClose()

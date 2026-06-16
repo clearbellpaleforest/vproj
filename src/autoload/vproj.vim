@@ -21,6 +21,10 @@ const MAX_WIDTH: number = 80
 const AUTOGROUP: string = 'VprojPane'
 var match_ids: list<number> = []
 
+def SortByName(A: dict<any>, B: dict<any>): number
+  return tolower(A.name) < tolower(B.name) ? -1 : tolower(A.name) > tolower(B.name) ? 1 : 0
+enddef
+
 # ──────────────────────────────────────────────
 # Pane lifecycle
 # ──────────────────────────────────────────────
@@ -125,11 +129,13 @@ enddef
 
 def MoveCursor(lnum: number): void
   var wnr: number = bufwinnr(pane_bufnr)
-  var wid: number = win_getid(wnr)
-  if wnr <= 0 || wid <= 0
+  if wnr <= 0
     return
   endif
-  win_execute(wid, 'call cursor(' .. lnum .. ', 1)')
+  if lnum < 1 || lnum > line('$', win_getid(wnr))
+    return
+  endif
+  win_execute(win_getid(wnr), 'call cursor(' .. lnum .. ', 1)')
 enddef
 
 def SkipNonSelectable(line: number): bool
@@ -416,11 +422,8 @@ def ReadDir(dir: string): list<dict<any>>
   endfor
 
   # Sort each group alphabetically, case-insensitive
-  var SortFn = (a: dict<any>, b: dict<any>): number =>
-        tolower(a.name) < tolower(b.name) ? -1 : tolower(a.name) > tolower(b.name) ? 1 : 0
-
-  sort(dirs, SortFn)
-  sort(files, SortFn)
+  sort(dirs, 'SortByName')
+  sort(files, 'SortByName')
 
   result->extend(dirs)
   result->extend(files)
@@ -627,6 +630,7 @@ enddef
 
 export def CloseBuffer(): void
   if current_mode != 'doc' || !IsPaneVisible()
+    echom 'vproj: x closes buffers in doc mode only (press D for doc mode)'
     return
   endif
   var idx: number = selected_line - 3
@@ -827,13 +831,10 @@ def CodeItems(): list<dict<any>>
     endif
   endfor
 
-  var SortFn = (a: dict<any>, b: dict<any>): number =>
-        tolower(a.name) < tolower(b.name) ? -1 : tolower(a.name) > tolower(b.name) ? 1 : 0
-
-  sort(dirs_included, SortFn)
-  sort(files_included, SortFn)
-  sort(dirs_other, SortFn)
-  sort(files_other, SortFn)
+  sort(dirs_included, 'SortByName')
+  sort(files_included, 'SortByName')
+  sort(dirs_other, 'SortByName')
+  sort(files_other, 'SortByName')
 
   result->extend(dirs_included)
   result->extend(files_included)
@@ -1014,12 +1015,11 @@ def HighlightCurrentMode(): void
 
   var pattern: string = '\V' .. escape(label, '\')
   var wnr: number = bufwinnr(pane_bufnr)
-  var wid: number = win_getid(wnr)
-  if wnr <= 0 || wid <= 0
+  if wnr <= 0
     return
   endif
   var orig_wid: number = win_getid()
-  win_gotoid(wid)
+  win_gotoid(win_getid(wnr))
   match_ids->add(matchadd('VprojModeCurrent', pattern, 10, -1))
   # Highlight selected line (cursorline replacement, skips menu/separator)
   var cur_pattern: string = '\%' .. selected_line .. 'l'
@@ -1033,12 +1033,11 @@ def ClearPaneHighlights(): void
   endif
   if !empty(match_ids)
     var wnr: number = bufwinnr(pane_bufnr)
-    var wid: number = win_getid(wnr)
-    if wnr <= 0 || wid <= 0
+    if wnr <= 0
       return
     endif
     var orig_wid: number = win_getid()
-    win_gotoid(wid)
+    win_gotoid(win_getid(wnr))
     for id in match_ids
       silent! matchdelete(id)
     endfor
@@ -1052,12 +1051,11 @@ def ApplyWidth(): void
     return
   endif
   var wnr: number = bufwinnr(pane_bufnr)
-  var wid: number = win_getid(wnr)
-  if wnr <= 0 || wid <= 0
+  if wnr <= 0
     return
   endif
   var orig_wid: number = win_getid()
-  win_gotoid(wid)
+  win_gotoid(win_getid(wnr))
   execute 'vert resize ' .. pane_width
   win_gotoid(orig_wid)
 enddef
