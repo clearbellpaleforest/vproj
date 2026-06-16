@@ -105,10 +105,10 @@ export def PaneClose(): void
 enddef
 
 export def HandleBufWipeout(): void
+  ClearPaneHighlights()
   pane_bufnr = -1
   selected_line = FirstSelectableLine()
   items = []
-  match_ids = []
 enddef
 
 export def OnDirChanged(): void
@@ -740,10 +740,11 @@ def WriteVprojFile(): void
   var tmp: string = project.vproj_file .. '.tmp'
   if writefile(lines, tmp) == 0
     if rename(tmp, project.vproj_file) != 0
-				echohl WarningMsg
-				echom 'vproj: Failed to write project file: ' .. project.vproj_file
-				echohl None
-			endif
+      echohl WarningMsg
+      echom 'vproj: Failed to write project file: ' .. project.vproj_file
+      echohl None
+      silent! delete(tmp)
+    endif
   else
     echohl WarningMsg
     echom 'vproj: Failed to write ' .. project.vproj_file
@@ -911,10 +912,18 @@ export def ToggleInclude(): void
     var i1 = inc->index(rel)
     if i1 >= 0 | inc->remove(i1) | endif
     if exc->index(rel) < 0 | exc->add(rel) | endif
+    # Remove from opposite-type list (hand-edited .vproj guard)
+    var opp_exc = get(item, 'is_dir', false) ? project.excluded_files : project.excluded_dirs
+    var iopp = opp_exc->index(rel)
+    if iopp >= 0 | opp_exc->remove(iopp) | endif
   else
     var i2 = exc->index(rel)
     if i2 >= 0 | exc->remove(i2) | endif
     if inc->index(rel) < 0 | inc->add(rel) | endif
+    # Remove from opposite-type list (hand-edited .vproj guard)
+    var opp_inc = get(item, 'is_dir', false) ? project.included_files : project.included_dirs
+    var iopp = opp_inc->index(rel)
+    if iopp >= 0 | opp_inc->remove(iopp) | endif
   endif
 
   WriteVprojFile()
