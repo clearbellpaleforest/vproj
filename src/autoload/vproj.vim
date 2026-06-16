@@ -39,6 +39,7 @@ export def PaneOpen(): void
   endif
 
   # Reuse existing buffer if it still exists
+  DefineHighlights()
   if pane_bufnr > 0 && bufexists(pane_bufnr)
     execute 'topleft vert sbuffer ' .. pane_bufnr
     execute 'vert resize ' .. pane_width
