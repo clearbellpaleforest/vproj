@@ -44,12 +44,20 @@ export def PaneOpen(): void
     execute 'topleft vert sbuffer ' .. pane_bufnr
     execute 'vert resize ' .. pane_width
     selected_line = FirstSelectableLine()
+    SetupPaneMappings()
     Render()
     return
   endif
 
+  var prev_buf: number = bufnr('%')
   execute 'topleft vert new'
-  pane_bufnr = bufnr('%')
+  var new_buf: number = bufnr('%')
+  if new_buf == prev_buf
+    close!
+    echom 'vproj: Could not create pane buffer'
+    return
+  endif
+  pane_bufnr = new_buf
 
   setbufvar(pane_bufnr, '&buftype', 'nofile')
   setbufvar(pane_bufnr, '&bufhidden', 'wipe')
@@ -81,6 +89,7 @@ export def PaneOpen(): void
 enddef
 
 export def PaneClose(): void
+  items = []
   if pane_bufnr <= 0 || !bufexists(pane_bufnr)
     pane_bufnr = -1
     return
@@ -95,6 +104,10 @@ enddef
 export def HandleBufWipeout(): void
   pane_bufnr = -1
   selected_line = FirstSelectableLine()
+  project = {}
+  code_root = ''
+  current_dir = ''
+  items = []
 enddef
 
 export def OnDirChanged(): void
@@ -115,9 +128,11 @@ enddef
 
 def MoveCursor(lnum: number): void
   var wnr: number = bufwinnr(pane_bufnr)
-  if wnr > 0
-    win_execute(win_getid(wnr), 'call cursor(' .. lnum .. ', 1)')
+  var wid: number = win_getid(wnr)
+  if wnr <= 0 || wid <= 0
+    return
   endif
+  win_execute(wid, 'call cursor(' .. lnum .. ', 1)')
 enddef
 
 def SkipNonSelectable(line: number): bool
@@ -369,17 +384,19 @@ enddef
 
 def ReadDir(dir: string): list<dict<any>>
   var result: list<dict<any>> = []
+  # Normalize: strip trailing slash unless it is the filesystem root
+  var norm_dir: string = (dir != '/' && dir =~ '/$') ? dir->substitute('/$', '', '') : dir
 
   # Parent directory entry (unless at filesystem root)
-  if dir != '/' && dir != ''
-    result->add({name: '..', path: fnamemodify(dir, ':h'), is_parent: true, is_dir: true, size: 0})
+  if norm_dir != '/' && norm_dir != ''
+    result->add({name: '..', path: fnamemodify(norm_dir, ':h'), is_parent: true, is_dir: true, size: 0})
   endif
 
   var entries: list<string> = []
   try
-    entries = readdir(dir)
+    entries = readdir(norm_dir)
   catch
-    echom 'vproj: Cannot read directory: ' .. dir
+    echom 'vproj: Cannot read directory: ' .. norm_dir
     return result
   endtry
   if empty(entries)
@@ -393,7 +410,7 @@ def ReadDir(dir: string): list<dict<any>>
     if entry[0] == '.' && !exists('g:vproj_show_dotfiles')
       continue
     endif
-    var full: string = dir .. '/' .. entry
+    var full: string = norm_dir .. '/' .. entry
     if isdirectory(full)
       dirs->add({name: entry, path: full, is_dir: true, size: 0})
     else
@@ -485,6 +502,10 @@ enddef
 
 def NavigateInto(subdir: string): void
   var root = CurrentRoot()
+  # Strip trailing slash unless root is filesystem root
+  if root != '/' && root =~ '/$'
+    root = root->substitute('/$', '', '')
+  endif
   var new_dir: string = root .. '/' .. subdir
   if !isdirectory(new_dir)
     return
@@ -510,8 +531,9 @@ def OpenFile(path: string): void
     echohl None
     return
   endif
-  PaneClose()
+  wincmd p
   execute 'edit ' .. fnameescape(path)
+	wincmd p
 enddef
 
 def IsBinary(path: string): bool
@@ -586,8 +608,9 @@ def OpenBuffer(bufnr: number): void
   if !bufexists(bufnr)
     return
   endif
-  PaneClose()
+  wincmd p
   execute 'buffer ' .. bufnr
+	wincmd p
 enddef
 
 export def Refresh(): void
@@ -663,6 +686,10 @@ def ParseVprojFile(path: string): dict<any>
 
     if section == 'name' || section == 'root'
       p[section] = t
+      # Strip trailing slashes from root path
+      if section == 'root'
+        p[section] = p[section]->substitute('/*$', '', '')
+      endif
       section = ''
     elseif !empty(section)
       p[section]->add(t)
@@ -893,7 +920,11 @@ export def RenameProject(): void
     var old = project.vproj_file
     project.name = new_name
     project.vproj_file = fnamemodify(old, ':h') .. '/' .. new_name .. '.vproj'
-    if old != project.vproj_file && filereadable(old) | delete(old) | endif
+    if old != project.vproj_file && filereadable(old)
+      if delete(old) != 0
+        echom 'vproj: Warning: Could not delete ' .. old
+      endif
+    endif
   endif
 
   WriteVprojFile()
@@ -969,8 +1000,12 @@ def HighlightCurrentMode(): void
 
   var pattern: string = '\V' .. escape(label, '\')
   var wnr: number = bufwinnr(pane_bufnr)
+  var wid: number = win_getid(wnr)
+  if wnr <= 0 || wid <= 0
+    return
+  endif
   var orig_wid: number = win_getid()
-  win_gotoid(win_getid(wnr))
+  win_gotoid(wid)
   match_ids->add(matchadd('VprojModeCurrent', pattern, 10, -1))
   # Highlight selected line (cursorline replacement, skips menu/separator)
   var cur_pattern: string = '\%' .. selected_line .. 'l'
@@ -984,8 +1019,12 @@ def ClearPaneHighlights(): void
   endif
   if !empty(match_ids)
     var wnr: number = bufwinnr(pane_bufnr)
+    var wid: number = win_getid(wnr)
+    if wnr <= 0 || wid <= 0
+      return
+    endif
     var orig_wid: number = win_getid()
-    win_gotoid(win_getid(wnr))
+    win_gotoid(wid)
     for id in match_ids
       silent! matchdelete(id)
     endfor
@@ -999,8 +1038,12 @@ def ApplyWidth(): void
     return
   endif
   var wnr: number = bufwinnr(pane_bufnr)
+  var wid: number = win_getid(wnr)
+  if wnr <= 0 || wid <= 0
+    return
+  endif
   var orig_wid: number = win_getid()
-  win_gotoid(win_getid(wnr))
+  win_gotoid(wid)
   execute 'vert resize ' .. pane_width
   win_gotoid(orig_wid)
 enddef

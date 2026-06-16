@@ -68,7 +68,7 @@ Buffer-local (only active in the pane):
 | Shift-D | Doc mode |
 | Shift-C | Code mode |
 | r | Refresh pane |
-| d | Close selected buffer (doc mode) |
+| x | Close selected buffer (doc mode) |
 | +/- | Include/exclude item (code mode) |
 | q, F4 | Close pane |
 | . | Parent directory |
