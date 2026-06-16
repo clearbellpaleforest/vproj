@@ -53,7 +53,6 @@ export def PaneOpen(): void
   execute 'topleft vert new'
   var new_buf: number = bufnr('%')
   if new_buf == prev_buf
-    close!
     echom 'vproj: Could not create pane buffer'
     return
   endif
@@ -104,10 +103,8 @@ enddef
 export def HandleBufWipeout(): void
   pane_bufnr = -1
   selected_line = FirstSelectableLine()
-  project = {}
-  code_root = ''
-  current_dir = ''
   items = []
+  match_ids = []
 enddef
 
 export def OnDirChanged(): void
@@ -531,9 +528,13 @@ def OpenFile(path: string): void
     echohl None
     return
   endif
-  wincmd p
+  if winnr('$') < 2
+    rightbelow split
+  else
+    wincmd p
+  endif
   execute 'edit ' .. fnameescape(path)
-	wincmd p
+  wincmd p
 enddef
 
 def IsBinary(path: string): bool
@@ -608,9 +609,13 @@ def OpenBuffer(bufnr: number): void
   if !bufexists(bufnr)
     return
   endif
-  wincmd p
+  if winnr('$') < 2
+    rightbelow split
+  else
+    wincmd p
+  endif
   execute 'buffer ' .. bufnr
-	wincmd p
+  wincmd p
 enddef
 
 export def Refresh(): void
@@ -641,7 +646,7 @@ enddef
 # ──────────────────────────────────────────────
 
 def FindVprojFile(dir: string): string
-  var d: string = dir
+  var d: string = fnamemodify(dir, ':p')
   while d != '' && d != '/'
     var matches = glob(d .. '/*.vproj', 0, 1)
     if matches->len() > 0
@@ -730,7 +735,11 @@ def WriteVprojFile(): void
   # Atomic write: temp file + rename
   var tmp: string = project.vproj_file .. '.tmp'
   if writefile(lines, tmp) == 0
-    rename(tmp, project.vproj_file)
+    if rename(tmp, project.vproj_file) != 0
+				echohl WarningMsg
+				echom 'vproj: Failed to write project file: ' .. project.vproj_file
+				echohl None
+			endif
   else
     echohl WarningMsg
     echom 'vproj: Failed to write ' .. project.vproj_file
@@ -878,7 +887,12 @@ def BuildCodeLines(code_items: list<dict<any>>): list<string>
 enddef
 
 export def ToggleInclude(): void
-  if current_mode != 'code' || !IsPaneVisible() || empty(project) | return | endif
+  if current_mode != 'code' || !IsPaneVisible() || empty(project)
+    if empty(project)
+      echom 'vproj: No project -- Enter on status line to create one'
+    endif
+    return
+  endif
   var idx: number = selected_line - 3
   if idx < 0 || idx >= len(items) | return | endif
   var item: dict<any> = items[idx]
