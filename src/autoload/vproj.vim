@@ -19,6 +19,7 @@ const MODE_LABELS: dict<string> = {file: '[F]ile', doc: '[D]oc', code: '[C]ode'}
 const MIN_WIDTH: number = 20
 const MAX_WIDTH: number = 80
 const AUTOGROUP: string = 'VprojPane'
+var match_ids: list<number> = []
 
 # ──────────────────────────────────────────────
 # Pane lifecycle
@@ -41,6 +42,7 @@ export def PaneOpen(): void
   if pane_bufnr > 0 && bufexists(pane_bufnr)
     execute 'topleft vert sbuffer ' .. pane_bufnr
     execute 'vert resize ' .. pane_width
+    selected_line = FirstSelectableLine()
     Render()
     return
   endif
@@ -53,11 +55,15 @@ export def PaneOpen(): void
   setbufvar(pane_bufnr, '&swapfile', 0)
   setbufvar(pane_bufnr, '&buflisted', 0)
   setbufvar(pane_bufnr, '&modifiable', 0)
-  setbufvar(pane_bufnr, '&cursorline', 1)
+  setbufvar(pane_bufnr, '&cursorline', 0)
   setbufvar(pane_bufnr, '&number', 0)
   setbufvar(pane_bufnr, '&relativenumber', 0)
   setbufvar(pane_bufnr, '&signcolumn', 'no')
   setbufvar(pane_bufnr, '&winfixwidth', 1)
+  setbufvar(pane_bufnr, '&foldenable', 0)
+  setbufvar(pane_bufnr, '&wrap', 0)
+  setbufvar(pane_bufnr, '&spell', 0)
+  setbufvar(pane_bufnr, '&list', 0)
 
   silent! keepalt file VPROJ
 
@@ -68,6 +74,7 @@ export def PaneOpen(): void
   if empty(current_dir)
     current_dir = expand('~')
   endif
+  selected_line = FirstSelectableLine()
   Render()
   SetupPaneMappings()
 enddef
@@ -86,34 +93,59 @@ enddef
 
 export def HandleBufWipeout(): void
   pane_bufnr = -1
-  selected_line = 3
+  selected_line = FirstSelectableLine()
+enddef
+
+export def OnDirChanged(): void
+  if !IsPaneVisible() || current_mode == 'code'
+    return
+  endif
+  var cwd: string = getcwd()
+  if cwd != current_dir
+    current_dir = cwd
+    selected_line = FirstSelectableLine()
+    Render()
+  endif
 enddef
 
 # ──────────────────────────────────────────────
 # Navigation
 # ──────────────────────────────────────────────
 
+def MoveCursor(lnum: number): void
+  var wnr: number = bufwinnr(pane_bufnr)
+  if wnr > 0
+    win_execute(win_getid(wnr), 'call cursor(' .. lnum .. ', 1)')
+  endif
+enddef
+
+def SkipNonSelectable(line: number): bool
+  if line == 1 | return true | endif
+  if current_mode != 'code' && line == 2 | return true | endif
+  return false
+enddef
+
+def FirstSelectableLine(): number
+  return (current_mode == 'code') ? 2 : 3
+enddef
+
 export def SelectNext(): void
   if !IsPaneVisible()
     return
   endif
 
-  var total: number = line('$', pane_bufnr)
+  var total: number = getbufinfo(pane_bufnr)[0].linecount
   var next_line: number = selected_line + 1
 
-  while next_line <= total
-    if next_line == 1 || (current_mode != 'code' && next_line == 2)
-      next_line += 1
-      continue
-    endif
-    break
+  while next_line <= total && SkipNonSelectable(next_line)
+    next_line += 1
   endwhile
   if next_line > total
-    next_line = (current_mode == 'code') ? 2 : 3
+    next_line = FirstSelectableLine()
   endif
 
   selected_line = next_line
-  cursor(selected_line, 1)
+  MoveCursor(selected_line)
 enddef
 
 export def SelectPrev(): void
@@ -121,22 +153,18 @@ export def SelectPrev(): void
     return
   endif
 
-  var total: number = line('$', pane_bufnr)
+  var total: number = getbufinfo(pane_bufnr)[0].linecount
   var prev_line: number = selected_line - 1
 
-  while prev_line >= 1
-    if prev_line == 1 || (current_mode != 'code' && prev_line == 2)
-      prev_line -= 1
-      continue
-    endif
-    break
+  while prev_line >= 1 && SkipNonSelectable(prev_line)
+    prev_line -= 1
   endwhile
   if prev_line < 1
     prev_line = total
   endif
 
   selected_line = prev_line
-  cursor(selected_line, 1)
+  MoveCursor(selected_line)
 enddef
 
 export def SelectCurrent(): void
@@ -197,6 +225,9 @@ export def SwitchMode(key: string): void
     return
   endif
   current_mode = key
+  if key != 'code'
+    current_dir = getcwd()
+  endif
   if key == 'code' && empty(project)
     var vproj_path: string = FindVprojFile(current_dir)
     if !empty(vproj_path)
@@ -308,21 +339,18 @@ def Render(): void
   deletebufline(pane_bufnr, 1, '$')
   setbufline(pane_bufnr, 1, lines)
   setbufvar(pane_bufnr, '&modifiable', 0)
+  setbufvar(pane_bufnr, '&modified', 0)
 
   ClearPaneHighlights()
   HighlightCurrentMode()
 
   if selected_line > len(lines)
-    if current_mode == 'code'
-      selected_line = len(lines) >= 2 ? 2 : 1
-    else
-      selected_line = len(lines) > 2 ? 3 : 1
-    endif
+    selected_line = FirstSelectableLine()
   endif
-  if selected_line < 1
-    selected_line = 1
+  if selected_line < FirstSelectableLine()
+    selected_line = FirstSelectableLine()
   endif
-  cursor(selected_line, 1)
+  MoveCursor(selected_line)
 enddef
 
 def BuildModeMenu(): string
@@ -346,7 +374,13 @@ def ReadDir(dir: string): list<dict<any>>
     result->add({name: '..', path: fnamemodify(dir, ':h'), is_parent: true, is_dir: true, size: 0})
   endif
 
-  var entries: list<string> = readdir(dir)
+  var entries: list<string> = []
+  try
+    entries = readdir(dir)
+  catch
+    echom 'vproj: Cannot read directory: ' .. dir
+    return result
+  endtry
   if empty(entries)
     return result
   endif
@@ -355,6 +389,9 @@ def ReadDir(dir: string): list<dict<any>>
   var files: list<dict<any>> = []
 
   for entry in entries
+    if entry[0] == '.' && !exists('g:vproj_show_dotfiles')
+      continue
+    endif
     var full: string = dir .. '/' .. entry
     if isdirectory(full)
       dirs->add({name: entry, path: full, is_dir: true, size: 0})
@@ -393,7 +430,7 @@ def BuildFileLines(file_items: list<dict<any>>): list<string>
     info = repeat(' ', info_width - strwidth(info)) .. info
 
     # Build line: "  name  ...  info"
-    var name_width: number = pane_width - info_width - 1
+    var name_width: number = pane_width - info_width - 2
     if strwidth(name) > name_width
       name = strcharpart(name, 0, name_width)
     endif
@@ -462,12 +499,13 @@ enddef
 
 def OpenFile(path: string): void
   if !filereadable(path)
+    echom 'vproj: Cannot read: ' .. path
     return
   endif
   # Check for binary (null bytes in first 8KB)
   if IsBinary(path)
     echohl WarningMsg
-    echo 'Binary file: ' .. fnamemodify(path, ':t')
+    echom 'vproj: Binary file: ' .. fnamemodify(path, ':t')
     echohl None
     return
   endif
@@ -476,7 +514,13 @@ def OpenFile(path: string): void
 enddef
 
 def IsBinary(path: string): bool
-  var blob: blob = readblob(path, 0, 8192)
+  var blob: blob
+  try
+    blob = readblob(path, 0, 8192)
+  catch
+    echom 'vproj: Cannot read binary check: ' .. path
+    return false
+  endtry
   for b in blob
     if b == 0
       return true
@@ -508,7 +552,7 @@ enddef
 
 def BuildDocLines(buf_items: list<dict<any>>): list<string>
   var result: list<string> = []
-  var flag_width: number = 6
+  var flag_width: number = 7
 
   for item in buf_items
     var flags: string = ''
@@ -517,7 +561,7 @@ def BuildDocLines(buf_items: list<dict<any>>): list<string>
     flags = flags .. ' ' .. printf('%4d', item.linecount)
 
     var name: string = item.name
-    var name_width: number = pane_width - flag_width - 1
+    var name_width: number = pane_width - flag_width - 2
     if strwidth(name) > name_width
       name = strcharpart(name, 0, name_width)
     endif
@@ -574,8 +618,12 @@ enddef
 
 def FindVprojFile(dir: string): string
   var d: string = dir
-  while d != '' && d != '/' && d != '/home'
+  while d != '' && d != '/'
     var matches = glob(d .. '/*.vproj', 0, 1)
+    if matches->len() > 0
+      return matches[0]
+    endif
+    matches = glob(d .. '/.vproj', 0, 1)
     if matches->len() > 0
       return matches[0]
     endif
@@ -607,7 +655,8 @@ def ParseVprojFile(path: string): dict<any>
     if empty(t) || t[0] == '#' | continue | endif
 
     if t =~ ':$'
-      section = get(SECTION_MAP, tolower(t->substitute(':$', '', '')), '')
+      var raw: string = t->substitute(':\s*$', '', '')->substitute('\s\+$', '', '')
+      section = get(SECTION_MAP, tolower(raw), '')
       continue
     endif
 
@@ -654,6 +703,10 @@ def WriteVprojFile(): void
   var tmp: string = project.vproj_file .. '.tmp'
   if writefile(lines, tmp) == 0
     rename(tmp, project.vproj_file)
+  else
+    echohl WarningMsg
+    echom 'vproj: Failed to write ' .. project.vproj_file
+    echohl None
   endif
 enddef
 
@@ -665,6 +718,7 @@ def RelPath(full: string): string
   var proot: string = get(project, 'root', '')
   var rel: string = full
   if !empty(proot) && rel->stridx(proot) == 0
+      && (rel->len() == proot->len() || rel[proot->len()] == '/')
     rel = rel[proot->len() :]->substitute('^/', '', '')
   endif
   return rel
@@ -684,7 +738,13 @@ def CodeItems(): list<dict<any>>
     })
   endif
 
-  var entries: list<string> = readdir(code_root)
+  var entries: list<string> = []
+  try
+    entries = readdir(code_root)
+  catch
+    echom 'vproj: Cannot read directory: ' .. code_root
+    return result
+  endtry
   if empty(entries)
     return result
   endif
@@ -695,6 +755,9 @@ def CodeItems(): list<dict<any>>
   var files_other: list<dict<any>> = []
 
   for entry in entries
+    if entry[0] == '.' && !exists('g:vproj_show_dotfiles')
+      continue
+    endif
     var full: string = code_root .. '/' .. entry
     var is_dir: bool = isdirectory(full)
     var item: dict<any> = {
@@ -787,7 +850,7 @@ def BuildCodeLines(code_items: list<dict<any>>): list<string>
 enddef
 
 export def ToggleInclude(): void
-  if current_mode != 'code' || !IsPaneVisible() | return | endif
+  if current_mode != 'code' || !IsPaneVisible() || empty(project) | return | endif
   var idx: number = selected_line - 3
   if idx < 0 || idx >= len(items) | return | endif
   var item: dict<any> = items[idx]
@@ -850,6 +913,8 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> <Up> <Cmd>call vproj#SelectPrev()<CR>
   nnoremap <buffer> <silent> j <Cmd>call vproj#SelectNext()<CR>
   nnoremap <buffer> <silent> k <Cmd>call vproj#SelectPrev()<CR>
+  nnoremap <buffer> <silent> h <Cmd>call vproj#NavigateUp()<CR>
+  nnoremap <buffer> <silent> l <Cmd>call vproj#SelectCurrent()<CR>
 
   # Width
   nnoremap <buffer> <silent> <Right> <Cmd>call vproj#PaneGrow()<CR>
@@ -859,9 +924,9 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> <CR> <Cmd>call vproj#SelectCurrent()<CR>
 
   # Mode switching
-  nnoremap <buffer> <silent> <S-F> <Cmd>call vproj#SwitchMode('file')<CR>
-  nnoremap <buffer> <silent> <S-D> <Cmd>call vproj#SwitchMode('doc')<CR>
-  nnoremap <buffer> <silent> <S-C> <Cmd>call vproj#SwitchMode('code')<CR>
+  nnoremap <buffer> <silent> F <Cmd>call vproj#SwitchMode('file')<CR>
+  nnoremap <buffer> <silent> D <Cmd>call vproj#SwitchMode('doc')<CR>
+  nnoremap <buffer> <silent> C <Cmd>call vproj#SwitchMode('code')<CR>
 
   # Include / exclude (code mode)
   nnoremap <buffer> <silent> + <Cmd>call vproj#ToggleInclude()<CR>
@@ -885,6 +950,9 @@ def SetupAutocommands(): void
   execute 'augroup ' .. AUTOGROUP
     autocmd!
     execute 'autocmd BufWipeout <buffer> call vproj#HandleBufWipeout()'
+    autocmd DirChanged global call vproj#OnDirChanged()
+    autocmd DirChanged window call vproj#OnDirChanged()
+    autocmd ColorScheme * call vproj#DefineHighlights()
   augroup END
 enddef
 
@@ -902,7 +970,10 @@ def HighlightCurrentMode(): void
   var wnr: number = bufwinnr(pane_bufnr)
   var orig_wid: number = win_getid()
   win_gotoid(win_getid(wnr))
-  silent! matchadd('VprojModeCurrent', pattern, 10, -1)
+  match_ids->add(matchadd('VprojModeCurrent', pattern, 10, -1))
+  # Highlight selected line (cursorline replacement, skips menu/separator)
+  var cur_pattern: string = '\%' .. selected_line .. 'l'
+  match_ids->add(matchadd('VprojCursorLine', cur_pattern, 9, -1))
   win_gotoid(orig_wid)
 enddef
 
@@ -910,11 +981,16 @@ def ClearPaneHighlights(): void
   if !IsPaneVisible()
     return
   endif
-  var wnr: number = bufwinnr(pane_bufnr)
-  var orig_wid: number = win_getid()
-  win_gotoid(win_getid(wnr))
-  silent! clearmatches()
-  win_gotoid(orig_wid)
+  if !empty(match_ids)
+    var wnr: number = bufwinnr(pane_bufnr)
+    var orig_wid: number = win_getid()
+    win_gotoid(win_getid(wnr))
+    for id in match_ids
+      silent! matchdelete(id)
+    endfor
+    match_ids = []
+    win_gotoid(orig_wid)
+  endif
 enddef
 
 def ApplyWidth(): void
@@ -929,8 +1005,6 @@ def ApplyWidth(): void
 enddef
 
 export def DefineHighlights(): void
-  if hlexists('VprojModeCurrent')
-    return
-  endif
   highlight VprojModeCurrent cterm=bold,underline gui=bold,underline
+  highlight VprojCursorLine cterm=reverse gui=reverse
 enddef

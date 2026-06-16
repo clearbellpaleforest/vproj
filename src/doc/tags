@@ -1,0 +1,17 @@
+:VprojClose	vproj.txt	/*:VprojClose*
+:VprojOpen	vproj.txt	/*:VprojOpen*
+:VprojRefresh	vproj.txt	/*:VprojRefresh*
+:VprojToggle	vproj.txt	/*:VprojToggle*
+g:vproj_show_dotfiles	vproj.txt	/*g:vproj_show_dotfiles*
+vproj-commands	vproj.txt	/*vproj-commands*
+vproj-config	vproj.txt	/*vproj-config*
+vproj-contents	vproj.txt	/*vproj-contents*
+vproj-file-format	vproj.txt	/*vproj-file-format*
+vproj-highlights	vproj.txt	/*vproj-highlights*
+vproj-intro	vproj.txt	/*vproj-intro*
+vproj-mappings	vproj.txt	/*vproj-mappings*
+vproj-mode-code	vproj.txt	/*vproj-mode-code*
+vproj-mode-doc	vproj.txt	/*vproj-mode-doc*
+vproj-mode-file	vproj.txt	/*vproj-mode-file*
+vproj-modes	vproj.txt	/*vproj-modes*
+vproj.txt	vproj.txt	/*vproj.txt*

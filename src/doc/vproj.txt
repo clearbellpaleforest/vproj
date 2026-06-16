@@ -1,0 +1,142 @@
+*vproj.txt*  Vim project manager
+
+Author:  Aldous Thoreau
+License: MIT
+
+==============================================================================
+CONTENTS                                           *vproj-contents*
+
+  1. Intro ..................................... |vproj-intro|
+  2. Commands .................................. |vproj-commands|
+  3. Modes ..................................... |vproj-modes|
+  4. Key Mappings .............................. |vproj-mappings|
+  5. Configuration ............................. |vproj-config|
+  6. .vproj File Format ........................ |vproj-file-format|
+
+==============================================================================
+1. INTRO                                             *vproj-intro*
+
+vproj is a project manager sidebar for Vim. Browse files, switch buffers,
+and manage project structure from a vertical pane.
+
+Press |F4| to toggle the pane, or use |:VprojToggle|.
+
+Installation: clone the repository and run |install.sh|, or create symlinks
+manually to ~/.vim/pack/bundle/start/vproj/.
+
+==============================================================================
+2. COMMANDS                                         *vproj-commands*
+
+:VprojToggle                                        *:VprojToggle*
+    Toggle the project pane open or closed.
+
+:VprojOpen                                          *:VprojOpen*
+    Open the project pane.
+
+:VprojClose                                         *:VprojClose*
+    Close the project pane.
+
+:VprojRefresh                                       *:VprojRefresh*
+    Refresh the pane contents (re-read directory).
+
+==============================================================================
+3. MODES                                             *vproj-modes*
+
+File Mode  ([F]ile)                                 *vproj-mode-file*
+    Browse the filesystem. Directories listed first, then files.
+    File sizes shown for regular files. Press |l| or Enter on a
+    directory to navigate into it, on a file to open it. Press |h|
+    or . to go to the parent directory.
+
+Doc Mode  ([D]oc)                                   *vproj-mode-doc*
+    Switch between open buffers. Modified buffers marked with +,
+    current buffer marked with %. Press |d| to close a buffer.
+    Line counts shown.
+
+Code Mode  ([C]ode)                                 *vproj-mode-code*
+    Project-aware file tree from a .vproj file. Included items
+    shown normally; excluded items shown in parentheses.
+    Press |+| or |-| to toggle inclusion.
+
+Press Enter on the mode menu line (line 1) to cycle through modes.
+Press |F|, |D|, or |C| inside the pane to switch directly.
+
+==============================================================================
+4. KEY MAPPINGS                                    *vproj-mappings*
+
+All mappings are buffer-local to the VPROJ pane. They do not affect
+other buffers.
+
+Navigation:
+    |j| / |k|           Move selection down / up
+    <Down> / <Up>       Same as j / k
+    |h|                 Go to parent directory
+    |l|                 Open file or enter directory
+    Enter               Same as l
+    |. |                 Go to parent directory (same as h)
+
+Mode switching:
+    |F|                 File mode
+    |D|                 Doc mode
+    |C|                 Code mode
+
+Actions:
+    |r|                 Refresh listing
+    |d|                 Close selected buffer (doc mode)
+    |+| / |-|           Toggle include/exclude (code mode)
+    <Left> / <Right>    Shrink / grow pane width
+
+Close:
+    |q|                 Close pane
+    |F4|                Close pane
+
+Global (outside pane):
+    <F4>                Toggle pane open / closed
+
+==============================================================================
+5. CONFIGURATION                                   *vproj-config*
+
+                                               *g:vproj_show_dotfiles*
+    g:vproj_show_dotfiles
+        Set to 1 to show dotfiles (hidden files starting with ".").
+        Default: hidden.
+
+                                               *vproj-highlights*
+Highlight groups:
+    VprojModeCurrent    Mode label on the menu line (bold, underline)
+    VprojCursorLine     Selected line highlight (reverse video)
+
+Example vimrc:
+>
+    " Show hidden files
+    let g:vproj_show_dotfiles = 1
+
+    " Remap toggle to F2
+    nmap <F2> <Plug>VprojToggle
+    nunmap <F4>
+<
+
+==============================================================================
+6. .vproj FILE FORMAT                             *vproj-file-format*
+
+The .vproj file defines a project for Code Mode. It lives at the
+project root.
+
+Format: >
+
+    Project Name: my-project
+    Project Root: /home/user/dev/my-project
+    Included Directories:
+    src
+    Included Files:
+    README.md
+    Excluded Directories:
+    .git
+    node_modules
+    Excluded Files:
+    .env
+
+Lines starting with # are comments.
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
