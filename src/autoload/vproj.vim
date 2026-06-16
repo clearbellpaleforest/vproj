@@ -139,8 +139,12 @@ def MoveCursor(lnum: number): void
 enddef
 
 def SkipNonSelectable(line: number): bool
-  if line == 1 | return true | endif
-  if current_mode != 'code' && line == 2 | return true | endif
+  if line == 1
+    return true
+  endif
+  if current_mode != 'code' && line == 2
+    return true
+  endif
   return false
 enddef
 
@@ -680,12 +684,16 @@ def ParseVprojFile(path: string): dict<any>
     included_dirs: [], included_files: [],
     excluded_dirs: [], excluded_files: [],
   }
-  if !filereadable(path) | return p | endif
+  if !filereadable(path)
+    return p
+  endif
 
   var section: string = ''
   for line in readfile(path)
     var t: string = line->substitute('^\s\+', '', '')->substitute('\s\+$', '', '')
-    if empty(t) || t[0] == '#' | continue | endif
+    if empty(t) || t[0] == '#'
+      continue
+    endif
 
     if t =~ ':$'
       var raw: string = t->substitute(':\s*$', '', '')->substitute('\s\+$', '', '')
@@ -896,9 +904,13 @@ export def ToggleInclude(): void
     return
   endif
   var idx: number = selected_line - 3
-  if idx < 0 || idx >= len(items) | return | endif
+  if idx < 0 || idx >= len(items)
+    return
+  endif
   var item: dict<any> = items[idx]
-  if get(item, 'is_parent', false) | return | endif
+  if get(item, 'is_parent', false)
+    return
+  endif
 
   var rel = RelPath(item.path)
   var inc = project.included_dirs
@@ -910,20 +922,32 @@ export def ToggleInclude(): void
 
   if get(item, 'included', false)
     var i1 = inc->index(rel)
-    if i1 >= 0 | inc->remove(i1) | endif
-    if exc->index(rel) < 0 | exc->add(rel) | endif
+    if i1 >= 0
+      inc->remove(i1)
+    endif
+    if exc->index(rel) < 0
+      exc->add(rel)
+    endif
     # Remove from opposite-type list (hand-edited .vproj guard)
     var opp_exc = get(item, 'is_dir', false) ? project.excluded_files : project.excluded_dirs
     var iopp = opp_exc->index(rel)
-    if iopp >= 0 | opp_exc->remove(iopp) | endif
+    if iopp >= 0
+      opp_exc->remove(iopp)
+    endif
   else
     var i2 = exc->index(rel)
-    if i2 >= 0 | exc->remove(i2) | endif
-    if inc->index(rel) < 0 | inc->add(rel) | endif
+    if i2 >= 0
+      exc->remove(i2)
+    endif
+    if inc->index(rel) < 0
+      inc->add(rel)
+    endif
     # Remove from opposite-type list (hand-edited .vproj guard)
     var opp_inc = get(item, 'is_dir', false) ? project.included_files : project.included_dirs
     var iopp = opp_inc->index(rel)
-    if iopp >= 0 | opp_inc->remove(iopp) | endif
+    if iopp >= 0
+      opp_inc->remove(iopp)
+    endif
   endif
 
   WriteVprojFile()
@@ -931,11 +955,15 @@ export def ToggleInclude(): void
 enddef
 
 export def RenameProject(): void
-  if current_mode != 'code' || !IsPaneVisible() | return | endif
+  if current_mode != 'code' || !IsPaneVisible()
+    return
+  endif
 
   var default_name = !empty(get(project, 'name', '')) ? project.name : fnamemodify(current_dir, ':t')
   var new_name = input('Project name: ', default_name)
-  if empty(new_name) || new_name == default_name | return | endif
+  if empty(new_name) || new_name == default_name
+    return
+  endif
 
   if empty(project)
     project = {name: new_name, root: current_dir, vproj_file: current_dir .. '/' .. new_name .. '.vproj', included_dirs: [], included_files: [], excluded_dirs: [], excluded_files: []}
