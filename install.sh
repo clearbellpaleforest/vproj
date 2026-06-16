@@ -8,7 +8,17 @@
 set -e
 
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
-TARGET_DIR="$HOME/.vim/pack/bundle/start/vproj"
+
+# Respect XDG if set, otherwise default to ~/.vim
+# Vim's 'packpath' includes ~/.vim regardless, but some distributions
+# patch this — check XDG_CONFIG_HOME first.
+if [ -n "$XDG_CONFIG_HOME" ]; then
+  TARGET_DIR="$XDG_CONFIG_HOME/vim/pack/bundle/start/vproj"
+elif [ -d "$HOME/.config/vim" ]; then
+  TARGET_DIR="$HOME/.config/vim/pack/bundle/start/vproj"
+else
+  TARGET_DIR="$HOME/.vim/pack/bundle/start/vproj"
+fi
 
 mkdir -p "$TARGET_DIR"
 ln -sf "$SRC_DIR/src/plugin" "$TARGET_DIR/plugin"

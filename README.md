@@ -16,6 +16,8 @@ The script creates `~/.vim/pack/bundle/start/vproj/` with symlinks to `plugin/`,
 
 **Option 2 — Manual symlinks:**
 
+Replace `~/.vim` with `$XDG_CONFIG_HOME/vim` if you use XDG.
+
 ```bash
 mkdir -p ~/.vim/pack/bundle/start/vproj
 ln -s ~/dev/vproj/src/plugin   ~/.vim/pack/bundle/start/vproj/plugin
