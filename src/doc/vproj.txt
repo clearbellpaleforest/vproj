@@ -82,7 +82,7 @@ Mode switching:
 
 Actions:
     |r|                 Refresh listing
-    |d|                 Close selected buffer (doc mode)
+    |x|                 Close selected buffer (doc mode)
     |+| / |-|           Toggle include/exclude (code mode)
     <Left> / <Right>    Shrink / grow pane width
 

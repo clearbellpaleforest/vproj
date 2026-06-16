@@ -936,7 +936,7 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> r <Cmd>call vproj#Refresh()<CR>
 
   # Close buffer (doc mode)
-  nnoremap <buffer> <silent> d <Cmd>call vproj#CloseBuffer()<CR>
+  nnoremap <buffer> <silent> x <Cmd>call vproj#CloseBuffer()<CR>
 
   # Close pane
   nnoremap <buffer> <silent> q <Cmd>call vproj#PaneClose()<CR>

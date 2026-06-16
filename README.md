@@ -46,7 +46,7 @@ Plug 'clearbellpaleforest/vproj'
 | D | Doc mode — switch open buffers |
 | C | Code mode — project tree |
 | r | Refresh |
-| d | Close selected buffer (doc mode) |
+| x | Close selected buffer (doc mode) |
 | + / - | Include / exclude item (code mode) |
 | Left / Right | Shrink / grow pane |
 | . | Parent directory |
