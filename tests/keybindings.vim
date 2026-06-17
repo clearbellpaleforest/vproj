@@ -105,17 +105,17 @@ endtry
 echom '--- Mode Switching ---'
 Setup()
 
-execute 'normal F'
-Assert(vproj#GetCurrentMode() == 'file', 'F stays in file mode')
+execute 'normal f'
+Assert(vproj#GetCurrentMode() == 'file', 'f stays in file mode')
 
-execute 'normal D'
-Assert(vproj#GetCurrentMode() == 'doc', 'D switches to doc mode')
+execute 'normal b'
+Assert(vproj#GetCurrentMode() == 'buf', 'b switches to buf mode')
 
-execute 'normal C'
-Assert(vproj#GetCurrentMode() == 'code', 'C switches to code mode')
+execute 'normal g'
+Assert(vproj#GetCurrentMode() == 'git', 'g switches to git mode')
 
-execute 'normal F'
-Assert(vproj#GetCurrentMode() == 'file', 'F back to file mode')
+execute 'normal f'
+Assert(vproj#GetCurrentMode() == 'file', 'f back to file mode')
 
 # ──────────────────────────────────────────────
 # SECTION 5: Action keys (r, x, +, -)
@@ -128,8 +128,8 @@ execute 'normal r'
 Assert(vproj#IsPaneVisible(), 'r (refresh) keeps pane open')
 Assert(vproj#GetCurrentMode() == 'file', 'r preserves mode')
 
-# x — close buffer (doc mode)
-vproj#SwitchMode('doc')
+# x — close buffer (buf mode)
+vproj#SwitchMode('buf')
 try
   execute 'normal x'
   Assert(vproj#IsPaneVisible(), 'x (close buffer) does not crash')
@@ -137,8 +137,8 @@ catch
   Assert(false, 'x error: ' .. v:exception)
 endtry
 
-# +/- — toggle include (code mode)
-vproj#SwitchMode('code')
+# +/- — toggle include (git mode)
+vproj#SwitchMode('git')
 try
   execute 'normal +'
   Assert(vproj#IsPaneVisible(), '+ (toggle include) does not crash')
@@ -171,13 +171,13 @@ Assert(vproj#GetPaneWidth() == w_before, '<Left> shrinks pane')
 # ──────────────────────────────────────────────
 echom '--- Close ---'
 
-# q — close
-execute 'normal q'
-Assert(!vproj#IsPaneVisible(), 'q closes pane')
+# Q — close
+execute 'normal Q'
+Assert(!vproj#IsPaneVisible(), 'Q closes pane')
 
 # Reopen for next test
 vproj#PaneOpen()
-Assert(vproj#IsPaneVisible(), 'reopen after q')
+Assert(vproj#IsPaneVisible(), 'reopen after Q')
 
 # F4 — close (may not send in headless, test the function path)
 vproj#PaneClose()

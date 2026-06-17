@@ -42,11 +42,11 @@ Setup()
 # FirstSelectableLine must be 3 in all modes
 Assert(PaneCursorLine() == 3, 'cursor starts on line 3 in file mode')
 
-vproj#SwitchMode('doc')
-Assert(PaneCursorLine() == 3, 'cursor starts on line 3 in doc mode')
+vproj#SwitchMode('buf')
+Assert(PaneCursorLine() == 3, 'cursor starts on line 3 in buf mode')
 
-vproj#SwitchMode('code')
-Assert(PaneCursorLine() == 3, 'cursor starts on line 3 in code mode')
+vproj#SwitchMode('git')
+Assert(PaneCursorLine() == 4, 'cursor starts on line 4 in git mode (separator at line 3)')
 
 # SelectNext from line 3 → line 4 (not status line)
 vproj#SwitchMode('file')
@@ -75,7 +75,7 @@ catch
 endtry
 
 # ──────────────────────────────────────────────
-# ToggleInclude guards (status line, non-code mode)
+# ToggleInclude guards (status line, non-git mode)
 # ──────────────────────────────────────────────
 echom '--- ToggleInclude guards ---'
 
@@ -89,19 +89,19 @@ catch
   Assert(false, '+ in file mode error: ' .. v:exception)
 endtry
 
-# In code mode with no project, cursor on first item (line 3), press +
-vproj#SwitchMode('code')
+# In git mode with no project, cursor on first item (line 3), press +
+vproj#SwitchMode('git')
 execute 'normal +'
-Assert(vproj#IsPaneVisible(), '+ in code mode no-project does not crash')
+Assert(vproj#IsPaneVisible(), '+ in git mode no-project does not crash')
 
 # - key similarly
 execute 'normal -'
-Assert(vproj#IsPaneVisible(), '- in code mode no-project does not crash')
+Assert(vproj#IsPaneVisible(), '- in git mode no-project does not crash')
 
 # ──────────────────────────────────────────────
-# CloseBuffer outside doc mode
+# CloseBuffer outside buf mode
 # ──────────────────────────────────────────────
-echom '--- CloseBuffer outside doc mode ---'
+echom '--- CloseBuffer outside buf mode ---'
 Setup()
 vproj#SwitchMode('file')
 try
@@ -111,12 +111,12 @@ catch
   Assert(false, 'x in file mode error: ' .. v:exception)
 endtry
 
-vproj#SwitchMode('code')
+vproj#SwitchMode('git')
 try
   execute 'normal x'
-  Assert(vproj#IsPaneVisible(), 'x in code mode shows message, does not crash')
+  Assert(vproj#IsPaneVisible(), 'x in git mode shows message, does not crash')
 catch
-  Assert(false, 'x in code mode error: ' .. v:exception)
+  Assert(false, 'x in git mode error: ' .. v:exception)
 endtry
 
 # ──────────────────────────────────────────────
@@ -170,12 +170,12 @@ echom '--- Mode cycling ---'
 Setup()
 
 Assert(vproj#GetCurrentMode() == 'file', 'starts in file mode')
-vproj#SwitchMode('doc')
-Assert(vproj#GetCurrentMode() == 'doc', 'SwitchMode file→doc')
-vproj#SwitchMode('code')
-Assert(vproj#GetCurrentMode() == 'code', 'SwitchMode doc→code')
+vproj#SwitchMode('buf')
+Assert(vproj#GetCurrentMode() == 'buf', 'SwitchMode file→buf')
+vproj#SwitchMode('git')
+Assert(vproj#GetCurrentMode() == 'git', 'SwitchMode buf→git')
 vproj#SwitchMode('file')
-Assert(vproj#GetCurrentMode() == 'file', 'SwitchMode code→file')
+Assert(vproj#GetCurrentMode() == 'file', 'SwitchMode git→file')
 
 # ──────────────────────────────────────────────
 # SetPaneWidth invalid values
@@ -204,17 +204,22 @@ g:vproj_pane_width_file = 45
 vproj#SwitchMode('file')
 Assert(vproj#GetPaneWidth() == 45, 'file-mode width config applied')
 
-g:vproj_pane_width_doc = 35
-vproj#SwitchMode('doc')
-Assert(vproj#GetPaneWidth() == 35, 'doc-mode width config applied')
+g:vproj_pane_width_buf = 35
+vproj#SwitchMode('buf')
+Assert(vproj#GetPaneWidth() == 35, 'buf-mode width config applied')
 
-g:vproj_pane_width_code = 30
-vproj#SwitchMode('code')
-Assert(vproj#GetPaneWidth() == 30, 'code-mode width config applied')
+g:vproj_pane_width_git = 30
+vproj#SwitchMode('git')
+Assert(vproj#GetPaneWidth() == 30, 'git-mode width config applied')
+
+g:vproj_pane_width_qfix = 38
+vproj#SwitchMode('qfix')
+Assert(vproj#GetPaneWidth() == 38, 'qfix-mode width config applied')
 
 unlet g:vproj_pane_width_file
-unlet g:vproj_pane_width_doc
-unlet g:vproj_pane_width_code
+unlet g:vproj_pane_width_buf
+unlet g:vproj_pane_width_git
+unlet g:vproj_pane_width_qfix
 vproj#SwitchMode('file')
 
 # ──────────────────────────────────────────────
@@ -306,7 +311,7 @@ catch
 endtry
 
 # ──────────────────────────────────────────────
-# RenameProject in non-code mode
+# RenameProject in non-git mode
 # ──────────────────────────────────────────────
 echom '--- RenameProject guard ---'
 Setup()

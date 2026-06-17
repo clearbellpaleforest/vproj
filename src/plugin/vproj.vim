@@ -17,7 +17,7 @@ if exists('g:loaded_vproj')
 endif
 g:loaded_vproj = 1
 
-# Define highlight groups (idempotent — guards with hlexists)
+# Define highlight groups (idempotent — uses highlight default)
 vproj#DefineHighlights()
 
 # ---------------------------------------------------------------------------
@@ -38,3 +38,7 @@ nnoremap <silent> <Plug>VprojToggle :VprojToggle<CR>
 if !hasmapto('<Plug>VprojToggle', 'n')
   nmap <F4> <Plug>VprojToggle
 endif
+
+# F1 / Help — toggle info column inside pane, normal help outside
+nnoremap <silent> <F1> :call vproj#HandleF1()<CR>
+nnoremap <silent> <Help> :call vproj#HandleF1()<CR>

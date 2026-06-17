@@ -87,17 +87,17 @@ for i in range(3)
 endfor
 ShowState('Step 8: After 3 more j presses (wrap test)')
 
-# --- STEP 9: Switch to doc mode ---
+# --- STEP 9: Switch to buf mode ---
 echom ''
-echom 'STEP 9: Switch to doc mode (Shift-D)'
-vproj#SwitchMode('doc')
-ShowState('Step 9: Doc mode')
+echom 'STEP 9: Switch to buf mode (Shift-D)'
+vproj#SwitchMode('buf')
+ShowState('Step 9: Buf mode')
 
-# --- STEP 10: Switch to code mode ---
+# --- STEP 10: Switch to git mode ---
 echom ''
-echom 'STEP 10: Switch to code mode (Shift-C)'
-vproj#SwitchMode('code')
-ShowState('Step 10: Code mode')
+echom 'STEP 10: Switch to git mode (Shift-C)'
+vproj#SwitchMode('git')
+ShowState('Step 10: Git mode')
 
 # --- STEP 11: Back to file mode, close ---
 echom ''

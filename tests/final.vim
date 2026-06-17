@@ -29,11 +29,11 @@ enddef
 # ── FIX 1: ToggleInclude doesn't crash on empty project ──
 echom '--- ToggleInclude with empty project (was CRASH) ---'
 vproj#PaneOpen()
-vproj#SwitchMode('code')
+vproj#SwitchMode('git')
 
 # Navigate to first item (line 3), press +
 # Cursor starts on line 3 (first item) since FirstSelectableLine returns 3
-Assert(CursorInPane() == 3, 'cursor on first item in code mode')
+Assert(CursorInPane() == 4, 'cursor on first item in git mode')
 vproj#ToggleInclude()
 echom 'ToggleInclude did not crash with empty project'
 
@@ -71,28 +71,28 @@ vproj#PaneClose()
 vproj#PaneOpen()
 Assert(vproj#IsPaneVisible(), 'reopen works after NavigateUp')
 
-# ── FIX 7: Code mode after file mode directory change ──
+# ── FIX 7: Git mode after file mode directory change ──
 echom '--- Mode switch refreshes current_dir ---'
-vproj#SwitchMode('code')
-Assert(vproj#GetCurrentMode() == 'code', 'switched to code mode')
+vproj#SwitchMode('git')
+Assert(vproj#GetCurrentMode() == 'git', 'switched to git mode')
 vproj#SwitchMode('file')
 Assert(vproj#GetCurrentMode() == 'file', 'switched back to file mode')
 
 # ── FIX 8: HandleBufWipeout uses FirstSelectableLine ──
 echom '--- HandleBufWipeout uses FirstSelectableLine ---'
-vproj#SwitchMode('code')
+vproj#SwitchMode('git')
 # Verify the code path: HandleBufWipeout sets pane_bufnr = -1 then
 # PaneOpen sets selected_line via FirstSelectableLine()
 vproj#PaneClose()
 vproj#PaneOpen()
-Assert(CursorInPane() == 3, 'code mode: cursor on first item (3) after close+reopen')
+Assert(CursorInPane() == 3, 'git mode: cursor on first item (3) after close+reopen (defaults to file mode)')
 
-# ── FIX 9: Doc mode flag_width ──
-echom '--- Doc mode (flag_width fix) ---'
-vproj#SwitchMode('doc')
-Assert(vproj#GetCurrentMode() == 'doc', 'doc mode works')
-# Doc mode with no open buffers: cursor should be on line 3 ("(no open buffers)")
-# or line 1 if doc mode has no items (but it always has the placeholder)
+# ── FIX 9: Buf mode flag_width ──
+echom '--- Buf mode (flag_width fix) ---'
+vproj#SwitchMode('buf')
+Assert(vproj#GetCurrentMode() == 'buf', 'buf mode works')
+# Buf mode with no open buffers: cursor should be on line 3 ("(no open buffers)")
+# or line 1 if buf mode has no items (but it always has the placeholder)
 vproj#SwitchMode('file')
 Assert(vproj#GetCurrentMode() == 'file', 'back to file mode after doc')
 

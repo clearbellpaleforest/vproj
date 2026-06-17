@@ -33,9 +33,9 @@ Assert(vproj#IsPaneVisible(), 'Pane opens')
 # Test 4: Default mode is file
 Assert(vproj#GetCurrentMode() == 'file', 'Default mode is file')
 
-# Test 5: Switch to doc mode
-vproj#SwitchMode('doc')
-Assert(vproj#GetCurrentMode() == 'doc', 'Switch to doc mode')
+# Test 5: Switch to buf mode
+vproj#SwitchMode('buf')
+Assert(vproj#GetCurrentMode() == 'buf', 'Switch to buf mode')
 
 # Test 6: Switch to file mode
 vproj#SwitchMode('file')
@@ -50,13 +50,13 @@ Assert(vproj#GetPaneWidth() == 41, 'PaneGrow increases width')
 vproj#PaneShrink()
 Assert(vproj#GetPaneWidth() == 40, 'PaneShrink decreases width')
 
-# Test 9: Switch to code mode
-vproj#SwitchMode('code')
-Assert(vproj#GetCurrentMode() == 'code', 'Switch to code mode')
+# Test 9: Switch to git mode
+vproj#SwitchMode('git')
+Assert(vproj#GetCurrentMode() == 'git', 'Switch to git mode')
 
 # Test 10: Switch back to file mode
 vproj#SwitchMode('file')
-Assert(vproj#GetCurrentMode() == 'file', 'Switch back from code mode')
+Assert(vproj#GetCurrentMode() == 'file', 'Switch back from git mode')
 
 # Test 11: Close pane
 vproj#PaneClose()

@@ -48,18 +48,22 @@ File Mode  ([F]ile)                                 *vproj-mode-file*
     directory to navigate into it, on a file to open it. Press |h|
     or . to go to the parent directory.
 
-Doc Mode  ([D]oc)                                   *vproj-mode-doc*
+Buf Mode  ([B]uf)                                   *vproj-mode-buf*
     Switch between open buffers. Modified buffers marked with +,
     current buffer marked with %. Press |x| to close a buffer.
     Line counts shown.
 
-Code Mode  ([C]ode)                                 *vproj-mode-code*
+Git Mode  ([G]it)                                   *vproj-mode-git*
     Project-aware file tree from a .vproj file. Included items
     shown normally; excluded items shown in parentheses.
     Press |+| or |-| to toggle inclusion.
 
+Qfix Mode  ([Q]fix)                                 *vproj-mode-qfix*
+    Displays the Vim quickfix list. Press Enter to open the
+    selected entry at the file and line number.
+
 Press Enter on the mode menu line (line 1) to cycle through modes.
-Press |F|, |D|, or |C| inside the pane to switch directly.
+Press |f|, |b|, |g|, or |q| inside the pane to switch directly.
 
 ==============================================================================
 4. KEY MAPPINGS                                    *vproj-mappings*
@@ -80,14 +84,15 @@ Navigation:
     <C-J>               Enter first subdirectory
 
 Mode switching:
-    |F|                 File mode
-    |D|                 Doc mode
-    |C|                 Code mode
+    |f|                 File mode
+    |b|                 Buf mode
+    |g|                 Git mode
+    |q|                 Qfix mode
 
 Actions:
     |r|                 Refresh listing
-    |x|                 Close selected buffer (doc mode)
-    |+| / |-|           Include / exclude item (code mode)
+    |x|                 Close selected buffer (buf mode)
+    |+| / |-|           Include / exclude item (git mode)
     <Left> / <Right>    Shrink / grow pane width
     <F1>                Toggle info column
 
@@ -101,7 +106,7 @@ Quick Nav:
     |a|-|z|, |A|-|Z|, |1|-|9|  Jump to item by nav character
 
 Close:
-    |q|                 Close pane
+    |Q|                 Close pane
     |F4|                Close pane
 
 Global (outside pane):
@@ -123,13 +128,17 @@ Global (outside pane):
     g:vproj_pane_width_file
         Pane width for File mode (20-80). 0 = use default. Default: 0.
 
-                                               *g:vproj_pane_width_doc*
-    g:vproj_pane_width_doc
-        Pane width for Doc mode (20-80). 0 = use default. Default: 0.
+                                               *g:vproj_pane_width_buf*
+    g:vproj_pane_width_buf
+        Pane width for Buf mode (20-80). 0 = use default. Default: 0.
 
-                                               *g:vproj_pane_width_code*
-    g:vproj_pane_width_code
-        Pane width for Code mode (20-80). 0 = use default. Default: 0.
+                                               *g:vproj_pane_width_git*
+    g:vproj_pane_width_git
+        Pane width for Git mode (20-80). 0 = use default. Default: 0.
+
+                                               *g:vproj_pane_width_qfix*
+    g:vproj_pane_width_qfix
+        Pane width for Qfix mode (20-80). 0 = use default. Default: 0.
 
                                                *vproj-highlights*
 Highlight groups:
@@ -140,7 +149,7 @@ Highlight groups:
     VprojParentDir      Parent directory entry (blue)
     VprojDirName        Directory name (bold)
     VprojSeparator      Separator line (dark grey)
-    VprojStatusLine     Code mode status line (reverse video)
+    VprojStatusLine     Git mode status line (reverse video)
 
 Example vimrc:
 >
@@ -155,7 +164,7 @@ Example vimrc:
 ==============================================================================
 6. .vproj FILE FORMAT                             *vproj-file-format*
 
-The .vproj file defines a project for Code Mode. It lives at the
+The .vproj file defines a project for Git Mode. It lives at the
 project root.
 
 Format: >

@@ -30,7 +30,7 @@ Assert(mode == 'file', 'default mode is file')
 
 # We can't directly query selected_line, but we can verify cursor
 # position indirectly by checking vproj#SelectCurrent() behavior.
-# If cursor is on line 1 (menu), SelectCurrent would cycle to doc mode.
+# If cursor is on line 1 (menu), SelectCurrent would cycle to buf mode.
 # If cursor is on line 3+, it would try to open a file/dir.
 # So let's check: mode should still be 'file' after calling SelectCurrent
 # (because we're on a file item, not the menu line)
@@ -39,7 +39,7 @@ var mode2: string = vproj#GetCurrentMode()
 Assert(mode2 == 'file', 'cursor was NOT on menu line (mode did not cycle)')
 
 # --- Bug #4: j/k cursor movement ---
-# Switch to doc mode then back to file to reset state
+# Switch to buf mode then back to file to reset state
 vproj#SwitchMode('file')
 
 # Can't directly test j/k since those are key mappings, but we can

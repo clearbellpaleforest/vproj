@@ -27,10 +27,11 @@ Press `F4` to open the pane, then work through each section.
 
 Press these while the pane is focused:
 
-- [ ] `F` — file mode (browse directories)
-- [ ] `D` — doc mode (open buffers)
-- [ ] `C` — code mode (project tree)
-- [ ] `Enter` on the `[F]ile  [D]oc  [C]ode` menu line (line 1) — cycles to next mode
+- [ ] `f` — file mode (browse directories)
+- [ ] `b` — buf mode (open buffers)
+- [ ] `g` — git mode (project tree)
+- [ ] `q` — qfix mode (quickfix list)
+- [ ] `Enter` on the `[F]ile  [B]uf  [G]it  [Q]fix` menu line (line 1) — cycles to next mode
 
 ## Width
 
@@ -41,9 +42,9 @@ Press these while the pane is focused:
 ## Actions
 
 - [ ] `r` — refresh pane contents
-- [ ] `x` — close selected buffer (doc mode only; shows message in other modes)
-- [ ] `+` — include item (code mode, on a parenthesized item)
-- [ ] `-` — exclude item (code mode, on an included item)
+- [ ] `x` — close selected buffer (buf mode only; shows message in other modes)
+- [ ] `+` — include item (git mode, on a parenthesized item)
+- [ ] `-` — exclude item (git mode, on an included item)
 - [ ] `<F1>` — toggle info column (file sizes / line counts)
 
 ## Paging
@@ -62,15 +63,15 @@ Nav indicators are the single chars at the start of each line (a, b, c, …).
 
 Jump-to-char keys (press the char to jump to that line):
 
-- [ ] `a` `b` `c` `d` `e` `g` `i` `m` `n` `o` `p` `s` `t` `u` `v` `w` `y` `z`
-- [ ] `A` `B` `E` `G` `H` `I` `J` `K` `L` `M` `N` `O` `P` `Q` `R` `S` `T` `U` `V` `W` `X` `Y` `Z`
+- [ ] `a` `c` `d` `e` `i` `m` `n` `o` `p` `s` `t` `u` `v` `w` `y` `z`
+- [ ] `A` `B` `C` `D` `E` `F` `G` `H` `I` `J` `K` `L` `M` `N` `O` `P` `Q` `R` `S` `T` `U` `V` `W` `X` `Y` `Z`
 - [ ] `1` `2` `3` `4` `5` `6` `7` `8` `9`
 
 If a char is not on the current page, nothing happens (no crash).
 
 ## Close
 
-- [ ] `q` — close pane
+- [ ] `Q` — close pane
 - [ ] `<F4>` — close pane (inside the pane)
 - [ ] `<F4>` — toggle pane open/closed (outside the pane, globally)
 
@@ -78,12 +79,10 @@ If a char is not on the current page, nothing happens (no crash).
 
 These are NOT remapped and should work as usual inside the pane:
 
-- [ ] `f<char>` — find character on current line
 - [ ] `t<char>` — find until character
-- [ ] `w` / `b` — word forward / back
+- [ ] `w` — word forward
 - [ ] `e` — end of word
 - [ ] `0` / `^` / `$` — line start / first non-blank / line end
-- [ ] `gg` / `G` — buffer top / bottom
 - [ ] `H` / `M` / `L` — screen top / middle / bottom
 - [ ] `%` — jump to matching `( ) { } [ ]`
 - [ ] `{` / `}` — paragraph back / forward
@@ -97,7 +96,7 @@ These are NOT remapped and should work as usual inside the pane:
 
 ## Notes
 
-- `f` is passthrough (find char), NOT a nav char — lowercase f is excluded from nav indicators
-- `h` `j` `k` `l` `q` `r` `x` are navigation/action keys, not nav chars
-- `C` `D` `F` are mode-switch keys — uppercase in nav chars skips these
+- `f` `b` `g` `q` are mode-switch keys, NOT nav chars — lowercase f/b/g/q are excluded from nav indicators
+- `h` `j` `k` `l` `r` `x` are navigation/action keys, not nav chars
+- `C` `D` `F` are now free and included as nav chars (uppercase)
 - `0` is passthrough (line start), not a nav char — digits start at 1

@@ -60,24 +60,24 @@ Assert(vproj#GetCurrentMode() == 'file', 'SwitchMode(invalid) ignored, stays fil
 vproj#ToggleInclude()
 Assert(vproj#IsPaneVisible(), 'ToggleInclude file mode does not crash')
 
-# ── CloseBuffer in doc mode with no buffers ──
-vproj#SwitchMode('doc')
+# ── CloseBuffer in buf mode with no buffers ──
+vproj#SwitchMode('buf')
 vproj#CloseBuffer()
-Assert(vproj#IsPaneVisible(), 'CloseBuffer doc mode no buffers does not crash')
+Assert(vproj#IsPaneVisible(), 'CloseBuffer buf mode no buffers does not crash')
 
 # ── CloseBuffer in file mode (wrong mode) ──
 vproj#SwitchMode('file')
 vproj#CloseBuffer()
 Assert(vproj#IsPaneVisible(), 'CloseBuffer file mode does not crash')
 
-# ── Code mode: ToggleInclude on parent entry ──
-vproj#SwitchMode('code')
+# ── Git mode: ToggleInclude on parent entry ──
+vproj#SwitchMode('git')
 # Navigate past line 1 (menu) and 2 (status), land on first item
 vproj#SelectNext()
 vproj#SelectNext()
-Assert(vproj#IsPaneVisible(), 'code mode: moved cursor down')
+Assert(vproj#IsPaneVisible(), 'git mode: moved cursor down')
 vproj#ToggleInclude()
-Assert(vproj#IsPaneVisible(), 'code mode: ToggleInclude on first item (no project) does not crash')
+Assert(vproj#IsPaneVisible(), 'git mode: ToggleInclude on first item (no project) does not crash')
 
 # ── Refresh when pane is closed ──
 vproj#PaneClose()
@@ -107,21 +107,21 @@ vproj#SetPaneWidth(40)
 
 # ── SelectCurrent on empty items ──
 # Move cursor to an empty area and call SelectCurrent
-vproj#SwitchMode('doc')
+vproj#SwitchMode('buf')
 # Should handle gracefully if no buffers
 vproj#SelectCurrent()
-Assert(vproj#GetCurrentMode() == 'doc', 'SelectCurrent in doc mode no crash')
+Assert(vproj#GetCurrentMode() == 'buf', 'SelectCurrent in buf mode no crash')
 
 # ── Mode switch from empty state ──
 vproj#SwitchMode('file')
 Assert(vproj#IsPaneVisible(), 'Switch back to file mode works')
-vproj#SwitchMode('code')
-Assert(vproj#GetCurrentMode() == 'code', 'Switch to code mode works')
+vproj#SwitchMode('git')
+Assert(vproj#GetCurrentMode() == 'git', 'Switch to git mode works')
 vproj#SwitchMode('file')
 Assert(vproj#GetCurrentMode() == 'file', 'Switch back to file mode works')
 
 # ── SelectNext/Prev wrapping ──
-# In doc mode with no buffers, there's only 3 lines: menu, separator, "(empty)"
+# In buf mode with no buffers, there's only 3 lines: menu, separator, "(empty)"
 # SelectNext should wrap
 vproj#SelectNext()
 Assert(vproj#GetCurrentMode() == 'file', 'SelectNext in file mode no crash')
