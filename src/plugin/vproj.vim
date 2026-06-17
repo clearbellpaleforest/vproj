@@ -9,6 +9,7 @@ vim9script
 #   :VprojToggle  — Toggle the project pane open/closed.
 #   :VprojOpen    — Open the project pane.
 #   :VprojClose   — Close the project pane.
+#   :VprojRefresh — Refresh the pane contents.
 
 # Load guard
 if exists('g:loaded_vproj')

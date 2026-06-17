@@ -45,6 +45,10 @@ Plug 'clearbellpaleforest/vproj'
 | `h` | Parent directory |
 | `l` / `Enter` | Open file or enter directory |
 | `.` | Parent directory |
+| `Ctrl-T` | Jump to first item |
+| `Ctrl-B` | Jump to last item |
+| `Ctrl-K` | Parent directory |
+| `Ctrl-J` | Enter first subdirectory |
 
 ### Mode Switching
 
@@ -61,8 +65,20 @@ Plug 'clearbellpaleforest/vproj'
 |-----|--------|
 | `r` | Refresh listing |
 | `x` | Close selected buffer (doc mode) |
-| `+` / `-` | Include / exclude item (code mode) |
+| `+` | Include item (code mode) |
+| `-` | Exclude item (code mode) |
 | `<Left>` / `<Right>` | Shrink / grow pane width |
+| `F1` | Toggle info column |
+| `Tab` | Shift nav indicators forward |
+| `Shift-Tab` | Shift nav indicators backward |
+| `a` – `z`, `A` – `Z`, `1` – `9` | Jump to item by nav char |
+
+### Paging
+
+| Key | Action |
+|-----|--------|
+| `Ctrl-N` | Next page |
+| `Ctrl-P` | Previous page |
 
 ### Close
 
@@ -77,17 +93,17 @@ These work as usual — we don't override them:
 
 | Key(s) | Behavior |
 |--------|----------|
-| `f` `t` `T` | Find character on current line |
+| `f` | Find character on current line |
 | `w` `b` `e` | Word motions |
 | `0` `^` `$` | Line start / end |
-| `gg` `G` | Buffer top / bottom |
-| `/` `?` `n` `N` | Search |
+| `gg` | Buffer top |
+| `/` `?` | Search |
 | `y` | Yank (copy filename) |
-| `Ctrl-F` `Ctrl-B` | Page down / up |
+| `Ctrl-F` | Page down |
 | `Ctrl-D` `Ctrl-U` | Half-page down / up |
 | `Ctrl-W` keys | Window management |
 | `%` `{` `}` `(` `)` | Jump / matching pair |
-| `H` `M` `L` | High / middle / low of screen |
+| `M` `L` | Middle / low of screen |
 | `zz` `zt` `zb` | Scroll cursor to center / top / bottom |
 
 Or use commands: `:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`.
@@ -95,6 +111,26 @@ Or use commands: `:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`.
 Use `let g:vproj_show_dotfiles = 1` to show hidden files.
 
 See `:help vproj` for full documentation.
+
+## .vproj File Format
+
+Code Mode reads a `.vproj` file at the project root to determine which files and directories to include. Example:
+
+```
+Project Name: my-project
+Project Root: /home/user/dev/my-project
+Included Directories:
+src
+Included Files:
+README.md
+Excluded Directories:
+.git
+node_modules
+Excluded Files:
+.env
+```
+
+Lines starting with `#` are comments. See `:help vproj-file-format` for details.
 
 ## Remap
 

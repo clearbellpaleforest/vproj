@@ -31,8 +31,8 @@ echom '--- ToggleInclude with empty project (was CRASH) ---'
 vproj#PaneOpen()
 vproj#SwitchMode('code')
 
-# Navigate to first non-parent item (line 3), press +
-vproj#SelectNext()
+# Navigate to first item (line 3), press +
+# Cursor starts on line 3 (first item) since FirstSelectableLine returns 3
 Assert(CursorInPane() == 3, 'cursor on first item in code mode')
 vproj#ToggleInclude()
 echom 'ToggleInclude did not crash with empty project'
@@ -85,7 +85,7 @@ vproj#SwitchMode('code')
 # PaneOpen sets selected_line via FirstSelectableLine()
 vproj#PaneClose()
 vproj#PaneOpen()
-Assert(CursorInPane() == 2, 'code mode: cursor on status line (2) after close+reopen')
+Assert(CursorInPane() == 3, 'code mode: cursor on first item (3) after close+reopen')
 
 # ── FIX 9: Doc mode flag_width ──
 echom '--- Doc mode (flag_width fix) ---'

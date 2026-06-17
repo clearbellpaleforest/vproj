@@ -21,7 +21,7 @@ and manage project structure from a vertical pane.
 
 Press |F4| to toggle the pane, or use |:VprojToggle|.
 
-Installation: clone the repository and run |install.sh|, or create symlinks
+Installation: clone the repository and run install.sh, or create symlinks
 manually to ~/.vim/pack/bundle/start/vproj/.
 
 ==============================================================================
@@ -50,7 +50,7 @@ File Mode  ([F]ile)                                 *vproj-mode-file*
 
 Doc Mode  ([D]oc)                                   *vproj-mode-doc*
     Switch between open buffers. Modified buffers marked with +,
-    current buffer marked with %. Press |d| to close a buffer.
+    current buffer marked with %. Press |x| to close a buffer.
     Line counts shown.
 
 Code Mode  ([C]ode)                                 *vproj-mode-code*
@@ -73,7 +73,11 @@ Navigation:
     |h|                 Go to parent directory
     |l|                 Open file or enter directory
     Enter               Same as l
-    |. |                 Go to parent directory (same as h)
+    |.|                  Go to parent directory (same as h)
+    <C-T>               Jump to first item
+    <C-B>               Jump to last item
+    <C-K>               Go to parent directory (same as h)
+    <C-J>               Enter first subdirectory
 
 Mode switching:
     |F|                 File mode
@@ -83,8 +87,18 @@ Mode switching:
 Actions:
     |r|                 Refresh listing
     |x|                 Close selected buffer (doc mode)
-    |+| / |-|           Toggle include/exclude (code mode)
+    |+| / |-|           Include / exclude item (code mode)
     <Left> / <Right>    Shrink / grow pane width
+    <F1>                Toggle info column
+
+Paging:
+    <C-N>               Next page
+    <C-P>               Previous page
+
+Quick Nav:
+    <Tab>               Shift nav indicators forward
+    <S-Tab>             Shift nav indicators backward
+    |a|-|z|, |A|-|Z|, |1|-|9|  Jump to item by nav character
 
 Close:
     |q|                 Close pane
@@ -101,10 +115,32 @@ Global (outside pane):
         Set to 1 to show dotfiles (hidden files starting with ".").
         Default: hidden.
 
+                                               *g:vproj_pane_width_default*
+    g:vproj_pane_width_default
+        Initial pane width in columns (20-80). Default: 40.
+
+                                               *g:vproj_pane_width_file*
+    g:vproj_pane_width_file
+        Pane width for File mode (20-80). 0 = use default. Default: 0.
+
+                                               *g:vproj_pane_width_doc*
+    g:vproj_pane_width_doc
+        Pane width for Doc mode (20-80). 0 = use default. Default: 0.
+
+                                               *g:vproj_pane_width_code*
+    g:vproj_pane_width_code
+        Pane width for Code mode (20-80). 0 = use default. Default: 0.
+
                                                *vproj-highlights*
 Highlight groups:
     VprojModeCurrent    Mode label on the menu line (bold, underline)
     VprojCursorLine     Selected line highlight (reverse video)
+    VprojNavIndicator   Nav character indicator (cyan)
+    VprojInfoColumn     File size / buffer info column (green)
+    VprojParentDir      Parent directory entry (blue)
+    VprojDirName        Directory name (bold)
+    VprojSeparator      Separator line (dark grey)
+    VprojStatusLine     Code mode status line (reverse video)
 
 Example vimrc:
 >

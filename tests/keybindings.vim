@@ -200,7 +200,6 @@ var passthrough_tests: list<list<string>> = [
   ['gg',               'gg (buffer top)'],
   ['G',                'G (buffer bottom)'],
   ["\<C-F>",           'Ctrl-F (page down)'],
-  ["\<C-B>",           'Ctrl-B (page up)'],
   ['H',                'H (screen top)'],
   ['L',                'L (screen bottom)'],
   ['%',                '% (match pair)'],
@@ -242,7 +241,9 @@ wincmd w
 close!
 
 # Move past parent dir (..) and subdirs to a file item
-normal jjj
+while getbufline(bufnr('VPROJ'), PaneCursorLine())[0] =~ '/'
+  execute 'normal j'
+endwhile
 
 try
   execute "normal \<CR>"

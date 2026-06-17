@@ -18,7 +18,8 @@ Plain functions. State is script-local variables:
 
 ```
 pane_bufnr, pane_width, current_mode, selected_line, current_dir, items
-project, code_root
+project, code_root, project_prompted, match_ids, show_info_column, current_page
+items_per_page, paging_active, nav_offset, is_interactive
 ```
 
 Commands change state then call `Render()` directly. No event bus, no CQS, no domain model.
@@ -27,9 +28,9 @@ Commands change state then call `Render()` directly. No event bus, no CQS, no do
 
 | Mode | Key | Shows |
 |------|-----|-------|
-| File | Shift-F | Directory browsing, file sizes, binary detection |
-| Doc | Shift-D | Open buffers with flags + line counts |
-| Code | Shift-C | Project tree from .vproj, include/exclude with +/- |
+| File | F | Directory browsing, file sizes, binary detection |
+| Doc | D | Open buffers with flags + line counts |
+| Code | C | Project tree from .vproj, include/exclude with +/- |
 
 Enter on the mode menu line cycles between modes.
 
@@ -49,9 +50,19 @@ Enter on the mode menu line cycles between modes.
 | `vproj#Refresh()` | Re-render pane contents |
 | `vproj#CloseBuffer()` | Close selected buffer (doc mode) |
 | `vproj#ToggleInclude()` | Include/exclude item (code mode) |
+| `vproj#IncludeItem()` | Include item (code mode, + key) |
+| `vproj#ExcludeItem()` | Exclude item (code mode, - key) |
 | `vproj#RenameProject()` | Rename/create project (code mode) |
 | `vproj#IsPaneVisible()` | Query visibility |
 | `vproj#GetPaneWidth()` / `vproj#GetCurrentMode()` | Query state |
+| `vproj#SelectFirst()` / `vproj#SelectLast()` | Jump to first / last item |
+| `vproj#NavigateIntoFirstDir()` | Enter first subdirectory |
+| `vproj#SelectByNavChar(ch)` | Jump to item by nav character |
+| `vproj#ShiftNavForward()` / `vproj#ShiftNavBackward()` | Shift nav indicator range |
+| `vproj#GetNavOffset()` | Get current nav offset |
+| `vproj#ToggleInfoColumn()` | Toggle info column display |
+| `vproj#NextPage()` / `vproj#PrevPage()` | Page through long listings |
+| `vproj#OnDirChanged()` | Handle directory change event |
 | `vproj#HandleBufWipeout()` | Cleanup on buffer wipe |
 | `vproj#DefineHighlights()` | Define highlight groups |
 
@@ -62,16 +73,21 @@ Buffer-local (only active in the pane):
 | Key | Action |
 |-----|--------|
 | j/k, Up/Down | Move selection |
+| h/l | Parent directory / open or enter |
 | Left/Right | Shrink/grow width |
 | Enter | Open file, switch buffer, cycle mode, or rename project |
-| Shift-F | File mode |
-| Shift-D | Doc mode |
-| Shift-C | Code mode |
+| F/D/C | File / Doc / Code mode |
 | r | Refresh pane |
 | x | Close selected buffer (doc mode) |
-| +/- | Include/exclude item (code mode) |
+| +/- | Include / exclude item (code mode) |
 | q, F4 | Close pane |
 | . | Parent directory |
+| Ctrl-T / Ctrl-B | Jump to first / last item |
+| Ctrl-K / Ctrl-J | Parent dir / enter first subdir |
+| F1 | Toggle info column |
+| Ctrl-N / Ctrl-P | Next / previous page |
+| Tab / Shift-Tab | Shift nav indicators |
+| a-z, A-Z, 1-9 | Jump by nav character |
 
 ## Commands
 
@@ -118,3 +134,5 @@ vim -N -u NONE -S tests/smoke.vim
 - Use `get(dict, 'key', default)` for optional dict keys
 - Mappings use `<Cmd>` modifier to avoid command-line flicker
 - ASCII-only for separator characters
+- `ItemIndex()` extracts the shared `(selected_line - FirstSelectableLine()) + (current_page * items_per_page)` formula used by SelectCurrent, CloseBuffer, and DoToggleInclude
+- `getftype()` filters FIFOs/sockets/devices in ReadDir and CodeItems to prevent readblob hangs
