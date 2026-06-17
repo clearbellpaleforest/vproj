@@ -1609,11 +1609,11 @@ def SetupPaneMappings(): void
   # Activate / open
   nnoremap <buffer> <silent> <CR> <Cmd>call vproj#SelectCurrent()<CR>
 
-  # Mode switching
-  nnoremap <buffer> <silent> f <Cmd>call vproj#SwitchMode('file')<CR>
+  # Mode switching — <nowait> prevents timeout on Vim prefix keys (f, g, q)
+  nnoremap <buffer> <silent> <nowait> f <Cmd>call vproj#SwitchMode('file')<CR>
   nnoremap <buffer> <silent> b <Cmd>call vproj#SwitchMode('buf')<CR>
-  nnoremap <buffer> <silent> g <Cmd>call vproj#SwitchMode('git')<CR>
-  nnoremap <buffer> <silent> q <Cmd>call vproj#SwitchMode('qfix')<CR>
+  nnoremap <buffer> <silent> <nowait> g <Cmd>call vproj#SwitchMode('git')<CR>
+  nnoremap <buffer> <silent> <nowait> q <Cmd>call vproj#SwitchMode('qfix')<CR>
 
   # Include / exclude (git mode)
   nnoremap <buffer> <silent> + <Cmd>call vproj#IncludeItem()<CR>
@@ -1679,8 +1679,9 @@ def ApplyStaticHighlights(): void
   for id in match_ids
     silent! matchdelete(id, pane_wid)
   endfor
+  var group: string = 'VprojMode' .. toupper(current_mode[0]) .. current_mode[1 : ]
   match_ids = []
-  silent! match_ids->add(matchadd('VprojModeCurrent', pattern, 10, -1))
+  silent! match_ids->add(matchadd(group, pattern, 10, -1))
   # Highlight nav indicator characters in cyan (priority 11 = above cursorline)
   silent! match_ids->add(matchadd('VprojNavIndicator', '^[a-zA-Z0-9]', 11, -1))
   win_gotoid(orig_wid)
@@ -1742,7 +1743,10 @@ def ApplyWidth(): void
 enddef
 
 export def DefineHighlights(): void
-  highlight default VprojModeCurrent cterm=bold,underline gui=bold,underline
+  highlight default VprojModeFile ctermfg=yellow cterm=bold,underline guifg=yellow gui=bold,underline
+  highlight default VprojModeBuf ctermfg=green cterm=bold,underline guifg=green gui=bold,underline
+  highlight default VprojModeGit ctermfg=magenta cterm=bold,underline guifg=magenta gui=bold,underline
+  highlight default VprojModeQfix ctermfg=blue cterm=bold,underline guifg=blue gui=bold,underline
   highlight default VprojCursorLine cterm=reverse gui=reverse
   highlight default VprojNavIndicator ctermfg=cyan guifg=cyan
 enddef

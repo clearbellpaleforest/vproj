@@ -142,7 +142,10 @@ Global (outside pane):
 
                                                *vproj-highlights*
 Highlight groups:
-    VprojModeCurrent    Mode label on the menu line (bold, underline)
+    VprojModeFile       File mode label (yellow, bold, underline)
+    VprojModeBuf        Buf mode label (green, bold, underline)
+    VprojModeGit        Git mode label (magenta, bold, underline)
+    VprojModeQfix       Qfix mode label (blue, bold, underline)
     VprojCursorLine     Selected line highlight (reverse video)
     VprojNavIndicator   Nav character indicator (cyan)
     VprojInfoColumn     File size / buffer info column (green)
