@@ -317,6 +317,7 @@ export def PaneDiagnose(): void
   echom 'Terminal: ' .. &columns .. ' cols x ' .. &lines .. ' lines'
   echom 'Windows: ' .. winnr('$')
   echom 'winminwidth: ' .. &winminwidth .. '  winminheight: ' .. &winminheight
+  echom 'winheight: ' .. &winheight .. '  cmdheight: ' .. &cmdheight
   echom 'pane_bufnr: ' .. pane_bufnr .. ' (exists: ' .. (pane_bufnr > 0 && bufexists(pane_bufnr)) .. ')'
   echom 'current_mode: ' .. current_mode
   echom 'saved_shortmess: "' .. saved_shortmess .. '"'
@@ -333,22 +334,31 @@ export def PaneDiagnose(): void
   endfor
   echom ''
 
-  echom 'Testing bare :new...'
+  # Lower winminwidth/winminheight before testing splits — same as PaneOpen
+  var saved_minwidth: number = &winminwidth
+  var saved_minheight: number = &winminheight
+  set winminwidth=1 winminheight=1
   try
-    new
-    echom '  :new SUCCEEDED (bufnr=' .. bufnr('%') .. ')'
-    close
-  catch
-    echom '  :new FAILED: ' .. v:exception
-  endtry
+    echom 'Testing bare :new (winmin set to 1x1)...'
+    try
+      new
+      echom '  :new SUCCEEDED (bufnr=' .. bufnr('%') .. ')'
+      close
+    catch
+      echom '  :new FAILED: ' .. v:exception
+    endtry
 
-  echom 'Testing :rightbelow vertical new...'
-  try
-    rightbelow vertical new
-    echom '  vertical new SUCCEEDED'
-    close
-  catch
-    echom '  vertical new FAILED: ' .. v:exception
+    echom 'Testing :rightbelow vertical new...'
+    try
+      rightbelow vertical new
+      echom '  vertical new SUCCEEDED'
+      close
+    catch
+      echom '  vertical new FAILED: ' .. v:exception
+    endtry
+  finally
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
   endtry
 
   echom '=== end diagnostics ==='
