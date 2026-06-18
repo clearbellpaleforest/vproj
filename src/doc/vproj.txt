@@ -39,6 +39,11 @@ manually to ~/.vim/pack/bundle/start/vproj/.
 :VprojRefresh                                       *:VprojRefresh*
     Refresh the pane contents (re-read directory).
 
+:VprojDiag                                          *:VprojDiag*
+    Diagnostic tool. Tests split creation and reports window
+    dimensions, cmdheight, and winmin settings. Useful for
+    debugging E36 "Not enough room" errors.
+
 ==============================================================================
 3. MODES                                             *vproj-modes*
 
@@ -48,6 +53,12 @@ File Mode  ([F]ile)                                 *vproj-mode-file*
     directory to navigate into it, on a file to open it. Press |h|
     or . to go to the parent directory.
 
+    Press |T| to toggle tree view (indented with expand/collapse).
+    Press |p| to toggle a file preview split that updates on cursor move.
+    Press |/| to filter by name pattern. Press |*| to grep the project
+    and populate quickfix. Press |Ctrl-G| to toggle showing only
+    git-changed files.
+
 Buf Mode  ([B]uf)                                   *vproj-mode-buf*
     Switch between open buffers. Modified buffers marked with +,
     current buffer marked with %. Press |x| to close a buffer.
@@ -56,14 +67,24 @@ Buf Mode  ([B]uf)                                   *vproj-mode-buf*
 Git Mode  ([G]it)                                   *vproj-mode-git*
     Project-aware file tree from a .vproj file. Included items
     shown normally; excluded items shown in parentheses.
-    Press |+| or |-| to toggle inclusion.
+    Press |+| or |-| to toggle inclusion. Press Enter on the
+    status line to rename or create the project.
+
+    Git actions: |s| to stage/unstage, |d| for diff preview,
+    |D| to discard changes, |C| to commit, |P| to push,
+    |U| to pull --ff-only, |B| to switch branches.
 
 Qfix Mode  ([Q]fix)                                 *vproj-mode-qfix*
     Displays the Vim quickfix list. Press Enter to open the
     selected entry at the file and line number.
 
+Log Mode  ([L]og)                                   *vproj-mode-log*
+    Git commit history. Shows `git log --oneline` output with
+    nav characters. Press Enter on a commit to open a detailed
+    diff in a split. Press |L| to switch to Log mode.
+
 Press Enter on the mode menu line (line 1) to cycle through modes.
-Press |f|, |b|, |g|, or |q| inside the pane to switch directly.
+Press |f|, |b|, |g|, |q|, or |L| inside the pane to switch directly.
 
 ==============================================================================
 4. KEY MAPPINGS                                    *vproj-mappings*
@@ -88,11 +109,26 @@ Mode switching:
     |b|                 Buf mode
     |g|                 Git mode
     |q|                 Qfix mode
+    |L|                 Log mode
+
+Git actions (file and log modes):
+    |s|                 Stage / unstage file under cursor
+    |d|                 Open diff preview in vertical split
+    |D|                 Discard file changes (with confirmation)
+    |C|                 Commit with message prompt
+    |P|                 Push to remote
+    |U|                 Pull --ff-only from remote
+    |B|                 Switch branch (with prompt)
+    <C-G>               Toggle showing only git-changed files
 
 Actions:
     |r|                 Refresh listing
     |x|                 Close selected buffer (buf mode)
     |+| / |-|           Include / exclude item (git mode)
+    |T|                 Toggle tree view (file mode)
+    |p|                 Toggle file preview split
+    |/|                 Filter files by name pattern
+    |*|                 Grep project and populate quickfix
     <Left> / <Right>    Shrink / grow pane width
     <F1>                Toggle info column
 
@@ -140,12 +176,17 @@ Global (outside pane):
     g:vproj_pane_width_qfix
         Pane width for Qfix mode (20-80). 0 = use default. Default: 0.
 
+                                               *g:vproj_pane_width_log*
+    g:vproj_pane_width_log
+        Pane width for Log mode (20-80). 0 = use default. Default: 0.
+
                                                *vproj-highlights*
 Highlight groups:
     VprojModeFile       File mode label (yellow, bold, underline)
     VprojModeBuf        Buf mode label (green, bold, underline)
     VprojModeGit        Git mode label (magenta, bold, underline)
     VprojModeQfix       Qfix mode label (blue, bold, underline)
+    VprojModeLog        Log mode label (cyan, bold, underline)
     VprojCursorLine     Selected line highlight (reverse video)
     VprojNavIndicator   Nav character indicator (cyan)
     VprojInfoColumn     File size / buffer info column (green)

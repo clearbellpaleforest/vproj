@@ -61,7 +61,21 @@ Each mode has a distinct color on the menu line so you know what you're in:
 | `b` | Buf | Green | Open buffers with flags + line counts |
 | `g` | Git | Magenta | Project tree from .vproj |
 | `q` | Qfix | Blue | Quickfix list entries |
+| `L` | Log | Cyan | Git commit log — `Enter` for full diff |
 | `Enter` on menu line | — | — | Cycle to next mode |
+
+### Git Actions (file and log modes)
+
+| Key | Action |
+|-----|--------|
+| `s` | Stage / unstage file under cursor |
+| `d` | Open diff preview in vertical split |
+| `D` | Discard file changes (with confirmation) |
+| `C` | Commit with message prompt |
+| `P` | Push to remote |
+| `U` | Pull --ff-only from remote |
+| `B` | Switch branch (with prompt) |
+| `Ctrl-G` | Toggle showing only git-changed files |
 
 ### Actions
 
@@ -70,6 +84,10 @@ Each mode has a distinct color on the menu line so you know what you're in:
 | `r` | Refresh listing |
 | `x` | Close selected buffer (buf mode only) |
 | `+` / `-` | Include / exclude item (git mode) |
+| `T` | Toggle tree view (file mode — indented with expand/collapse) |
+| `p` | Toggle file preview split (updates on cursor move) |
+| `/` | Filter files by name pattern |
+| `*` | Grep project and populate quickfix |
 | `<Left>` / `<Right>` | Shrink / grow pane width |
 | `F1` | Toggle info column (inside pane) |
 | `Tab` / `Shift-Tab` | Shift nav indicators forward / backward |
@@ -98,10 +116,10 @@ These work as usual inside the pane — we don't override them:
 | `w` `b` `e` | Word motions |
 | `0` `^` `$` | Line start / end |
 | `t<char>` | Find until character |
-| `H` `M` `L` | Screen top / middle / bottom |
-| `/` `?` | Search forward / backward |
+| `H` `M` | Screen top / middle |
+| `?` | Search backward |
 | `y` | Yank (copy filename on current line) |
-| `Ctrl-F` `Ctrl-B` | Page down / up |
+| `Ctrl-F` | Page down |
 | `Ctrl-D` `Ctrl-U` | Half-page down / up |
 | `Ctrl-W` keys | Window management |
 | `%` `{` `}` `(` `)` | Jump / matching pair |
