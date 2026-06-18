@@ -7,6 +7,9 @@ vproj-commands	vproj.txt	/*vproj-commands*
 vproj-config	vproj.txt	/*vproj-config*
 vproj-contents	vproj.txt	/*vproj-contents*
 vproj-file-format	vproj.txt	/*vproj-file-format*
+vproj-git-actions	vproj.txt	/*vproj-git-actions*
+vproj-git-stash	vproj.txt	/*vproj-git-stash*
+vproj-git-blame	vproj.txt	/*vproj-git-blame*
 vproj-highlights	vproj.txt	/*vproj-highlights*
 vproj-intro	vproj.txt	/*vproj-intro*
 vproj-mappings	vproj.txt	/*vproj-mappings*

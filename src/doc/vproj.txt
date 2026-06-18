@@ -95,6 +95,17 @@ Git Mode  ([G]it)                                   *vproj-mode-git*
     a message. Push (|P|), pull (|U|), and branch switch (|B|)
     use prompts for target/confirmation.
 
+                                               *vproj-git-stash*
+    Stash (|z|) pushes current changes with an optional message via
+    `git stash push`. Stash pop (|Z|) lists all stashes first, then
+    prompts for which to pop (default: top). Both operate on the
+    whole repository.
+
+                                               *vproj-git-blame*
+    Blame (|a|) opens a vertical split showing `git annotate` output
+    for the file under cursor. Requires the file be tracked by git.
+    Press |q| in the blame window to close it. Only in file mode.
+
 Qfix Mode  ([Q]fix)                                 *vproj-mode-qfix*
     Displays the Vim quickfix list. Press Enter to open the
     selected entry at the file and line number.
@@ -140,6 +151,9 @@ Git actions (file and log modes):
     |P|                 Push to remote
     |U|                 Pull --ff-only from remote
     |B|                 Switch branch (with prompt)
+    |z|                 Stash changes (optional message)
+    |Z|                 Pop a stash (shows list, select by index)
+    |a|                 Blame file under cursor (git annotate)
     <C-G>               Toggle showing only git-changed files
 
 Actions:

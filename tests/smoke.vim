@@ -19,6 +19,10 @@ enddef
 # Load the plugin
 set rtp+=src
 runtime! plugin/vproj.vim
+set nomore
+
+# Clear stale session so tests start from known state
+call delete(expand('~/.cache/vproj/session'))
 
 # Test 1: Plugin loaded
 Assert(exists('g:loaded_vproj'), 'Plugin loads without errors')

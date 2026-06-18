@@ -52,8 +52,8 @@ const FIRST_QFIX_ITEM_LINE: number = 3
 const LOG_SEP_LINE: number = 2
 const FIRST_LOG_ITEM_LINE: number = 3
 const NAV_CHARS: list<string> = [
-  'a', 'c', 'e', 'i', 'l', 'm', 'n', 'o', 't', 'u', 'v', 'w', 'y', 'z',
-  'A', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'M', 'N', 'O', 'R', 'S', 'V', 'W', 'X', 'Y', 'Z',
+  'c', 'e', 'i', 'l', 'm', 'n', 'o', 't', 'u', 'v', 'w', 'y',
+  'A', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'M', 'N', 'O', 'R', 'S', 'V', 'W', 'X', 'Y',
   '1', '2', '3', '4', '5', '6', '7', '8', '9',
 ]
 const MIN_WIDTH: number = 20
@@ -726,7 +726,6 @@ export def SwitchMode(key: string): void
   if key == 'git'
     var vproj_path: string = FindVprojFile(current_dir)
     if empty(vproj_path)
-      # current_dir may be stale from session load — try actual CWD
       cwd = getcwd()
       if cwd != current_dir
         vproj_path = FindVprojFile(cwd)
@@ -1276,35 +1275,28 @@ export def OpenDiffPreview(): void
   endif
 
   var pane_wid: number = win_getid()
-  if winnr("$") < 2
-    var saved_cmdheight: number = &cmdheight
-    var saved_minwidth: number = &winminwidth
-    var saved_minheight: number = &winminheight
-    if &cmdheight > 2
-      set cmdheight=1
-    endif
-    set winminwidth=1 winminheight=1
-    try
-      rightbelow split
-    catch
-      &cmdheight = saved_cmdheight
-      &winminwidth = saved_minwidth
-      &winminheight = saved_minheight
-      Error('vproj: Cannot create diff view — ' .. v:exception)
-      return
-    endtry
-    &cmdheight = saved_cmdheight
-    &winminwidth = saved_minwidth
-    &winminheight = saved_minheight
-  else
-    wincmd p
+  var saved_cmdheight: number = &cmdheight
+  var saved_minwidth: number = &winminwidth
+  var saved_minheight: number = &winminheight
+  if &cmdheight > 2
+    set cmdheight=1
   endif
+  set winminwidth=1 winminheight=1
   try
+    if winnr("$") < 2
+      rightbelow split
+    else
+      wincmd p
+    endif
     rightbelow vsplit
   catch
     win_gotoid(pane_wid)
     Error('vproj: Cannot create diff view — ' .. v:exception)
     return
+  finally
+    &cmdheight = saved_cmdheight
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
   endtry
   enew
   setlocal buftype=nofile
@@ -1380,6 +1372,73 @@ export def DiscardChanges(): void
   Render()
 enddef
 
+export def GitBlame(): void
+  if !IsPaneVisible() || current_mode != 'file'
+    return
+  endif
+  var item: dict<any> = GetSelectedItem()
+  if empty(item)
+    return
+  endif
+  var path: string = get(item, 'path', '')
+  if empty(path) || get(item, 'is_dir', false)
+    return
+  endif
+  if !IsRegularFile(path)
+    Error('vproj: Cannot blame binary or special file')
+    return
+  endif
+  var root: string = GitRoot()
+  if empty(root)
+    echom 'vproj: Not in a git repository'
+    return
+  endif
+  var tracked: string = system('git -C ' .. shellescape(root) .. ' ls-files ' .. shellescape(path) .. ' 2>/dev/null')
+  if empty(trim(tracked))
+    echom 'vproj: File is not tracked by git'
+    return
+  endif
+  var pane_wid: number = win_getid()
+  var saved_cmdheight: number = &cmdheight
+  var saved_minwidth: number = &winminwidth
+  var saved_minheight: number = &winminheight
+  if &cmdheight > 2
+    set cmdheight=1
+  endif
+  set winminwidth=1 winminheight=1
+  try
+    if winnr('$') < 2
+      rightbelow split
+    else
+      wincmd p
+    endif
+    rightbelow vsplit
+  catch
+    win_gotoid(pane_wid)
+    Error('vproj: Cannot create blame view — ' .. v:exception)
+    return
+  finally
+    &cmdheight = saved_cmdheight
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
+  endtry
+  enew
+  setlocal buftype=nofile
+  setlocal bufhidden=wipe
+  setlocal noswapfile
+  setlocal nobuflisted
+  setlocal wrap=0
+  setlocal readonly
+  setlocal nomodifiable
+  nnoremap <buffer> <silent> q <Cmd>close<CR>
+  silent execute 'read !git -C ' .. shellescape(root) .. ' annotate ' .. shellescape(path)
+  cursor(1, 1)
+  delete _
+  setlocal nomodified
+  win_gotoid(pane_wid)
+  echom 'Blame: ' .. item.name
+enddef
+
 export def TogglePreview(): void
   if !IsPaneVisible()
     return
@@ -1423,9 +1482,7 @@ def OpenPreview(): void
     &winminwidth = saved_minwidth
     &winminheight = saved_minheight
     win_gotoid(pane_wid)
-    echohl ErrorMsg
     Error('vproj: Cannot open preview — ' .. v:exception)
-    echohl None
     return
   endtry
   &cmdheight = saved_cmdheight
@@ -1510,7 +1567,7 @@ def ClearPreview(): void
   if preview_bufnr > 0 && bufexists(preview_bufnr)
     setbufvar(preview_bufnr, '&modifiable', 1)
     deletebufline(preview_bufnr, 1, '$')
-    appendbufline(preview_bufnr, 1, '')
+    appendbufline(preview_bufnr, 1, '(no preview)')
     setbufvar(preview_bufnr, '&modifiable', 0)
   endif
 enddef
@@ -1576,6 +1633,11 @@ def ShowFilePreview(file_path: string): void
   endif
   if !IsRegularFile(file_path)
     appendbufline(preview_bufnr, 0, '(special file)')
+    setbufvar(preview_bufnr, '&modifiable', 0)
+    return
+  endif
+  if IsBinary(file_path)
+    appendbufline(preview_bufnr, 0, '(binary file)')
     setbufvar(preview_bufnr, '&modifiable', 0)
     return
   endif
@@ -1692,6 +1754,57 @@ export def GitBranchSwitch(): void
     echom 'vproj: Checkout failed — ' .. substitute(output, '\n', ' ', 'g')
   else
     echom 'vproj: Switched to ' .. target
+  endif
+  InvalidateGitCache()
+  Render()
+enddef
+
+export def GitStashPush(): void
+  var root: string = GitRoot()
+  if empty(root)
+    Error('vproj: Not in a git repository')
+    return
+  endif
+  var msg: string = input('Stash message (empty for auto): ')
+  var cmd: string = 'git -C ' .. shellescape(root) .. ' stash push'
+  if !empty(msg)
+    cmd ..= ' -m ' .. shellescape(msg)
+  endif
+  var output: string = system(cmd .. ' 2>&1')
+  if v:shell_error != 0
+    echom 'vproj: Stash failed — ' .. substitute(output, '\n', ' ', 'g')
+  else
+    echom 'vproj: Changes stashed' .. (empty(msg) ? '' : ' — ' .. msg)
+  endif
+  InvalidateGitCache()
+  Render()
+enddef
+
+export def GitStashPop(): void
+  var root: string = GitRoot()
+  if empty(root)
+    Error('vproj: Not in a git repository')
+    return
+  endif
+  var list_output: string = system('git -C ' .. shellescape(root) .. ' stash list 2>&1')
+  if empty(trim(list_output))
+    echom 'vproj: No stashes found'
+    return
+  endif
+  echom 'Stash list:'
+  for line in list_output->split('\n')
+    echom '  ' .. line
+  endfor
+  var ref: string = input('Pop which stash? (Enter for top): ')
+  var cmd: string = 'git -C ' .. shellescape(root) .. ' stash pop'
+  if !empty(ref)
+    cmd ..= ' ' .. shellescape(ref)
+  endif
+  var output: string = system(cmd .. ' 2>&1')
+  if v:shell_error != 0
+    echom 'vproj: Stash pop failed — ' .. substitute(output, '\n', ' ', 'g')
+  else
+    echom 'vproj: Stash popped'
   endif
   InvalidateGitCache()
   Render()
@@ -1975,7 +2088,7 @@ def OpenFile(path: string): void
   endif
   # Check for binary (null bytes in first 8KB)
   if IsBinary(path)
-    Error('vproj: Binary file: ' .. fnamemodify(path, ':t')
+    Error('vproj: Binary file: ' .. fnamemodify(path, ':t'))
     return
   endif
   var pane_wid: number = win_getid()
@@ -2835,35 +2948,28 @@ def OpenCommitDetail(item: dict<any>): void
     return
   endif
   var pane_wid: number = win_getid()
-  if winnr('$') < 2
-    var saved_cmdheight: number = &cmdheight
-    var saved_minwidth: number = &winminwidth
-    var saved_minheight: number = &winminheight
-    if &cmdheight > 2
-      set cmdheight=1
-    endif
-    set winminwidth=1 winminheight=1
-    try
-      rightbelow split
-    catch
-      &cmdheight = saved_cmdheight
-      &winminwidth = saved_minwidth
-      &winminheight = saved_minheight
-      Error('vproj: Cannot create commit view — ' .. v:exception)
-      return
-    endtry
-    &cmdheight = saved_cmdheight
-    &winminwidth = saved_minwidth
-    &winminheight = saved_minheight
-  else
-    wincmd p
+  var saved_cmdheight: number = &cmdheight
+  var saved_minwidth: number = &winminwidth
+  var saved_minheight: number = &winminheight
+  if &cmdheight > 2
+    set cmdheight=1
   endif
+  set winminwidth=1 winminheight=1
   try
+    if winnr('$') < 2
+      rightbelow split
+    else
+      wincmd p
+    endif
     rightbelow vsplit
   catch
     win_gotoid(pane_wid)
     Error('vproj: Cannot create commit view — ' .. v:exception)
     return
+  finally
+    &cmdheight = saved_cmdheight
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
   endtry
   enew
   setlocal buftype=nofile
@@ -2989,6 +3095,11 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> P <Cmd>call vproj#GitPush()<CR>
   nnoremap <buffer> <silent> U <Cmd>call vproj#GitPull()<CR>
   nnoremap <buffer> <silent> B <Cmd>call vproj#GitBranchSwitch()<CR>
+
+  # Git: stash and blame
+  nnoremap <buffer> <silent> z <Cmd>call vproj#GitStashPush()<CR>
+  nnoremap <buffer> <silent> Z <Cmd>call vproj#GitStashPop()<CR>
+  nnoremap <buffer> <silent> a <Cmd>call vproj#GitBlame()<CR>
 
   # Close pane
   nnoremap <buffer> <silent> Q <Cmd>call vproj#PaneClose()<CR>
@@ -3184,4 +3295,9 @@ export def DefineHighlights(): void
   highlight default VprojModeLog ctermfg=0   ctermbg=44  cterm=bold guifg=#1A1A1A guibg=#00D7D7 gui=bold
   highlight default VprojCursorLine ctermbg=237 cterm=none guibg=#3A3A3A gui=none
   highlight default VprojNavIndicator ctermfg=214 guifg=#FFAF00
+  highlight default VprojInfoColumn ctermfg=2 guifg=#00AF00
+  highlight default VprojParentDir ctermfg=4 guifg=#005FAF
+  highlight default VprojDirName cterm=bold gui=bold
+  highlight default VprojSeparator ctermfg=8 guifg=#585858
+  highlight default VprojStatusLine cterm=reverse gui=reverse
 enddef

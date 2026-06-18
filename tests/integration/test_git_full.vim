@@ -345,6 +345,39 @@ Assert(vproj#IsPaneVisible(), 'log mode: info column toggle keeps pane visible')
 vproj#ToggleInfoColumn()
 Assert(vproj#IsPaneVisible(), 'log mode: info column toggle back keeps pane visible')
 
+# SECTION 19: GitStashPush / GitStashPop Function Existence
+# ──────────────────────────────────────────────
+echom '--- Stash Function Existence ---'
+
+Assert(exists('*vproj#GitStashPush'), 'GitStashPush function exists')
+Assert(exists('*vproj#GitStashPop'), 'GitStashPop function exists')
+
+# SECTION 20: GitBlame Function and Guards
+# ──────────────────────────────────────────────
+echom '--- Blame Function Existence ---'
+
+Assert(exists('*vproj#GitBlame'), 'GitBlame function exists')
+
+# Blame is file-mode-only — should exit silently in other modes
+vproj#SwitchMode('buf')
+try
+  call vproj#GitBlame()
+  Assert(true, 'GitBlame in buf mode: exits without crash')
+catch
+  Assert(false, 'GitBlame in buf mode threw: ' .. v:exception)
+endtry
+
+vproj#SwitchMode('git')
+try
+  call vproj#GitBlame()
+  Assert(true, 'GitBlame in git mode: exits without crash')
+catch
+  Assert(false, 'GitBlame in git mode threw: ' .. v:exception)
+endtry
+
+# Switch back to file mode for further tests
+vproj#SwitchMode('file')
+
 # ──────────────────────────────────────────────
 # Cleanup
 # ──────────────────────────────────────────────

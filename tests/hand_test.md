@@ -63,11 +63,26 @@ Nav indicators are the single chars at the start of each line (a, b, c, …).
 
 Jump-to-char keys (press the char to jump to that line):
 
-- [ ] `a` `c` `d` `e` `i` `m` `n` `o` `p` `s` `t` `u` `v` `w` `y` `z`
-- [ ] `A` `B` `C` `D` `E` `F` `G` `H` `I` `J` `K` `L` `M` `N` `O` `P` `Q` `R` `S` `T` `U` `V` `W` `X` `Y` `Z`
+- [ ] `b` `c` `d` `e` `i` `m` `n` `o` `p` `s` `t` `u` `v` `w` `x` `y`
+- [ ] `A` `B` `C` `D` `E` `F` `G` `H` `I` `J` `K` `L` `M` `N` `O` `P` `Q` `R` `S` `T` `U` `V` `W` `X` `Y`
 - [ ] `1` `2` `3` `4` `5` `6` `7` `8` `9`
 
 If a char is not on the current page, nothing happens (no crash).
+
+## Git Actions
+
+Navigate to a git-tracked file in file mode (or use git/log mode):
+
+- [ ] `s` — stage/unstage file under cursor
+- [ ] `d` — open diff preview in vertical split
+- [ ] `D` — discard file changes (confirmation prompt appears)
+- [ ] `C` — commit with message prompt
+- [ ] `P` — push to remote
+- [ ] `U` — pull (--ff-only) from remote
+- [ ] `B` — switch branch (prompt for branch name)
+- [ ] `z` — stash changes (optional message prompt)
+- [ ] `Z` — pop a stash (shows list first, select by index)
+- [ ] `a` — blame file under cursor (split opens with git annotate, q to close)
 
 ## Close
 

@@ -109,8 +109,8 @@ vproj#SelectLast()
 Assert(PaneCursorLine() == 5, 'qfix: SelectLast goes to line 5')
 
 # ── SelectByNavChar ──
-vproj#SelectByNavChar('a')
-Assert(PaneCursorLine() == 3, 'qfix: nav char a jumps to line 3')
+vproj#SelectByNavChar('c')
+Assert(PaneCursorLine() == 3, 'qfix: nav char c jumps to line 3')
 
 # ── PaneGrow/Shrink in qfix ──
 var w0 = vproj#GetPaneWidth()

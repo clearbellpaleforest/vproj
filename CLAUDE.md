@@ -220,6 +220,9 @@ Enter on the mode menu line cycles between modes.
 | `vproj#GitPush()` | Push to remote |
 | `vproj#GitPull()` | Pull --ff-only from remote |
 | `vproj#GitBranchSwitch()` | Switch git branch with prompt |
+| `vproj#GitStashPush()` | Stash current changes (with optional message) |
+| `vproj#GitStashPop()` | Pop a stash (shows list first, select by index) |
+| `vproj#GitBlame()` | Open git blame split for file under cursor |
 | `vproj#PromptFilter()` | Prompt for filter pattern |
 | `vproj#OnDirChanged()` | Handle directory change event |
 | `vproj#HandleBufWipeout()` | Cleanup on buffer wipe |
@@ -257,6 +260,9 @@ Buffer-local (only active in the pane):
 | P | Git push |
 | U | Git pull --ff-only |
 | B | Git branch switch |
+| z | Git stash push (with optional message) |
+| Z | Git stash pop (shows list, select by index) |
+| a | Git blame (annotate) for file under cursor |
 | T | Toggle tree view (file mode — indented with expand/collapse) |
 | p | Toggle file preview split (updates on cursor move) |
 | / | Filter by name |

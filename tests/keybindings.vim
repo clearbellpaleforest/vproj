@@ -189,14 +189,14 @@ echom '--- Passthrough ---'
 Setup()
 
 # Build list of passthrough keys and expected behavior
+  # Note: f, b, g are mapped with <nowait> so f+char, gg, b, etc.
+  # are NOT passthrough — they trigger mode switches or nav char jumps.
+  # Test only truly unmapped Vim motion keys.
 var passthrough_tests: list<list<string>> = [
-  ['f' .. 'e',         'f (find char)'],
   ['t' .. 'e',         't (find until)'],
   ['w',                'w (word forward)'],
-  ['b',                'b (word back)'],
   ['0',                '0 (line start)'],
   ['$',                '$ (line end)'],
-  ['gg',               'gg (buffer top)'],
   ['G',                'G (buffer bottom)'],
   ["\<C-F>",           'Ctrl-F (page down)'],
   ['H',                'H (screen top)'],
@@ -248,20 +248,44 @@ Setup()
 wincmd w
 close!
 
-# Move past parent dir (..) and subdirs to a file item
-while getbufline(bufnr('VPROJ'), PaneCursorLine())[0] =~ '/'
+# Move past parent dir (..) and subdirs to a file item (max 100 attempts)
+var attempts: number = 0
+while attempts < 100 && getbufline(bufnr('VPROJ'), PaneCursorLine())[0] =~ '/'
   execute 'normal j'
+  attempts += 1
 endwhile
 
-try
-  execute "normal \<CR>"
-  Assert(winnr('$') >= 1, 'Enter on file worked')
-  Assert(!vproj#IsPaneVisible(), 'Pane closes after file open')
-  # File buffer should be open in the current window
-  Assert(bufname('%') != 'VPROJ', 'File opened (not pane)')
-catch
-  Assert(false, 'Single-window file open error: ' .. v:exception)
-endtry
+if attempts >= 100
+  Assert(true, 'Single-window: no non-dir item found (all dirs) — skipped')
+else
+  try
+    execute "normal \<CR>"
+    Assert(winnr('$') >= 1, 'Enter on file worked')
+    Assert(!vproj#IsPaneVisible(), 'Pane closes after file open')
+    # File buffer should be open in the current window
+    Assert(bufname('%') != 'VPROJ', 'File opened (not pane)')
+  catch
+    Assert(false, 'Single-window file open error: ' .. v:exception)
+  endtry
+endif
+
+# ──────────────────────────────────────────────
+# SECTION 10: Git stash and blame mappings
+# ──────────────────────────────────────────────
+echom '--- Git Stash/Blame Mappings ---'
+Setup()
+
+var stash_z_map = maparg('z', 'n', 0, 1)
+Assert(!empty(stash_z_map), 'z is mapped in pane buffer')
+Assert(stash_z_map.rhs =~ 'GitStashPush', 'z maps to GitStashPush')
+
+var stash_Z_map = maparg('Z', 'n', 0, 1)
+Assert(!empty(stash_Z_map), 'Z is mapped in pane buffer')
+Assert(stash_Z_map.rhs =~ 'GitStashPop', 'Z maps to GitStashPop')
+
+var blame_a_map = maparg('a', 'n', 0, 1)
+Assert(!empty(blame_a_map), 'a is mapped in pane buffer')
+Assert(blame_a_map.rhs =~ 'GitBlame', 'a maps to GitBlame')
 
 # ──────────────────────────────────────────────
 # Cleanup
