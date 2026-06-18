@@ -96,7 +96,8 @@ try
 catch
   Assert(false, 'Enter error: ' .. v:exception)
 endtry
-# Note: if Enter opened a file, the pane may be closed. Re-setup below.
+# Pane stays open after file open in new two-panel layout
+Setup()
 
 # ──────────────────────────────────────────────
 # SECTION 4: Mode switching keys (F, D, C)
@@ -260,10 +261,10 @@ if attempts >= 100
 else
   try
     execute "normal \<CR>"
-    Assert(winnr('$') >= 1, 'Enter on file worked')
-    Assert(!vproj#IsPaneVisible(), 'Pane closes after file open')
-    # File buffer should be open in the current window
-    Assert(bufname('%') != 'VPROJ', 'File opened (not pane)')
+    Assert(winnr('$') >= 2, 'Enter on file: two-panel layout exists')
+    Assert(vproj#IsPaneVisible(), 'Pane stays open after file open')
+    # Cursor should be back in the pane after file open
+    Assert(bufname('%') == 'VPROJ', 'Cursor returned to pane')
   catch
     Assert(false, 'Single-window file open error: ' .. v:exception)
   endtry

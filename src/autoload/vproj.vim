@@ -453,9 +453,11 @@ def SkipNonSelectable(line: number): bool
     return true
   endif
   if paging_active
-    var total: number = getbufinfo(pane_bufnr)[0].linecount
-    if line == total
-      return true
+    var info: list<dict<any>> = getbufinfo(pane_bufnr)
+    if !empty(info)
+      if line == info[0].linecount
+        return true
+      endif
     endif
   endif
   return false
@@ -510,7 +512,9 @@ export def SelectNext(): void
     return
   endif
 
-  var total: number = getbufinfo(pane_bufnr)[0].linecount
+  var binfos: list<dict<any>> = getbufinfo(pane_bufnr)
+  if empty(binfos) | return | endif
+  var total: number = binfos[0].linecount
   var next_line: number = selected_line + 1
 
   while next_line <= total && SkipNonSelectable(next_line)
@@ -531,7 +535,9 @@ export def SelectPrev(): void
     return
   endif
 
-  var total: number = getbufinfo(pane_bufnr)[0].linecount
+  var binfos: list<dict<any>> = getbufinfo(pane_bufnr)
+  if empty(binfos) | return | endif
+  var total: number = binfos[0].linecount
   var prev_line: number = selected_line - 1
 
   while prev_line >= 1 && SkipNonSelectable(prev_line)
@@ -567,7 +573,9 @@ export def SelectLast(): void
   if !IsPaneVisible()
     return
   endif
-  var total: number = getbufinfo(pane_bufnr)[0].linecount
+  var binfos: list<dict<any>> = getbufinfo(pane_bufnr)
+  if empty(binfos) | return | endif
+  var total: number = binfos[0].linecount
   if total < 1
     return
   endif
@@ -586,7 +594,7 @@ export def NavigateIntoFirstDir(): void
   endif
   for item in items
     if get(item, 'is_dir', false) && !get(item, 'is_parent', false)
-      NavigateInto(item.name)
+      NavigateInto(get(item, 'name', ''))
       return
     endif
   endfor
@@ -670,17 +678,20 @@ export def SelectCurrent(): void
       NavigateUp()
     elseif get(item, 'is_dir', false)
       if tree_view_active
-        if has_key(expanded_dirs, item.path)
-          remove(expanded_dirs, item.path)
-        else
-          expanded_dirs[item.path] = 1
+        var item_path: string = get(item, 'path', '')
+        if !empty(item_path)
+          if has_key(expanded_dirs, item_path)
+            remove(expanded_dirs, item_path)
+          else
+            expanded_dirs[item_path] = 1
+          endif
         endif
         Render()
       else
-        NavigateInto(item.name)
+        NavigateInto(get(item, 'name', ''))
       endif
     else
-      OpenFile(item.path)
+      OpenFile(get(item, 'path', ''))
     endif
   elseif current_mode == 'buf'
     if has_key(item, 'bufnr')
@@ -690,9 +701,9 @@ export def SelectCurrent(): void
     if get(item, 'is_parent', false)
       NavigateUp()
     elseif get(item, 'is_dir', false)
-      NavigateInto(item.name)
+      NavigateInto(get(item, 'name', ''))
     else
-      OpenFile(item.path)
+      OpenFile(get(item, 'path', ''))
     endif
   elseif current_mode == 'qfix'
     if has_key(item, 'filename') && has_key(item, 'lnum')
@@ -736,7 +747,7 @@ export def SwitchMode(key: string): void
     endif
     if !empty(vproj_path)
       project = ParseVprojFile(vproj_path)
-      git_root = !empty(project.root) ? project.root : current_dir
+      git_root = !empty(get(project, 'root', '')) ? get(project, 'root', '') : current_dir
     else
       project = {}
       git_root = current_dir
@@ -846,11 +857,11 @@ def BuildDisplayLines(visible: list<dict<any>>): list<string>
 
   if current_mode == 'git'
     var status: string
-    if empty(project) || empty(project.name)
+    if empty(project) || empty(get(project, 'name', ''))
       status = '* (no project found)'
     else
-      status = '* ' .. project.name
-      if !empty(git_root) && git_root != project.root
+      status = '* ' .. get(project, 'name', '')
+      if !empty(git_root) && git_root != get(project, 'root', '')
         status = status .. '  ' .. git_root
       endif
     endif
@@ -895,9 +906,12 @@ def Render(): void
   var lines: list<string> = BuildDisplayLines(visible)
 
   setbufvar(pane_bufnr, '&modifiable', 1)
-  deletebufline(pane_bufnr, 1, '$')
-  setbufline(pane_bufnr, 1, lines)
-  setbufvar(pane_bufnr, '&modifiable', 0)
+  try
+    deletebufline(pane_bufnr, 1, '$')
+    setbufline(pane_bufnr, 1, lines)
+  finally
+    setbufvar(pane_bufnr, '&modifiable', 0)
+  endtry
   setbufvar(pane_bufnr, '&modified', 0)
 
   setbufvar(pane_bufnr, '&statusline', BuildStatusline())
@@ -1025,7 +1039,8 @@ def BuildStatusline(): string
 enddef
 
 def ComputePaging(all_items: list<dict<any>>): void
-  var win_height: number = winheight(bufwinnr(pane_bufnr))
+  var wnr: number = bufwinnr(pane_bufnr)
+  var win_height: number = wnr > 0 ? winheight(wnr) : 0
   var header_lines: number = current_mode == 'git' ? 3 : 2
   items_per_page = win_height - header_lines
   if items_per_page < 1
@@ -1176,7 +1191,7 @@ def ApplyGitFilter(all_items: list<dict<any>>): list<dict<any>>
       continue
     endif
     # Keep items that have git status
-    if has_key(status_map, item.path)
+    if has_key(status_map, get(item, 'path', ''))
       result->add(item)
     endif
   endfor
@@ -1204,34 +1219,32 @@ export def GitStageToggle(): void
     return
   endif
   var path: string = get(item, 'path', '')
-  if empty(path) || item.is_dir
+  if empty(path) || get(item, 'is_dir', false)
     return
   endif
 
   var status_map: dict<string> = GitStatusMap()
   var st: string = get(status_map, path, '')
+  var name: string = get(item, 'name', path)
   if empty(st)
-    echom 'vproj: No git changes for ' .. item.name
+    echom 'vproj: No git changes for ' .. name
     return
   endif
 
   if st == '?'
-    # Untracked: git add
     system('git add ' .. shellescape(path) .. ' 2>/dev/null')
     if v:shell_error == 0
-      echom 'Staged: ' .. item.name
+      echom 'Staged: ' .. name
     endif
-  elseif st == 'A' || st == 'M'
-    # Staged or modified/staged: git reset HEAD to unstage
+  elseif st == 'A' || st == 'M' || st == 'R'
     system('git reset HEAD -- ' .. shellescape(path) .. ' 2>/dev/null')
     if v:shell_error == 0
-      echom 'Unstaged: ' .. item.name
+      echom 'Unstaged: ' .. name
     endif
   elseif st == 'D'
-    # Deleted in worktree: stage deletion
     system('git rm -- ' .. shellescape(path) .. ' 2>/dev/null')
     if v:shell_error == 0
-      echom 'Staged deletion: ' .. item.name
+      echom 'Staged deletion: ' .. name
     endif
   endif
 
@@ -1247,7 +1260,7 @@ export def OpenDiffPreview(): void
     return
   endif
   var path: string = get(item, "path", "")
-  if empty(path) || item.is_dir
+  if empty(path) || get(item, "is_dir", false)
     return
   endif
 
@@ -1268,36 +1281,16 @@ export def OpenDiffPreview(): void
 
   if st == "?" || empty(st)
     cmd = "git diff --no-index /dev/null " .. shellescape(path)
-  elseif st == "A" || st == "M"
+  elseif st == "A" || st == "M" || st == "R"
     cmd = "git diff --cached -- " .. shellescape(path)
   else
     cmd = "git diff -- " .. shellescape(path)
   endif
 
   var pane_wid: number = win_getid()
-  var saved_cmdheight: number = &cmdheight
-  var saved_minwidth: number = &winminwidth
-  var saved_minheight: number = &winminheight
-  if &cmdheight > 2
-    set cmdheight=1
-  endif
-  set winminwidth=1 winminheight=1
-  try
-    if winnr("$") < 2
-      rightbelow split
-    else
-      wincmd p
-    endif
-    rightbelow vsplit
-  catch
-    win_gotoid(pane_wid)
-    Error('vproj: Cannot create diff view — ' .. v:exception)
+  if OpenInRightPanel() < 0
     return
-  finally
-    &cmdheight = saved_cmdheight
-    &winminwidth = saved_minwidth
-    &winminheight = saved_minheight
-  endtry
+  endif
   enew
   setlocal buftype=nofile
   setlocal bufhidden=wipe
@@ -1315,7 +1308,7 @@ export def OpenDiffPreview(): void
   setlocal nomodified
 
   win_gotoid(pane_wid)
-  echom "Diff: " .. item.name
+  echom "Diff: " .. get(item, "name", path)
 enddef
 
 export def DiscardChanges(): void
@@ -1327,19 +1320,20 @@ export def DiscardChanges(): void
     return
   endif
   var path: string = get(item, "path", "")
-  if empty(path) || item.is_dir
+  if empty(path) || get(item, "is_dir", false)
     return
   endif
 
   var status_map: dict<string> = GitStatusMap()
   var st: string = get(status_map, path, "")
+  var name: string = get(item, "name", path)
   if empty(st)
-    echom "vproj: No git changes for " .. item.name
+    echom "vproj: No git changes for " .. name
     return
   endif
 
   echohl WarningMsg
-  var answer: string = input("Discard changes to " .. item.name .. "? y/N: ")
+  var answer: string = input("Discard changes to " .. name .. "? y/N: ")
   echohl None
   if tolower(answer) != "y"
     echom "Cancelled"
@@ -1349,22 +1343,22 @@ export def DiscardChanges(): void
   if st == "?"
     delete(path)
     if !filereadable(path)
-      echom "Deleted: " .. item.name
+      echom "Deleted: " .. name
     else
-      echom "Failed to delete: " .. item.name
+      echom "Failed to delete: " .. name
     endif
   elseif st == "A"
     system("git reset HEAD -- " .. shellescape(path) .. " 2>/dev/null")
-    echom "Unstaged: " .. item.name
-  elseif st == "M"
+    echom "Unstaged: " .. name
+  elseif st == "M" || st == "R"
     system("git checkout -- " .. shellescape(path) .. " 2>/dev/null")
     if v:shell_error == 0
-      echom "Reverted: " .. item.name
+      echom "Reverted: " .. name
     endif
   elseif st == "D"
     system("git checkout -- " .. shellescape(path) .. " 2>/dev/null")
     if v:shell_error == 0
-      echom "Restored: " .. item.name
+      echom "Restored: " .. name
     endif
   endif
 
@@ -1399,29 +1393,9 @@ export def GitBlame(): void
     return
   endif
   var pane_wid: number = win_getid()
-  var saved_cmdheight: number = &cmdheight
-  var saved_minwidth: number = &winminwidth
-  var saved_minheight: number = &winminheight
-  if &cmdheight > 2
-    set cmdheight=1
-  endif
-  set winminwidth=1 winminheight=1
-  try
-    if winnr('$') < 2
-      rightbelow split
-    else
-      wincmd p
-    endif
-    rightbelow vsplit
-  catch
-    win_gotoid(pane_wid)
-    Error('vproj: Cannot create blame view — ' .. v:exception)
+  if OpenInRightPanel() < 0
     return
-  finally
-    &cmdheight = saved_cmdheight
-    &winminwidth = saved_minwidth
-    &winminheight = saved_minheight
-  endtry
+  endif
   enew
   setlocal buftype=nofile
   setlocal bufhidden=wipe
@@ -1436,7 +1410,7 @@ export def GitBlame(): void
   delete _
   setlocal nomodified
   win_gotoid(pane_wid)
-  echom 'Blame: ' .. item.name
+  echom 'Blame: ' .. get(item, 'name', path)
 enddef
 
 export def TogglePreview(): void
@@ -1478,16 +1452,14 @@ def OpenPreview(): void
   try
     botright vnew
   catch
-    &cmdheight = saved_cmdheight
-    &winminwidth = saved_minwidth
-    &winminheight = saved_minheight
     win_gotoid(pane_wid)
     Error('vproj: Cannot open preview — ' .. v:exception)
     return
+  finally
+    &cmdheight = saved_cmdheight
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
   endtry
-  &cmdheight = saved_cmdheight
-  &winminwidth = saved_minwidth
-  &winminheight = saved_minheight
   preview_bufnr = bufnr('%')
   var preview_wid: number = win_getid()
   setbufvar(preview_bufnr, '&buftype', 'nofile')
@@ -1525,8 +1497,11 @@ def ClosePreview(): void
       else
         # Last window — clear buffer instead of closing
         setbufvar(preview_bufnr, '&modifiable', 1)
-        silent! deletebufline(preview_bufnr, 1, '$')
-        setbufvar(preview_bufnr, '&modifiable', 0)
+        try
+          silent! deletebufline(preview_bufnr, 1, '$')
+        finally
+          setbufvar(preview_bufnr, '&modifiable', 0)
+        endtry
       endif
       if win_id2win(orig_wid) > 0
         win_gotoid(orig_wid)
@@ -1566,9 +1541,12 @@ enddef
 def ClearPreview(): void
   if preview_bufnr > 0 && bufexists(preview_bufnr)
     setbufvar(preview_bufnr, '&modifiable', 1)
-    deletebufline(preview_bufnr, 1, '$')
-    appendbufline(preview_bufnr, 1, '(no preview)')
-    setbufvar(preview_bufnr, '&modifiable', 0)
+    try
+      deletebufline(preview_bufnr, 1, '$')
+      appendbufline(preview_bufnr, 1, '(no preview)')
+    finally
+      setbufvar(preview_bufnr, '&modifiable', 0)
+    endtry
   endif
 enddef
 
@@ -1577,47 +1555,50 @@ def ShowDirPreview(dir_path: string, dir_name: string): void
     return
   endif
   setbufvar(preview_bufnr, '&modifiable', 1)
-  deletebufline(preview_bufnr, 1, '$')
-  var header: string = '-- ' .. dir_name .. '/ --'
-  appendbufline(preview_bufnr, 0, header)
-  appendbufline(preview_bufnr, 1, '')
-  var raw: list<string>
   try
-    raw = readdir(dir_path)
-  catch
-    raw = []
+    deletebufline(preview_bufnr, 1, '$')
+    var header: string = '-- ' .. dir_name .. '/ --'
+    appendbufline(preview_bufnr, 0, header)
+    appendbufline(preview_bufnr, 1, '')
+    var raw: list<string>
+    try
+      raw = readdir(dir_path)
+    catch
+      raw = []
+    endtry
+    var show_dot: bool = get(g:, 'vproj_show_dotfiles', false)
+    var dirs: list<string> = []
+    var files: list<string> = []
+    for entry in raw
+      if entry[0] == '.' && !show_dot
+        continue
+      endif
+      var full: string = dir_path .. '/' .. entry
+      if isdirectory(full)
+        dirs->add(entry .. '/')
+      else
+        files->add(entry)
+      endif
+    endfor
+    sort(dirs)
+    sort(files)
+    var entries: list<string> = dirs + files
+    var count: number = 0
+    for entry in entries
+      if count >= 100
+        break
+      endif
+      appendbufline(preview_bufnr, '$', '  ' .. entry)
+      count += 1
+    endfor
+    if count == 0
+      appendbufline(preview_bufnr, '$', '(empty)')
+    elseif len(entries) > 100
+      appendbufline(preview_bufnr, '$', '...')
+    endif
+  finally
+    setbufvar(preview_bufnr, '&modifiable', 0)
   endtry
-  var show_dot: bool = get(g:, 'vproj_show_dotfiles', false)
-  var dirs: list<string> = []
-  var files: list<string> = []
-  for entry in raw
-    if entry[0] == '.' && !show_dot
-      continue
-    endif
-    var full: string = dir_path .. '/' .. entry
-    if isdirectory(full)
-      dirs->add(entry .. '/')
-    else
-      files->add(entry)
-    endif
-  endfor
-  sort(dirs)
-  sort(files)
-  var entries: list<string> = dirs + files
-  var count: number = 0
-  for entry in entries
-    if count >= 100
-      break
-    endif
-    appendbufline(preview_bufnr, '$', '  ' .. entry)
-    count += 1
-  endfor
-  if count == 0
-    appendbufline(preview_bufnr, '$', '(empty)')
-  elseif len(entries) > 100
-    appendbufline(preview_bufnr, '$', '...')
-  endif
-  setbufvar(preview_bufnr, '&modifiable', 0)
 enddef
 
 def ShowFilePreview(file_path: string): void
@@ -1625,44 +1606,43 @@ def ShowFilePreview(file_path: string): void
     return
   endif
   setbufvar(preview_bufnr, '&modifiable', 1)
-  deletebufline(preview_bufnr, 1, '$')
-  if !filereadable(file_path)
-    appendbufline(preview_bufnr, 0, '(cannot read)')
-    setbufvar(preview_bufnr, '&modifiable', 0)
-    return
-  endif
-  if !IsRegularFile(file_path)
-    appendbufline(preview_bufnr, 0, '(special file)')
-    setbufvar(preview_bufnr, '&modifiable', 0)
-    return
-  endif
-  if IsBinary(file_path)
-    appendbufline(preview_bufnr, 0, '(binary file)')
-    setbufvar(preview_bufnr, '&modifiable', 0)
-    return
-  endif
-  var lines: list<string>
   try
-    lines = readfile(file_path, '', 200)
-  catch
-    appendbufline(preview_bufnr, 0, '(cannot read)')
+    deletebufline(preview_bufnr, 1, '$')
+    if !filereadable(file_path)
+      appendbufline(preview_bufnr, 0, '(cannot read)')
+      return
+    endif
+    if !IsRegularFile(file_path)
+      appendbufline(preview_bufnr, 0, '(special file)')
+      return
+    endif
+    if IsBinary(file_path)
+      appendbufline(preview_bufnr, 0, '(binary file)')
+      return
+    endif
+    var lines: list<string>
+    try
+      lines = readfile(file_path, '', 200)
+    catch
+      appendbufline(preview_bufnr, 0, '(cannot read)')
+      return
+    endtry
+    if empty(lines)
+      appendbufline(preview_bufnr, 0, '(empty file)')
+    else
+      appendbufline(preview_bufnr, 0, lines)
+    endif
+    var ext: string = fnamemodify(file_path, ':e')
+    if !empty(ext)
+      setbufvar(preview_bufnr, '&filetype', ext)
+    endif
+    var preview_wins: list<number> = win_findbuf(preview_bufnr)
+    if !empty(preview_wins)
+      win_execute(preview_wins[0], 'cursor(1, 1)')
+    endif
+  finally
     setbufvar(preview_bufnr, '&modifiable', 0)
-    return
   endtry
-  if empty(lines)
-    appendbufline(preview_bufnr, 0, '(empty file)')
-  else
-    appendbufline(preview_bufnr, 0, lines)
-  endif
-  var ext: string = fnamemodify(file_path, ':e')
-  if !empty(ext)
-    setbufvar(preview_bufnr, '&filetype', ext)
-  endif
-  var preview_wins: list<number> = win_findbuf(preview_bufnr)
-  if !empty(preview_wins)
-    win_execute(preview_wins[0], 'cursor(1, 1)')
-  endif
-  setbufvar(preview_bufnr, '&modifiable', 0)
 enddef
 
 export def GitCommit(): void
@@ -1877,22 +1857,23 @@ def BuildFileLines(file_items: list<dict<any>>): list<string>
   var prefix_width: number = 2 + git_width
 
   for item in file_items
-    var name: string = item.name
-    if item.is_dir
+    var name: string = get(item, 'name', '')
+    var is_dir: bool = get(item, 'is_dir', false)
+    if is_dir
       name = name .. '/'
     endif
 
     var info: string = ''
-    if show_info_column && !item.is_dir
-      info = FormatSize(item.size)
+    if show_info_column && !is_dir
+      info = FormatSize(get(item, 'size', 0))
       info = repeat(' ', info_width - strwidth(info)) .. info
     endif
 
     # Build line with nav indicator, optional git status, and name
     var indicator: string = NavChar(item, visible_idx)
     var git_char: string = ' '
-    if in_git && !get(item, 'is_parent', false) && !get(item, 'is_dir', false)
-      var st: string = get(status_map, item.path, '')
+    if in_git && !get(item, 'is_parent', false) && !is_dir
+      var st: string = get(status_map, get(item, 'path', ''), '')
       git_char = empty(st) ? ' ' : st
     endif
     var name_width: number = pane_width - info_width - prefix_width
@@ -1954,12 +1935,13 @@ def BuildTreeLines(visible: list<dict<any>>): list<string>
   var visible_idx: number = 0
 
   for item in visible
-    var name: string = item.name
+    var name: string = get(item, 'name', '')
     var depth: number = get(item, 'depth', 0)
+    var is_dir: bool = get(item, 'is_dir', false)
     var expand_char: string = ''
 
-    if item.is_dir && !get(item, 'is_parent', false)
-      expand_char = has_key(expanded_dirs, item.path) ? '-' : '+'
+    if is_dir && !get(item, 'is_parent', false)
+      expand_char = has_key(expanded_dirs, get(item, 'path', '')) ? '-' : '+'
       name = name .. '/'
     endif
 
@@ -1970,8 +1952,8 @@ def BuildTreeLines(visible: list<dict<any>>): list<string>
     endif
 
     var git_char: string = ' '
-    if in_git && !get(item, 'is_parent', false) && !get(item, 'is_dir', false)
-      var st: string = get(status_map, item.path, '')
+    if in_git && !get(item, 'is_parent', false) && !is_dir
+      var st: string = get(status_map, get(item, 'path', ''), '')
       git_char = empty(st) ? ' ' : st
     endif
 
@@ -1983,8 +1965,8 @@ def BuildTreeLines(visible: list<dict<any>>): list<string>
     line = line .. name
 
     var info: string = ''
-    if show_info_column && !item.is_dir
-      info = FormatSize(item.size)
+    if show_info_column && !is_dir
+      info = FormatSize(get(item, 'size', 0))
       info = repeat(' ', info_width - strwidth(info)) .. info
     endif
 
@@ -2081,6 +2063,42 @@ def NavigateInto(subdir: string): void
   Render()
 enddef
 
+def OpenInRightPanel(): number
+  # If only the pane window exists, create a new vertical split on the right.
+  # If a non-pane window already exists, move there (reuse it).
+  # Returns with cursor in the target window.
+  var pane_wid: number = win_getid()
+  var saved_cmdheight: number = &cmdheight
+  var saved_minwidth: number = &winminwidth
+  var saved_minheight: number = &winminheight
+  if &cmdheight > 2
+    set cmdheight=1
+  endif
+  set winminwidth=1 winminheight=1
+  try
+    var found_non_pane: bool = false
+    for info in getwininfo()
+      if info.winid != pane_wid
+        win_gotoid(info.winid)
+        found_non_pane = true
+        break
+      endif
+    endfor
+    if !found_non_pane
+      botright vnew
+    endif
+  catch
+    win_gotoid(pane_wid)
+    Error('vproj: Cannot open right panel — ' .. v:exception)
+    return -1
+  finally
+    &cmdheight = saved_cmdheight
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
+  endtry
+  return 0
+enddef
+
 def OpenFile(path: string): void
   if !filereadable(path)
     Error('vproj: Cannot read: ' .. path)
@@ -2092,32 +2110,11 @@ def OpenFile(path: string): void
     return
   endif
   var pane_wid: number = win_getid()
-  if winnr('$') < 2
-    var saved_cmdheight: number = &cmdheight
-    var saved_minwidth: number = &winminwidth
-    var saved_minheight: number = &winminheight
-    if &cmdheight > 2
-      set cmdheight=1
-    endif
-    set winminwidth=1 winminheight=1
-    try
-      rightbelow split
-    catch
-      &cmdheight = saved_cmdheight
-      &winminwidth = saved_minwidth
-      &winminheight = saved_minheight
-      Error('vproj: Cannot open file — ' .. v:exception)
-      return
-    endtry
-    &cmdheight = saved_cmdheight
-    &winminwidth = saved_minwidth
-    &winminheight = saved_minheight
-  else
-    wincmd p
+  if OpenInRightPanel() < 0
+    return
   endif
   execute 'edit ' .. fnameescape(path)
   win_gotoid(pane_wid)
-  PaneClose()
 enddef
 
 def IsBinary(path: string): bool
@@ -2218,15 +2215,13 @@ def OpenBuffer(bufnr: number): void
     try
       rightbelow split
     catch
+      Error('vproj: Cannot open buffer — ' .. v:exception)
+      return
+    finally
       &cmdheight = saved_cmdheight
       &winminwidth = saved_minwidth
       &winminheight = saved_minheight
-      Error('vproj: Cannot open buffer — ' .. v:exception)
-      return
     endtry
-    &cmdheight = saved_cmdheight
-    &winminwidth = saved_minwidth
-    &winminheight = saved_minheight
   else
     wincmd p
   endif
@@ -2882,35 +2877,38 @@ def OpenQfixEntry(item: dict<any>): void
     try
       rightbelow split
     catch
+      Error('vproj: Cannot open qfix entry — ' .. v:exception)
+      return
+    finally
       &cmdheight = saved_cmdheight
       &winminwidth = saved_minwidth
       &winminheight = saved_minheight
-      Error('vproj: Cannot open qfix entry — ' .. v:exception)
-      return
     endtry
-    &cmdheight = saved_cmdheight
-    &winminwidth = saved_minwidth
-    &winminheight = saved_minheight
   else
     wincmd p
   endif
   # Open the file
-  var bufnr: number = bufnr(item.filename)
+  var fname: string = get(item, 'filename', '')
+  if empty(fname)
+    win_gotoid(pane_wid)
+    return
+  endif
+  var bufnr: number = bufnr(fname)
   if bufnr >= 1
     execute 'buffer ' .. bufnr
-  elseif filereadable(item.filename)
-    execute 'edit ' .. fnameescape(item.filename)
+  elseif filereadable(fname)
+    execute 'edit ' .. fnameescape(fname)
   else
-    Error('vproj: Cannot open: ' .. item.filename)
+    Error('vproj: Cannot open: ' .. fname)
     win_gotoid(pane_wid)
     return
   endif
   # Jump to line/column
-  if item.lnum > 0
-    execute 'normal! ' .. item.lnum .. 'G'
+  if get(item, 'lnum', 0) > 0
+    execute 'normal! ' .. get(item, 'lnum', 0) .. 'G'
   endif
-  if item.col > 0
-    execute 'normal! ' .. item.col .. '|'
+  if get(item, 'col', 0) > 0
+    execute 'normal! ' .. get(item, 'col', 0) .. '|'
   endif
   win_gotoid(pane_wid)
   PaneClose()
@@ -3278,7 +3276,7 @@ def LoadSession(): void
       var vproj_path: string = FindVprojFile(current_dir)
       if !empty(vproj_path)
         project = ParseVprojFile(vproj_path)
-        git_root = !empty(project.root) ? project.root : current_dir
+        git_root = !empty(get(project, 'root', '')) ? get(project, 'root', '') : current_dir
       else
         project = {}
         git_root = current_dir
