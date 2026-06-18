@@ -244,6 +244,7 @@ export def PaneOpen(): void
     &cmdheight = saved_cmdheight
   endtry
   var new_buf: number = bufnr('%')
+  var new_wid: number = win_getid()
   pane_bufnr = new_buf
 
   setbufvar(pane_bufnr, '&buftype', 'nofile')
@@ -251,13 +252,13 @@ export def PaneOpen(): void
   setbufvar(pane_bufnr, '&swapfile', 0)
   setbufvar(pane_bufnr, '&buflisted', 0)
   setbufvar(pane_bufnr, '&modifiable', 0)
-  setbufvar(pane_bufnr, '&cursorline', 0)
-  setbufvar(pane_bufnr, '&number', 0)
-  setbufvar(pane_bufnr, '&relativenumber', 0)
-  setbufvar(pane_bufnr, '&signcolumn', 'no')
-  setbufvar(pane_bufnr, '&winfixwidth', 1)
-  setbufvar(pane_bufnr, '&foldenable', 0)
-  setbufvar(pane_bufnr, '&wrap', 0)
+  setwinvar(new_wid, '&cursorline', 0)
+  setwinvar(new_wid, '&number', 0)
+  setwinvar(new_wid, '&relativenumber', 0)
+  setwinvar(new_wid, '&signcolumn', 'no')
+  setwinvar(new_wid, '&winfixwidth', 1)
+  setwinvar(new_wid, '&foldenable', 0)
+  setwinvar(new_wid, '&wrap', 0)
   setbufvar(pane_bufnr, '&spell', 0)
   setbufvar(pane_bufnr, '&list', 0)
 
@@ -1267,7 +1268,25 @@ export def OpenDiffPreview(): void
 
   var pane_wid: number = win_getid()
   if winnr("$") < 2
-    rightbelow split
+    var saved_cmdheight: number = &cmdheight
+    var saved_minwidth: number = &winminwidth
+    var saved_minheight: number = &winminheight
+    if &cmdheight > 2
+      set cmdheight=1
+    endif
+    set winminwidth=1 winminheight=1
+    try
+      rightbelow split
+    catch
+      &cmdheight = saved_cmdheight
+      &winminwidth = saved_minwidth
+      &winminheight = saved_minheight
+      echom 'vproj: Cannot create diff view — ' .. v:exception
+      return
+    endtry
+    &cmdheight = saved_cmdheight
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
   else
     wincmd p
   endif
@@ -2069,7 +2088,25 @@ def OpenBuffer(bufnr: number): void
   endif
   var pane_wid: number = win_getid()
   if winnr('$') < 2
-    rightbelow split
+    var saved_cmdheight: number = &cmdheight
+    var saved_minwidth: number = &winminwidth
+    var saved_minheight: number = &winminheight
+    if &cmdheight > 2
+      set cmdheight=1
+    endif
+    set winminwidth=1 winminheight=1
+    try
+      rightbelow split
+    catch
+      &cmdheight = saved_cmdheight
+      &winminwidth = saved_minwidth
+      &winminheight = saved_minheight
+      echom 'vproj: Cannot open buffer — ' .. v:exception
+      return
+    endtry
+    &cmdheight = saved_cmdheight
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
   else
     wincmd p
   endif
@@ -2723,7 +2760,25 @@ def OpenQfixEntry(item: dict<any>): void
   var pane_wid: number = win_getid()
   # Find or create a non-pane window
   if winnr('$') < 2
-    rightbelow split
+    var saved_cmdheight: number = &cmdheight
+    var saved_minwidth: number = &winminwidth
+    var saved_minheight: number = &winminheight
+    if &cmdheight > 2
+      set cmdheight=1
+    endif
+    set winminwidth=1 winminheight=1
+    try
+      rightbelow split
+    catch
+      &cmdheight = saved_cmdheight
+      &winminwidth = saved_minwidth
+      &winminheight = saved_minheight
+      echom 'vproj: Cannot open qfix entry — ' .. v:exception
+      return
+    endtry
+    &cmdheight = saved_cmdheight
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
   else
     wincmd p
   endif
@@ -2782,7 +2837,25 @@ def OpenCommitDetail(item: dict<any>): void
   endif
   var pane_wid: number = win_getid()
   if winnr('$') < 2
-    rightbelow split
+    var saved_cmdheight: number = &cmdheight
+    var saved_minwidth: number = &winminwidth
+    var saved_minheight: number = &winminheight
+    if &cmdheight > 2
+      set cmdheight=1
+    endif
+    set winminwidth=1 winminheight=1
+    try
+      rightbelow split
+    catch
+      &cmdheight = saved_cmdheight
+      &winminwidth = saved_minwidth
+      &winminheight = saved_minheight
+      echom 'vproj: Cannot create commit view — ' .. v:exception
+      return
+    endtry
+    &cmdheight = saved_cmdheight
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
   else
     wincmd p
   endif
