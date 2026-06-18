@@ -121,18 +121,28 @@ export def PaneOpen(): void
   # Reuse existing buffer if it still exists
   DefineHighlights()
   if pane_bufnr > 0 && bufexists(pane_bufnr)
-    # Switch to a window without winfixwidth so the split can succeed.
-    # Plugins like NERDTree/Tagbar set winfixwidth, which may block
-    # vertical splits from that window (E36).
-    var found_non_fixed: bool = false
+    # Switch to a window without winfixheight/winfixwidth so splits succeed.
+    # Plugins like NERDTree/Tagbar set these, which may block splits (E36).
+    var found_clear: bool = false
     for info in getwininfo()
-      if !getwinvar(info.winid, '&winfixwidth', 0)
+      if !getwinvar(info.winid, '&winfixheight', 0) && !getwinvar(info.winid, '&winfixwidth', 0)
         win_gotoid(info.winid)
-        found_non_fixed = true
+        found_clear = true
         break
       endif
     endfor
-    if !found_non_fixed
+    if !found_clear
+      # Fall back: find window without winfixheight (needed for :new)
+      for info in getwininfo()
+        if !getwinvar(info.winid, '&winfixheight', 0)
+          win_gotoid(info.winid)
+          found_clear = true
+          break
+        endif
+      endfor
+      if !found_clear
+        setlocal winfixheight=0
+      endif
       setlocal winfixwidth=0
     endif
     var saved_minwidth: number = &winminwidth
@@ -174,16 +184,26 @@ export def PaneOpen(): void
     return
   endif
 
-  # Switch to a window without winfixwidth so the split can succeed
-  var found_non_fixed: bool = false
+  # Switch to a window without winfixheight/winfixwidth so splits succeed.
+  var found_clear: bool = false
   for info in getwininfo()
-    if !getwinvar(info.winid, '&winfixwidth', 0)
+    if !getwinvar(info.winid, '&winfixheight', 0) && !getwinvar(info.winid, '&winfixwidth', 0)
       win_gotoid(info.winid)
-      found_non_fixed = true
+      found_clear = true
       break
     endif
   endfor
-  if !found_non_fixed
+  if !found_clear
+    for info in getwininfo()
+      if !getwinvar(info.winid, '&winfixheight', 0)
+        win_gotoid(info.winid)
+        found_clear = true
+        break
+      endif
+    endfor
+    if !found_clear
+      setlocal winfixheight=0
+    endif
     setlocal winfixwidth=0
   endif
   # Open as horizontal split first — always succeeds regardless of
@@ -328,9 +348,10 @@ export def PaneDiagnose(): void
   for info in getwininfo()
     var wnr: number = info.winnr
     var wfw: bool = getwinvar(info.winid, '&winfixwidth', 0)
+    var wfh: bool = getwinvar(info.winid, '&winfixheight', 0)
     var bt: string = getbufvar(info.bufnr, '&buftype', '')
     var bn: string = bufname(info.bufnr)
-    echom '  win ' .. wnr .. ': wfw=' .. wfw .. ' bt=' .. bt .. ' buf=' .. bn
+    echom '  win ' .. wnr .. ': wfw=' .. wfw .. ' wfh=' .. wfh .. ' bt=' .. bt .. ' buf=' .. bn
   endfor
   echom ''
 
