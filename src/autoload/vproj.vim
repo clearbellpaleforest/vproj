@@ -147,7 +147,11 @@ export def PaneOpen(): void
     endif
     var saved_minwidth: number = &winminwidth
     var saved_minheight: number = &winminheight
+    var saved_cmdheight: number = &cmdheight
     set winminwidth=1 winminheight=1
+    if &cmdheight > 2
+      set cmdheight=1
+    endif
     try
       try
         new
@@ -167,6 +171,7 @@ export def PaneOpen(): void
     finally
       &winminwidth = saved_minwidth
       &winminheight = saved_minheight
+      &cmdheight = saved_cmdheight
     endtry
     silent! execute 'vert resize ' .. pane_width
     selected_line = FirstSelectableLine()
@@ -212,7 +217,11 @@ export def PaneOpen(): void
   # If rotation fails, the pane stays horizontal at the bottom.
   var saved_minwidth: number = &winminwidth
   var saved_minheight: number = &winminheight
+  var saved_cmdheight: number = &cmdheight
   set winminwidth=1 winminheight=1
+  if &cmdheight > 2
+    set cmdheight=1
+  endif
   try
     try
       new
@@ -232,6 +241,7 @@ export def PaneOpen(): void
   finally
     &winminwidth = saved_minwidth
     &winminheight = saved_minheight
+    &cmdheight = saved_cmdheight
   endtry
   var new_buf: number = bufnr('%')
   pane_bufnr = new_buf
