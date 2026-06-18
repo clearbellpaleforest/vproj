@@ -1380,25 +1380,42 @@ def OpenPreview(): void
       break
     endif
   endfor
-  var before_buf: number = bufnr('%')
-  silent! botright vnew
-  if bufnr('%') == before_buf
-    # vnew failed — not enough room
-    win_gotoid(pane_wid)
-    return
+  var saved_cmdheight: number = &cmdheight
+  var saved_minwidth: number = &winminwidth
+  var saved_minheight: number = &winminheight
+  if &cmdheight > 2
+    set cmdheight=1
   endif
+  set winminwidth=1 winminheight=1
+  var before_buf: number = bufnr('%')
+  try
+    botright vnew
+  catch
+    &cmdheight = saved_cmdheight
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
+    win_gotoid(pane_wid)
+    echohl ErrorMsg
+    echom 'vproj: Cannot open preview — ' .. v:exception
+    echohl None
+    return
+  endtry
+  &cmdheight = saved_cmdheight
+  &winminwidth = saved_minwidth
+  &winminheight = saved_minheight
   preview_bufnr = bufnr('%')
+  var preview_wid: number = win_getid()
   setbufvar(preview_bufnr, '&buftype', 'nofile')
   setbufvar(preview_bufnr, '&bufhidden', 'wipe')
   setbufvar(preview_bufnr, '&swapfile', 0)
   setbufvar(preview_bufnr, '&buflisted', 0)
   setbufvar(preview_bufnr, '&modifiable', 0)
-  setbufvar(preview_bufnr, '&number', 0)
-  setbufvar(preview_bufnr, '&relativenumber', 0)
-  setbufvar(preview_bufnr, '&signcolumn', 'no')
-  setbufvar(preview_bufnr, '&wrap', 1)
   setbufvar(preview_bufnr, '&spell', 0)
   setbufvar(preview_bufnr, '&list', 0)
+  setwinvar(preview_wid, '&number', 0)
+  setwinvar(preview_wid, '&relativenumber', 0)
+  setwinvar(preview_wid, '&signcolumn', 'no')
+  setwinvar(preview_wid, '&wrap', 1)
   silent! keepalt file [Preview]
   silent! vert resize 40
   win_gotoid(pane_wid)
@@ -1937,7 +1954,25 @@ def OpenFile(path: string): void
   endif
   var pane_wid: number = win_getid()
   if winnr('$') < 2
-    rightbelow split
+    var saved_cmdheight: number = &cmdheight
+    var saved_minwidth: number = &winminwidth
+    var saved_minheight: number = &winminheight
+    if &cmdheight > 2
+      set cmdheight=1
+    endif
+    set winminwidth=1 winminheight=1
+    try
+      rightbelow split
+    catch
+      &cmdheight = saved_cmdheight
+      &winminwidth = saved_minwidth
+      &winminheight = saved_minheight
+      echom 'vproj: Cannot open file — ' .. v:exception
+      return
+    endtry
+    &cmdheight = saved_cmdheight
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
   else
     wincmd p
   endif
