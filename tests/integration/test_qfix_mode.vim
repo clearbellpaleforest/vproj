@@ -64,19 +64,15 @@ vproj#SwitchMode('qfix')
 Assert(vproj#GetCurrentMode() == 'qfix', 'git→qfix switch works')
 
 # ── Populate qflist with test entries ──
-var tmpdir = '/tmp/vproj_qfix_test'
-if isdirectory(tmpdir)
-  delete(tmpdir, 'rf')
-endif
-mkdir(tmpdir)
-writefile(['line one', 'line two', 'line three'], tmpdir .. '/a.txt')
-writefile(['alpha', 'beta', 'gamma'], tmpdir .. '/b.txt')
+# Use project-relative paths so qfix displays readable relative paths
+writefile(['line one', 'line two', 'line three'], 'test_a.txt')
+writefile(['alpha', 'beta', 'gamma'], 'test_b.txt')
 
 # Build a qflist manually
 var qflist = [
-  {filename: tmpdir .. '/a.txt', lnum: 1, col: 1, text: 'first entry', valid: true},
-  {filename: tmpdir .. '/a.txt', lnum: 3, col: 1, text: 'third line', valid: true},
-  {filename: tmpdir .. '/b.txt', lnum: 2, col: 5, text: 'beta entry', valid: true},
+  {filename: getcwd() .. '/test_a.txt', lnum: 1, col: 1, text: 'first entry', valid: true},
+  {filename: getcwd() .. '/test_a.txt', lnum: 3, col: 1, text: 'third line', valid: true},
+  {filename: getcwd() .. '/test_b.txt', lnum: 2, col: 5, text: 'beta entry', valid: true},
 ]
 setqflist(qflist)
 
@@ -94,7 +90,7 @@ Assert(p2 =~ '^-\+$', 'qfix populated: line 2 is separator')
 # Should have 3 entries starting at line 3
 Assert(PaneCursorLine() == 3, 'qfix populated: cursor on first entry (line 3)')
 var p3 = PaneLine(3)
-Assert(p3 =~ 'a.txt', 'qfix populated: line 3 has first filename')
+Assert(p3 =~ 'test_a.txt', 'qfix populated: line 3 has first filename')
 Assert(p3 =~ 'first entry', 'qfix populated: line 3 has entry text')
 
 # ── Navigation ──
@@ -140,7 +136,8 @@ vproj#PaneClose()
 Assert(!vproj#IsPaneVisible(), 'qfix: pane closes cleanly')
 
 # ── Cleanup ──
-delete(tmpdir, 'rf')
+delete('test_a.txt')
+delete('test_b.txt')
 
 echom ''
 if failures == 0

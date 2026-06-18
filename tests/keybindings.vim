@@ -60,9 +60,9 @@ execute "normal \<Up>"
 Assert(PaneCursorLine() == start, '<Up> moves cursor back up')
 
 # ──────────────────────────────────────────────
-# SECTION 2: h, l, . (parent dir, enter)
+# SECTION 2: h, l, . (parent dir, index mode, parent)
 # ──────────────────────────────────────────────
-echom '--- h / l / . ---'
+echom '--- h / . ---'
 Setup()
 
 # h — parent directory
@@ -74,14 +74,13 @@ Assert(vproj#IsPaneVisible() && vproj#GetCurrentMode() == 'file',
 execute 'normal .'
 Assert(vproj#IsPaneVisible(), '. (parent) keeps pane open')
 
-# l — enter directory (need to be on a dir item, not a file)
-# Just verify it doesn't crash
+# L — Log mode
 Setup()
 try
-  execute 'normal l'
-  Assert(true, 'l (enter) dispatched')
+  execute 'normal L'
+  Assert(vproj#GetCurrentMode() == 'log', 'L switches to log mode')
 catch
-  Assert(false, 'l error: ' .. v:exception)
+  Assert(false, 'L error: ' .. v:exception)
 endtry
 
 # ──────────────────────────────────────────────
@@ -201,7 +200,6 @@ var passthrough_tests: list<list<string>> = [
   ['G',                'G (buffer bottom)'],
   ["\<C-F>",           'Ctrl-F (page down)'],
   ['H',                'H (screen top)'],
-  ['L',                'L (screen bottom)'],
   ['%',                '% (match pair)'],
 ]
 
@@ -222,12 +220,22 @@ catch
   Assert(false, 'y error: ' .. v:exception)
 endtry
 
-# / — search (opens command line; cancel it)
+# / — filter prompt (was passthrough, now mapped to PromptFilter)
+# Verify mapping exists (can't test directly: input() blocks in script)
 try
-  call feedkeys("/README\<C-c>", 'xt')
-  Assert(true, '/ (search) works')
+  var slash_map = maparg('/', 'n', 0, 1)
+  Assert(!empty(slash_map), '/ is mapped in pane')
 catch
   Assert(false, '/ error: ' .. v:exception)
+endtry
+
+# * — grep search (can't call interactively: input() blocks)
+try
+  var star_map = maparg('*', 'n', 0, 1)
+  Assert(!empty(star_map), '* is mapped in pane')
+  Assert(star_map.rhs =~ 'GrepSearch', '* maps to GrepSearch')
+catch
+  Assert(false, '* error: ' .. v:exception)
 endtry
 
 # ──────────────────────────────────────────────
@@ -247,12 +255,10 @@ endwhile
 
 try
   execute "normal \<CR>"
-  Assert(winnr('$') >= 2, 'Enter opens split when pane is only window')
-  # OpenFile's wincmd p returns to pane; switch to the file window
-  wincmd w
-  Assert(bufname('%') != 'VPROJ', 'File opened (not pane) in other window')
-  wincmd w
-  Assert(bufnr('VPROJ') > 0, 'Pane buffer still exists')
+  Assert(winnr('$') >= 1, 'Enter on file worked')
+  Assert(!vproj#IsPaneVisible(), 'Pane closes after file open')
+  # File buffer should be open in the current window
+  Assert(bufname('%') != 'VPROJ', 'File opened (not pane)')
 catch
   Assert(false, 'Single-window file open error: ' .. v:exception)
 endtry

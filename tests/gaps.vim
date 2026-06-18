@@ -268,8 +268,10 @@ var vproj_content = [
 ]
 writefile(vproj_content, tmpdir .. '/.vproj')
 
-execute 'cd' tmpdir
-vproj#PaneOpen()
+	# Clear stale session to avoid inherited dir=/tmp
+	delete(expand('~/.cache/vproj/session'))
+	execute 'cd' tmpdir
+	vproj#PaneOpen()
 vproj#SwitchMode('git')
 
 # Verify git mode shows the project
@@ -439,6 +441,389 @@ vproj#SwitchMode('git')
 Assert(vproj#GetCurrentMode() == 'git', 'GetCurrentMode returns git')
 vproj#SwitchMode('qfix')
 Assert(vproj#GetCurrentMode() == 'qfix', 'GetCurrentMode returns qfix')
+
+# ══════════════════════════════════════════════════
+# 16. ToggleGitFilter — functional test
+# ══════════════════════════════════════════════════
+echom '--- ToggleGitFilter ---'
+Setup()
+
+# Indicator absent by default — check that [G] doesn't appear AFTER [Q]fix
+var ml1 = PaneLine(1)
+Assert(ml1 !~ 'Q\]fix.*\[G\]', 'git filter indicator absent by default')
+
+try
+  vproj#ToggleGitFilter()
+  Assert(vproj#IsPaneVisible(), 'ToggleGitFilter keeps pane visible')
+  var ml2 = PaneLine(1)
+  Assert(ml2 =~ 'Q\]fix.*\[G\]', 'git filter indicator appears after toggle')
+catch
+  Assert(false, 'ToggleGitFilter error: ' .. v:exception)
+endtry
+
+# Toggle back to off
+vproj#ToggleGitFilter()
+var ml3 = PaneLine(1)
+Assert(ml3 !~ 'Q\]fix.*\[G\]', 'git filter indicator cleared on second toggle')
+
+# Refresh clears git filter
+vproj#ToggleGitFilter()
+vproj#Refresh()
+var ml4 = PaneLine(1)
+Assert(ml4 !~ 'Q\]fix.*\[G\]', 'Refresh clears git filter')
+
+# Mode switch clears git filter
+vproj#ToggleGitFilter()
+vproj#SwitchMode('buf')
+var ml5 = PaneLine(1)
+Assert(ml5 !~ 'Q\]fix.*\[G\]', 'SwitchMode clears git filter')
+
+# ══════════════════════════════════════════════════
+# 17. HandleF1 — pane vs. non-pane paths
+# ══════════════════════════════════════════════════
+echom '--- HandleF1 ---'
+Setup()
+
+try
+  vproj#HandleF1()
+  Assert(vproj#IsPaneVisible(), 'HandleF1 in pane toggles info column')
+catch
+  Assert(false, 'HandleF1 in pane error: ' .. v:exception)
+endtry
+
+vproj#PaneClose()
+
+# HandleF1 outside pane — opens help
+try
+  vproj#HandleF1()
+  Assert(true, 'HandleF1 outside pane no crash')
+catch
+  Assert(false, 'HandleF1 outside pane error: ' .. v:exception)
+endtry
+
+# Close any help window that opened
+if winnr('$') > 1
+  wincmd w
+  if &buftype == 'help'
+    close
+  endif
+endif
+vproj#PaneClose()
+
+# ══════════════════════════════════════════════════
+# 18. CloseBuffer with actual buffers
+# ══════════════════════════════════════════════════
+echom '--- CloseBuffer functional ---'
+vproj#PaneClose()
+
+# Open real buffers
+silent! edit! /tmp/vproj_gap_buf_a.txt
+silent! edit! /tmp/vproj_gap_buf_b.txt
+silent! edit! /tmp/vproj_gap_buf_c.txt
+
+vproj#PaneOpen()
+vproj#SwitchMode('buf')
+
+# Should have at least 3 buffers beyond menu/separator
+try
+  vproj#CloseBuffer()
+  Assert(vproj#IsPaneVisible(), 'CloseBuffer in buf mode keeps pane visible')
+catch
+  Assert(false, 'CloseBuffer error: ' .. v:exception)
+endtry
+
+vproj#PaneClose()
+
+# Cleanup
+silent! bdelete! /tmp/vproj_gap_buf_a.txt
+silent! bdelete! /tmp/vproj_gap_buf_b.txt
+silent! bdelete! /tmp/vproj_gap_buf_c.txt
+
+# ══════════════════════════════════════════════════
+# 19. PromptFilter — feedkeys functional test
+# ══════════════════════════════════════════════════
+echom '--- PromptFilter ---'
+Setup()
+
+try
+  call feedkeys("vim\<CR>", 't')
+  vproj#PromptFilter()
+  Assert(vproj#IsPaneVisible(), 'PromptFilter with pattern ok')
+catch
+  Assert(false, 'PromptFilter error: ' .. v:exception)
+endtry
+
+# Clear filter with empty input
+try
+  call feedkeys("\<CR>", 't')
+  vproj#PromptFilter()
+  Assert(vproj#IsPaneVisible(), 'PromptFilter clear ok')
+catch
+  Assert(false, 'PromptFilter clear error: ' .. v:exception)
+endtry
+
+# ══════════════════════════════════════════════════
+# 20. Mode cycling via SwitchMode (all 4 modes, round-trip)
+# ══════════════════════════════════════════════════
+echom '--- Mode cycling ---'
+Setup()
+
+# file → buf → git → qfix → file
+vproj#SwitchMode('buf')
+Assert(vproj#GetCurrentMode() == 'buf', 'SwitchMode: file→buf')
+vproj#SwitchMode('git')
+Assert(vproj#GetCurrentMode() == 'git', 'SwitchMode: buf→git')
+vproj#SwitchMode('qfix')
+Assert(vproj#GetCurrentMode() == 'qfix', 'SwitchMode: git→qfix')
+vproj#SwitchMode('file')
+Assert(vproj#GetCurrentMode() == 'file', 'SwitchMode: qfix→file')
+
+# ══════════════════════════════════════════════════
+# 21. NavigateIntoFirstDir with no subdirectory
+# ══════════════════════════════════════════════════
+echom '--- NavigateIntoFirstDir in empty dir ---'
+
+vproj#PaneClose()
+call mkdir('/tmp/vproj_gap_empty_dir', 'p')
+execute 'cd /tmp/vproj_gap_empty_dir'
+
+vproj#PaneOpen()
+try
+  vproj#NavigateIntoFirstDir()
+  Assert(true, 'NavigateIntoFirstDir empty-dir no crash')
+catch
+  Assert(false, 'NavigateIntoFirstDir empty-dir error: ' .. v:exception)
+endtry
+vproj#PaneClose()
+call delete('/tmp/vproj_gap_empty_dir', 'rf')
+
+# ══════════════════════════════════════════════════
+# 22. Empty directory — works without crash, shows parent dir
+# ══════════════════════════════════════════════════
+echom '--- Empty directory ---'
+
+call mkdir('/tmp/vproj_gap_empty2', 'p')
+execute 'cd /tmp/vproj_gap_empty2'
+
+vproj#PaneOpen()
+var elines = getbufline(bufnr('VPROJ'), 1, '$')
+var has_parent = false
+for l in elines
+  if l =~ '\.\.'
+    has_parent = true
+    break
+  endif
+endfor
+Assert(has_parent, 'empty directory shows parent (..) entry')
+Assert(vproj#GetCurrentMode() == 'file', 'empty directory: stays in file mode')
+vproj#PaneClose()
+call delete('/tmp/vproj_gap_empty2', 'rf')
+
+# ══════════════════════════════════════════════════
+# 23. Session persistence round-trip
+# ══════════════════════════════════════════════════
+echom '--- Session persistence ---'
+
+vproj#PaneOpen()
+vproj#SwitchMode('buf')
+vproj#SetPaneWidth(55)
+vproj#ToggleInfoColumn()  # flip once
+vproj#PaneClose()
+
+vproj#PaneOpen()
+Assert(vproj#GetCurrentMode() == 'buf', 'session restores buf mode')
+Assert(vproj#GetPaneWidth() == 55, 'session restores width 55')
+vproj#PaneClose()
+
+# Restore default state
+vproj#PaneOpen()
+vproj#SetPaneWidth(40)
+vproj#SwitchMode('file')
+vproj#ToggleInfoColumn()  # flip back
+vproj#PaneClose()
+
+# ══════════════════════════════════════════════════
+# 24. ParseVprojFile with malformed / edge input
+# ══════════════════════════════════════════════════
+echom '--- ParseVprojFile malformed ---'
+
+var tmp_v = '/tmp/vproj_gap_malformed.vproj'
+
+# Minimal valid .vproj
+writefile(['Project Name: GapTest', '# comment', '', 'garbage line', 'Included Directories:', 'src'], tmp_v)
+try
+  var p = vproj#ParseVprojFile(tmp_v)
+  Assert(get(p, 'name', '') == 'GapTest', 'malformed .vproj: name parsed')
+  Assert(len(get(p, 'included_dirs', [])) == 1, 'malformed .vproj: 1 included dir')
+catch
+  Assert(false, 'ParseVprojFile malformed error: ' .. v:exception)
+endtry
+
+# Bogus root path
+writefile(['Project Name: Bogus', 'Project Root: /nonexistent/xyz/123', 'Included Directories:', 'src'], tmp_v)
+try
+  var p2 = vproj#ParseVprojFile(tmp_v)
+  Assert(empty(get(p2, 'root', '')), 'bogus root: cleared to empty')
+catch
+  Assert(false, 'ParseVprojFile bogus-root error: ' .. v:exception)
+endtry
+
+call delete(tmp_v)
+
+# ══════════════════════════════════════════════════
+# 25. Binary file detection
+# ══════════════════════════════════════════════════
+echom '--- Binary file ---'
+
+var bdata = 0z000102030405060708090a0b0c0d0e0f
+writefile(bdata, '/tmp/vproj_gap_binary.bin')
+
+vproj#PaneClose()
+execute 'cd /tmp'
+vproj#PaneOpen()
+vproj#SwitchMode('file')
+
+var p_lines = getbufline(bufnr('VPROJ'), 1, '$')
+var bin_line = 0
+for i in range(len(p_lines))
+  if p_lines[i] =~ 'vproj_gap_binary\.bin'
+    bin_line = i + 1
+    break
+  endif
+endfor
+
+if bin_line > 0
+  var pw2 = win_findbuf(bufnr('VPROJ'))[0]
+  win_execute(pw2, 'normal ' .. bin_line .. 'G')
+  try
+    vproj#SelectCurrent()
+    Assert(true, 'binary file SelectCurrent no crash')
+  catch
+    Assert(false, 'Binary SelectCurrent error: ' .. v:exception)
+  endtry
+else
+  Assert(true, 'binary file not in listing (filtered or not created)')
+endif
+
+vproj#PaneClose()
+call delete('/tmp/vproj_gap_binary.bin')
+
+# ══════════════════════════════════════════════════
+# 26. Qfix column jump and invalid entry skip
+# ══════════════════════════════════════════════════
+echom '--- Qfix edge cases ---'
+
+writefile(['col1 col2 col3 col4 col5', 'a b c d e'], '/tmp/vproj_gap_qfix2.txt')
+
+# Mix valid and invalid entries
+setqflist([
+  {filename: '/nonexistent/bad.txt', lnum: 1, col: 1, text: 'bad', valid: false},
+  {filename: '/tmp/vproj_gap_qfix2.txt', lnum: 2, col: 5, text: 'col 5', valid: true},
+])
+
+vproj#PaneOpen()
+vproj#SwitchMode('qfix')
+
+# Should have only the valid entry
+var qlines = getbufline(bufnr('VPROJ'), 1, '$')
+var hits = 0
+for l in qlines
+  if l =~ 'vproj_gap_qfix2'
+    hits += 1
+  endif
+endfor
+Assert(hits == 1, 'qfix skips invalid entry, shows 1 valid')
+
+# Jump to entry with column
+try
+  vproj#SelectCurrent()
+  Assert(true, 'qfix column-jump entry opened')
+catch
+  Assert(false, 'qfix column-jump error: ' .. v:exception)
+endtry
+
+vproj#PaneClose()
+call delete('/tmp/vproj_gap_qfix2.txt')
+
+# ══════════════════════════════════════════════════
+# 27. GitStageToggle guards (non-file modes)
+# ══════════════════════════════════════════════════
+echom '--- GitStageToggle guards ---'
+Setup()
+
+vproj#SwitchMode('buf')
+try
+  vproj#GitStageToggle()
+  Assert(vproj#IsPaneVisible(), 'GitStageToggle in buf mode exits early')
+catch
+  Assert(false, 'GitStageToggle buf-mode error: ' .. v:exception)
+endtry
+
+vproj#SwitchMode('git')
+try
+  vproj#GitStageToggle()
+  Assert(vproj#IsPaneVisible(), 'GitStageToggle in git mode exits early')
+catch
+  Assert(false, 'GitStageToggle git-mode error: ' .. v:exception)
+endtry
+
+vproj#SwitchMode('qfix')
+try
+  vproj#GitStageToggle()
+  Assert(vproj#IsPaneVisible(), 'GitStageToggle in qfix mode exits early')
+catch
+  Assert(false, 'GitStageToggle qfix-mode error: ' .. v:exception)
+endtry
+
+# ══════════════════════════════════════════════════
+# 28. Pane buffer name is VPROJ after open
+# ══════════════════════════════════════════════════
+echom '--- Pane buffer name ---'
+vproj#PaneClose()
+
+vproj#PaneOpen()
+var pb = bufnr('VPROJ')
+Assert(pb > 0, 'pane buffer exists after open')
+Assert(bufname(pb) == 'VPROJ', 'pane buffer named VPROJ')
+Assert(bufexists(pb), 'pane buffer is valid')
+vproj#PaneClose()
+
+# ══════════════════════════════════════════════════
+# 29. ToggleInfoColumn across all modes
+# ══════════════════════════════════════════════════
+echom '--- ToggleInfoColumn across modes ---'
+Setup()
+
+vproj#ToggleInfoColumn()
+Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in file mode ok')
+
+vproj#SwitchMode('buf')
+vproj#ToggleInfoColumn()
+Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in buf mode ok')
+
+vproj#SwitchMode('git')
+vproj#ToggleInfoColumn()
+Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in git mode ok')
+
+vproj#SwitchMode('qfix')
+vproj#ToggleInfoColumn()
+Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in qfix mode ok')
+
+vproj#SwitchMode('file')
+
+# ══════════════════════════════════════════════════
+# 30. SelectPrev wrap-around from first item
+# ══════════════════════════════════════════════════
+echom '--- SelectPrev wrap-around ---'
+Setup()
+
+vproj#SelectPrev()
+Assert(vproj#GetCurrentMode() == 'file', 'SelectPrev from first wraps, mode preserved')
+Assert(vproj#IsPaneVisible(), 'SelectPrev from first no crash')
+
+vproj#SelectLast()
+vproj#SelectNext()
+Assert(vproj#GetCurrentMode() == 'file', 'SelectNext from last wraps, mode preserved')
 
 # ══════════════════════════════════════════════════
 # Cleanup

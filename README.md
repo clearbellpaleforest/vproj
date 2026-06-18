@@ -1,6 +1,7 @@
 # vproj
 
-Vim project manager. A sidebar pane for browsing files and switching buffers.
+Vim project manager. A sidebar pane for browsing files, switching buffers,
+and managing project structure. Navigate with the keyboard — no commands needed.
 
 ## Install
 
@@ -52,26 +53,27 @@ Plug 'clearbellpaleforest/vproj'
 
 ### Mode Switching
 
-| Key | Action |
-|-----|--------|
-| `F` | File mode — browse directories |
-| `D` | Doc mode — switch open buffers |
-| `C` | Code mode — project tree |
-| `Enter` on menu line | Cycle to next mode |
+Each mode has a distinct color on the menu line so you know what you're in:
+
+| Key | Mode | Color | Shows |
+|-----|------|-------|-------|
+| `f` | File | Yellow | Directory browsing, file sizes |
+| `b` | Buf | Green | Open buffers with flags + line counts |
+| `g` | Git | Magenta | Project tree from .vproj |
+| `q` | Qfix | Blue | Quickfix list entries |
+| `Enter` on menu line | — | — | Cycle to next mode |
 
 ### Actions
 
 | Key | Action |
 |-----|--------|
 | `r` | Refresh listing |
-| `x` | Close selected buffer (doc mode) |
-| `+` | Include item (code mode) |
-| `-` | Exclude item (code mode) |
+| `x` | Close selected buffer (buf mode only) |
+| `+` / `-` | Include / exclude item (git mode) |
 | `<Left>` / `<Right>` | Shrink / grow pane width |
-| `F1` | Toggle info column |
-| `Tab` | Shift nav indicators forward |
-| `Shift-Tab` | Shift nav indicators backward |
-| `a` – `z`, `A` – `Z`, `1` – `9` | Jump to item by nav char |
+| `F1` | Toggle info column (inside pane) |
+| `Tab` / `Shift-Tab` | Shift nav indicators forward / backward |
+| `a` – `z`, `A` – `Z`, `1` – `9` | Jump to item by nav character (cyan) |
 
 ### Paging
 
@@ -84,26 +86,25 @@ Plug 'clearbellpaleforest/vproj'
 
 | Key | Action |
 |-----|--------|
-| `q` | Close pane |
-| `F4` | Close pane |
+| `Q` | Close pane |
+| `F4` | Close pane (or toggle when outside pane) |
 
 ### Standard Vim Keys (passthrough)
 
-These work as usual — we don't override them:
+These work as usual inside the pane — we don't override them:
 
 | Key(s) | Behavior |
 |--------|----------|
-| `f` | Find character on current line |
 | `w` `b` `e` | Word motions |
 | `0` `^` `$` | Line start / end |
-| `gg` | Buffer top |
-| `/` `?` | Search |
-| `y` | Yank (copy filename) |
-| `Ctrl-F` | Page down |
+| `t<char>` | Find until character |
+| `H` `M` `L` | Screen top / middle / bottom |
+| `/` `?` | Search forward / backward |
+| `y` | Yank (copy filename on current line) |
+| `Ctrl-F` `Ctrl-B` | Page down / up |
 | `Ctrl-D` `Ctrl-U` | Half-page down / up |
 | `Ctrl-W` keys | Window management |
 | `%` `{` `}` `(` `)` | Jump / matching pair |
-| `M` `L` | Middle / low of screen |
 | `zz` `zt` `zb` | Scroll cursor to center / top / bottom |
 
 Or use commands: `:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`.
@@ -114,7 +115,7 @@ See `:help vproj` for full documentation.
 
 ## .vproj File Format
 
-Code Mode reads a `.vproj` file at the project root to determine which files and directories to include. Example:
+Git Mode reads a `.vproj` file at the project root to determine which files and directories to include. Example:
 
 ```
 Project Name: my-project

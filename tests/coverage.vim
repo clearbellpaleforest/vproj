@@ -242,9 +242,11 @@ Assert(vproj#GetCurrentMode() == 'file', 'NavigateUp 50x preserves mode')
 echom '--- HandleBufWipeout ---'
 Setup()
 
+vproj#SetPaneWidth(45)
+
 vproj#HandleBufWipeout()
 Assert(!vproj#IsPaneVisible(), 'HandleBufWipeout clears pane visibility')
-Assert(vproj#GetPaneWidth() == 40, 'HandleBufWipeout preserves pane width')
+Assert(vproj#GetPaneWidth() == 45, 'HandleBufWipeout preserves pane width')
 Assert(vproj#GetCurrentMode() == 'file', 'HandleBufWipeout preserves mode')
 
 # ──────────────────────────────────────────────

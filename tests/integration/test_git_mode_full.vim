@@ -68,8 +68,8 @@ Assert(PaneCursorLine() == 4, 'SelectFirst goes to line 4 in git mode')
 vproj#PaneClose()
 Assert(!vproj#IsPaneVisible(), 'pane closed')
 vproj#PaneOpen()
-# After close (bufwipeout resets mode to file), open defaults to file mode
-Assert(PaneCursorLine() == 3, 'reopen: cursor on first item in file mode')
+# Session persistence restores last mode (git) after close/reopen
+Assert(PaneCursorLine() == 4, 'reopen: cursor on first item in git mode (session restore)')
 
 # ── Test 6: NavigateUp from git mode works ──
 vproj#SwitchMode('git')

@@ -85,7 +85,7 @@ vproj#SwitchMode('git')
 # PaneOpen sets selected_line via FirstSelectableLine()
 vproj#PaneClose()
 vproj#PaneOpen()
-Assert(CursorInPane() == 3, 'git mode: cursor on first item (3) after close+reopen (defaults to file mode)')
+Assert(CursorInPane() == 4, 'git mode: cursor on first item (4) after close+reopen (session restores git mode)')
 
 # ── FIX 9: Buf mode flag_width ──
 echom '--- Buf mode (flag_width fix) ---'

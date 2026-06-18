@@ -109,9 +109,10 @@ tests/
 ├── unit/
 │   └── test_first_selectable.vim
 ├── integration/
-│   ├── test_code_mode_full.vim
-│   ├── test_doc_mode.vim
-│   └── test_paging.vim
+│   ├── test_git_mode_full.vim
+│   ├── test_buf_mode.vim
+│   ├── test_paging.vim
+│   └── test_qfix_mode.vim
 ├── smoke.vim
 ├── final.vim
 ├── regression.vim
@@ -133,8 +134,8 @@ the autoload file:
 
 ```
 pane_bufnr, pane_width, current_mode, selected_line, current_dir, items
-project, git_root, project_prompted, match_ids, show_info_column, current_page
-items_per_page, paging_active, nav_offset, is_interactive
+project, git_root, match_ids, saved_shortmess, show_info_column, current_page
+items_per_page, paging_active, nav_offset, original_cwd, cursor_match_id
 ```
 
 Commands change state then call `Render()`. The display is always a pure
@@ -179,6 +180,7 @@ When adding a feature, follow this sequence:
 | Buf | b | Open buffers with flags + line counts |
 | Git | g | Project tree from .vproj, include/exclude with +/- |
 | Qfix | q | Quickfix list — filename:lnum, entry text |
+| Log | L | Git commit log — `git log --oneline`, Enter for diff details |
 
 Enter on the mode menu line cycles between modes.
 
@@ -189,7 +191,7 @@ Enter on the mode menu line cycles between modes.
 | `vproj#PaneToggle()` | Toggle pane open/closed |
 | `vproj#PaneOpen()` | Open pane |
 | `vproj#PaneClose()` | Close pane |
-| `vproj#SwitchMode(key)` | Switch to 'file', 'buf', 'git', or 'qfix' |
+| `vproj#SwitchMode(key)` | Switch to 'file', 'buf', 'git', 'qfix', or 'log' |
 | `vproj#SelectNext()` / `vproj#SelectPrev()` | Move selection |
 | `vproj#SelectCurrent()` | Activate selected item |
 | `vproj#PaneGrow()` / `vproj#PaneShrink()` | Width +/- 1 |
@@ -210,8 +212,21 @@ Enter on the mode menu line cycles between modes.
 | `vproj#GetNavOffset()` | Get current nav offset |
 | `vproj#ToggleInfoColumn()` | Toggle info column display |
 | `vproj#NextPage()` / `vproj#PrevPage()` | Page through long listings |
+| `vproj#ToggleGitFilter()` | Toggle showing only git-changed files |
+| `vproj#GitStageToggle()` | Stage/unstage file under cursor |
+| `vproj#OpenDiffPreview()` | Open git diff in vertical split |
+| `vproj#DiscardChanges()` | Discard file changes with confirmation |
+| `vproj#GitCommit()` | Commit with message prompt |
+| `vproj#GitPush()` | Push to remote |
+| `vproj#GitPull()` | Pull --ff-only from remote |
+| `vproj#GitBranchSwitch()` | Switch git branch with prompt |
+| `vproj#PromptFilter()` | Prompt for filter pattern |
 | `vproj#OnDirChanged()` | Handle directory change event |
 | `vproj#HandleBufWipeout()` | Cleanup on buffer wipe |
+| `vproj#HandleF1()` | Toggle info column (pane) or open help (elsewhere) |
+| `vproj#ToggleTreeView()` | Toggle tree view within file mode |
+| `vproj#TogglePreview()` | Toggle file preview split (p key) |
+| `vproj#GrepSearch()` | Grep project and populate quickfix |
 | `vproj#DefineHighlights()` | Define highlight groups |
 
 ## Pane Keybindings
@@ -221,10 +236,10 @@ Buffer-local (only active in the pane):
 | Key | Action |
 |-----|--------|
 | j/k, Up/Down | Move selection |
-| h/l | Parent directory / open or enter |
+| h | Parent directory |
 | Left/Right | Shrink/grow width |
 | Enter | Open file, switch buffer, cycle mode, or rename project |
-| f/b/g/q | File / Buf / Git / Qfix mode |
+| f/b/g/q/L | File / Buf / Git / Qfix / Log mode |
 | r | Refresh pane |
 | x | Close selected buffer (buf mode) |
 | +/- | Include / exclude item (git mode) |
@@ -234,6 +249,18 @@ Buffer-local (only active in the pane):
 | Ctrl-K / Ctrl-J | Parent dir / enter first subdir |
 | F1 | Toggle info column |
 | Ctrl-N / Ctrl-P | Next / previous page |
+| Ctrl-G | Toggle git-changed-only filter |
+| s | Stage/unstage file (git) |
+| d | Diff preview for file under cursor |
+| D | Discard changes (with confirmation) |
+| C | Git commit (with message prompt) |
+| P | Git push |
+| U | Git pull --ff-only |
+| B | Git branch switch |
+| T | Toggle tree view (file mode — indented with expand/collapse) |
+| p | Toggle file preview split (updates on cursor move) |
+| / | Filter by name |
+| * | Grep search (populates quickfix) |
 | Tab / Shift-Tab | Shift nav indicators |
 | a-z, A-Z, 1-9 | Jump by nav character |
 
@@ -297,7 +324,9 @@ Run all: `vim -N -u NONE -S tests/<test_file>.vim`
 - `readdir()` in `def`: no empty string filter argument
 - Use `=~ ':$'` and `substitute()` instead of negative string slices
 - Use `get(dict, 'key', default)` for optional dict keys
-- Mappings use `<Cmd>` modifier to avoid command-line flicker
+- Mappings use `<Cmd>` modifier to avoid command-line flicker; `<nowait>` on f/g/q to prevent prefix-key timeout
+- `matchadd()` 4th argument is match ID — pass `-1` for auto-assignment, never a window ID
+- Global `set shortmess+=S` suppresses search-wrap messages; restore original on pane close
 - ASCII-only for separator characters
 - `ItemIndex()` extracts the shared `(selected_line - FirstSelectableLine()) + (current_page * items_per_page)` formula used by SelectCurrent, CloseBuffer, and DoToggleInclude
 - `getftype()` filters FIFOs/sockets/devices in ReadDir and GitItems to prevent readblob hangs
