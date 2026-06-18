@@ -59,6 +59,19 @@ File Mode  ([F]ile)                                 *vproj-mode-file*
     and populate quickfix. Press |Ctrl-G| to toggle showing only
     git-changed files.
 
+                                               *vproj-tree-view*
+    Tree view toggles between flat listing and an indented directory
+    tree with expand/collapse within file mode.
+
+                                               *vproj-preview*
+    File preview shows file contents in a split that updates as the
+    cursor moves. Press |p| again to close.
+
+                                               *vproj-filter*
+                                               *vproj-grep*
+    Filter (|/|) narrows the listing by name pattern. Grep (|*|) runs
+    `grep -rn` and populates the quickfix list for |vproj-mode-qfix|.
+
 Buf Mode  ([B]uf)                                   *vproj-mode-buf*
     Switch between open buffers. Modified buffers marked with +,
     current buffer marked with %. Press |x| to close a buffer.
@@ -73,6 +86,14 @@ Git Mode  ([G]it)                                   *vproj-mode-git*
     Git actions: |s| to stage/unstage, |d| for diff preview,
     |D| to discard changes, |C| to commit, |P| to push,
     |U| to pull --ff-only, |B| to switch branches.
+
+                                               *vproj-git-actions*
+    Git actions work in file, git, and log modes. Stage (|s|)
+    uses `git add` / `git reset HEAD`. Diff preview (|d|) opens
+    a vertical split with `git diff`. Discard (|D|) prompts for
+    confirmation before `git checkout`. Commit (|C|) prompts for
+    a message. Push (|P|), pull (|U|), and branch switch (|B|)
+    use prompts for target/confirmation.
 
 Qfix Mode  ([Q]fix)                                 *vproj-mode-qfix*
     Displays the Vim quickfix list. Press Enter to open the
@@ -132,14 +153,20 @@ Actions:
     <Left> / <Right>    Shrink / grow pane width
     <F1>                Toggle info column
 
+Quick Nav:                                       *vproj-nav-char*
+    <Tab>               Shift nav indicators forward
+    <S-Tab>             Shift nav indicators backward
+    |a|-|z|, |A|-|Z|, |1|-|9|  Jump to item by nav character
+
+                                               *vproj-paging*
 Paging:
     <C-N>               Next page
     <C-P>               Previous page
 
-Quick Nav:
-    <Tab>               Shift nav indicators forward
-    <S-Tab>             Shift nav indicators backward
-    |a|-|z|, |A|-|Z|, |1|-|9|  Jump to item by nav character
+                                               *vproj-paging*
+Paging:
+    <C-N>               Next page
+    <C-P>               Previous page
 
 Close:
     |Q|                 Close pane

@@ -63,6 +63,12 @@ var match_ids: list<number> = []
 var cursor_match_id: number = -1
 var total_pages: number = 0
 
+def Error(msg: string): void
+  echohl ErrorMsg
+  echom msg
+  echohl None
+enddef
+
 def SortByName(A: dict<any>, B: dict<any>): number
   var a: string = tolower(A.name)
   var b: string = tolower(B.name)
@@ -157,7 +163,7 @@ export def PaneOpen(): void
         new
         execute 'buffer ' .. pane_bufnr
       catch
-        echom 'vproj: Cannot open pane (reuse) — ' .. v:exception .. ' (' .. &columns .. ' cols, ' .. winnr('$') .. ' wins)'
+        Error('vproj: Cannot open pane (reuse) — ' .. v:exception .. ' (' .. &columns .. ' cols, ' .. winnr('$') .. ' wins)')
         return
       endtry
       try
@@ -226,7 +232,7 @@ export def PaneOpen(): void
     try
       new
     catch
-      echom 'vproj: Cannot open pane (new) — ' .. v:exception .. ' (' .. &columns .. ' cols, ' .. winnr('$') .. ' wins)'
+      Error('vproj: Cannot open pane (new) — ' .. v:exception .. ' (' .. &columns .. ' cols, ' .. winnr('$') .. ' wins)')
     return
   endtry
   try
@@ -489,6 +495,9 @@ enddef
 
 def GetSelectedItem(): dict<any>
   var display_items: list<dict<any>> = ApplyFilter(items)
+  if git_filter_active && current_mode == 'file'
+    display_items = ApplyGitFilter(display_items)
+  endif
   var idx: number = ItemIndex()
   if idx < 0 || idx >= len(display_items)
     return {}
@@ -1250,7 +1259,7 @@ export def OpenDiffPreview(): void
   endif
 
   if !IsRegularFile(path)
-    echom "vproj: Cannot diff binary or special file"
+    Error("vproj: Cannot diff binary or special file")
     return
   endif
 
@@ -1281,7 +1290,7 @@ export def OpenDiffPreview(): void
       &cmdheight = saved_cmdheight
       &winminwidth = saved_minwidth
       &winminheight = saved_minheight
-      echom 'vproj: Cannot create diff view — ' .. v:exception
+      Error('vproj: Cannot create diff view — ' .. v:exception)
       return
     endtry
     &cmdheight = saved_cmdheight
@@ -1294,7 +1303,7 @@ export def OpenDiffPreview(): void
     rightbelow vsplit
   catch
     win_gotoid(pane_wid)
-    echom 'vproj: Cannot create diff view — ' .. v:exception
+    Error('vproj: Cannot create diff view — ' .. v:exception)
     return
   endtry
   enew
@@ -1415,7 +1424,7 @@ def OpenPreview(): void
     &winminheight = saved_minheight
     win_gotoid(pane_wid)
     echohl ErrorMsg
-    echom 'vproj: Cannot open preview — ' .. v:exception
+    Error('vproj: Cannot open preview — ' .. v:exception)
     echohl None
     return
   endtry
@@ -1597,7 +1606,7 @@ enddef
 export def GitCommit(): void
   var root: string = GitRoot()
   if empty(root)
-    echom 'vproj: Not in a git repository'
+    Error('vproj: Not in a git repository')
     return
   endif
   var msg: string = input('Commit message: ')
@@ -1619,12 +1628,12 @@ enddef
 export def GitPush(): void
   var root: string = GitRoot()
   if empty(root)
-    echom 'vproj: Not in a git repository'
+    Error('vproj: Not in a git repository')
     return
   endif
   var remote: string = system('git -C ' .. shellescape(root) .. ' remote 2>/dev/null')
   if empty(trim(remote))
-    echom 'vproj: No remote configured'
+    Error('vproj: No remote configured')
     return
   endif
   var output: string = system('git -C ' .. shellescape(root) .. ' push 2>&1')
@@ -1640,12 +1649,12 @@ enddef
 export def GitPull(): void
   var root: string = GitRoot()
   if empty(root)
-    echom 'vproj: Not in a git repository'
+    Error('vproj: Not in a git repository')
     return
   endif
   var remote: string = system('git -C ' .. shellescape(root) .. ' remote 2>/dev/null')
   if empty(trim(remote))
-    echom 'vproj: No remote configured'
+    Error('vproj: No remote configured')
     return
   endif
   var output: string = system('git -C ' .. shellescape(root) .. ' pull --ff-only 2>&1')
@@ -1661,12 +1670,12 @@ enddef
 export def GitBranchSwitch(): void
   var root: string = GitRoot()
   if empty(root)
-    echom 'vproj: Not in a git repository'
+    Error('vproj: Not in a git repository')
     return
   endif
   var branches: string = system('git -C ' .. shellescape(root) .. ' branch 2>/dev/null')
   if empty(trim(branches))
-    echom 'vproj: No branches found'
+    Error('vproj: No branches found')
     return
   endif
   echom 'Branches:'
@@ -1713,7 +1722,7 @@ def ReadDir(dir: string): list<dict<any>>
   try
     entries = readdir(norm_dir)
   catch
-    echom 'vproj: Cannot read directory: ' .. norm_dir
+    Error('vproj: Cannot read directory: ' .. norm_dir)
     return result
   endtry
   if empty(entries)
@@ -1736,8 +1745,8 @@ def ReadDir(dir: string): list<dict<any>>
   endfor
 
   # Sort each group alphabetically, case-insensitive
-  sort(dirs)
-  sort(files)
+  sort(dirs, SortByName)
+  sort(files, SortByName)
 
   result->extend(dirs)
   result->extend(files)
@@ -1961,14 +1970,12 @@ enddef
 
 def OpenFile(path: string): void
   if !filereadable(path)
-    echom 'vproj: Cannot read: ' .. path
+    Error('vproj: Cannot read: ' .. path)
     return
   endif
   # Check for binary (null bytes in first 8KB)
   if IsBinary(path)
-    echohl WarningMsg
-    echom 'vproj: Binary file: ' .. fnamemodify(path, ':t')
-    echohl None
+    Error('vproj: Binary file: ' .. fnamemodify(path, ':t')
     return
   endif
   var pane_wid: number = win_getid()
@@ -1986,7 +1993,7 @@ def OpenFile(path: string): void
       &cmdheight = saved_cmdheight
       &winminwidth = saved_minwidth
       &winminheight = saved_minheight
-      echom 'vproj: Cannot open file — ' .. v:exception
+      Error('vproj: Cannot open file — ' .. v:exception)
       return
     endtry
     &cmdheight = saved_cmdheight
@@ -2014,7 +2021,7 @@ def IsBinary(path: string): bool
   try
     blob = readblob(path, 0, 8192)
   catch
-    echom 'vproj: Cannot read binary check: ' .. path
+    Error('vproj: Cannot read binary check: ' .. path)
     return false
   endtry
   for b in blob
@@ -2101,7 +2108,7 @@ def OpenBuffer(bufnr: number): void
       &cmdheight = saved_cmdheight
       &winminwidth = saved_minwidth
       &winminheight = saved_minheight
-      echom 'vproj: Cannot open buffer — ' .. v:exception
+      Error('vproj: Cannot open buffer — ' .. v:exception)
       return
     endtry
     &cmdheight = saved_cmdheight
@@ -2142,7 +2149,7 @@ export def GrepSearch(): void
   var cmd: string = 'git -C ' .. shellescape(root) .. ' grep -n -i -z -- ' .. shellescape(pattern) .. ' 2>&1'
   var output: string = system(cmd)
   if v:shell_error != 0
-    echom 'vproj: no matches for: ' .. pattern
+    Error('vproj: no matches for: ' .. pattern)
     return
   endif
   var qflist: list<dict<any>> = []
@@ -2167,7 +2174,7 @@ export def GrepSearch(): void
     i += 2
   endwhile
   if empty(qflist)
-    echom 'vproj: no matches for: ' .. pattern
+    Error('vproj: no matches for: ' .. pattern)
     return
   endif
   setqflist([], ' ', {items: qflist, title: 'grep: ' .. pattern})
@@ -2291,7 +2298,7 @@ export def ParseVprojFile(path: string): dict<any>
   try
     file_lines = readfile(path)
   catch
-    echom 'vproj: Cannot read project file: ' .. path
+    Error('vproj: Cannot read project file: ' .. path)
     return p
   endtry
 
@@ -2314,9 +2321,7 @@ export def ParseVprojFile(path: string): dict<any>
             p[header_type] = p[header_type]->substitute('/$', '', '')
             p[header_type] = fnamemodify(p[header_type], ':p')->substitute('/$', '', '')
             if !isdirectory(p[header_type])
-              echohl WarningMsg
-              echom 'vproj: Invalid project root in .vproj: ' .. p[header_type]
-              echohl None
+              Error('vproj: Invalid project root in .vproj: ' .. p[header_type])
               p[header_type] = ''
             endif
           endif
@@ -2337,9 +2342,7 @@ export def ParseVprojFile(path: string): dict<any>
         p[section] = p[section]->substitute('/$', '', '')
         p[section] = fnamemodify(p[section], ':p')->substitute('/$', '', '')
         if !isdirectory(p[section])
-          echohl WarningMsg
-          echom 'vproj: Invalid project root in .vproj: ' .. p[section]
-          echohl None
+          Error('vproj: Invalid project root in .vproj: ' .. p[section])
           p[section] = ''
         endif
       endif
@@ -2386,14 +2389,10 @@ def WriteVprojFile(): bool
     if rename(tmp, project.vproj_file) == 0
       return true
     endif
-    echohl WarningMsg
-    echom 'vproj: Failed to write project file: ' .. project.vproj_file
-    echohl None
+    Error('vproj: Failed to write project file: ' .. project.vproj_file)
     silent! delete(tmp)
   else
-    echohl WarningMsg
-    echom 'vproj: Failed to write ' .. project.vproj_file
-    echohl None
+    Error('vproj: Failed to write ' .. project.vproj_file)
   endif
   return false
 enddef
@@ -2430,7 +2429,7 @@ def GitItems(): list<dict<any>>
   try
     entries = readdir(git_root)
   catch
-    echom 'vproj: Cannot read directory: ' .. git_root
+    Error('vproj: Cannot read directory: ' .. git_root)
     return result
   endtry
   if empty(entries)
@@ -2618,7 +2617,7 @@ def DoToggleInclude(action: string): void
     project.included_files = snap_inc_files
     project.excluded_dirs = snap_exc_dirs
     project.excluded_files = snap_exc_files
-    echom 'vproj: Failed to save project — changes reverted'
+    Error('vproj: Failed to save project — changes reverted')
   endif
   Render()
 enddef
@@ -2659,7 +2658,7 @@ export def RenameProject(): void
     if !WriteVprojFile()
       project = {}
       git_root = current_dir
-      echom 'vproj: Failed to create project file'
+      Error('vproj: Failed to create project file')
       return
     endif
     Render()
@@ -2683,12 +2682,12 @@ export def RenameProject(): void
   if !WriteVprojFile()
     project.name = old_name
     project.vproj_file = old_file
-    echom 'vproj: Failed to save renamed project — name reverted'
+    Error('vproj: Failed to save renamed project — name reverted')
     return
   endif
   if old_file != project.vproj_file && filereadable(old_file)
     if delete(old_file) != 0
-      echom 'vproj: Warning: Could not delete ' .. old_file
+      Error('vproj: Warning: Could not delete ' .. old_file)
     endif
   endif
   Render()
@@ -2773,7 +2772,7 @@ def OpenQfixEntry(item: dict<any>): void
       &cmdheight = saved_cmdheight
       &winminwidth = saved_minwidth
       &winminheight = saved_minheight
-      echom 'vproj: Cannot open qfix entry — ' .. v:exception
+      Error('vproj: Cannot open qfix entry — ' .. v:exception)
       return
     endtry
     &cmdheight = saved_cmdheight
@@ -2789,7 +2788,7 @@ def OpenQfixEntry(item: dict<any>): void
   elseif filereadable(item.filename)
     execute 'edit ' .. fnameescape(item.filename)
   else
-    echom 'vproj: Cannot open: ' .. item.filename
+    Error('vproj: Cannot open: ' .. item.filename)
     win_gotoid(pane_wid)
     return
   endif
@@ -2850,7 +2849,7 @@ def OpenCommitDetail(item: dict<any>): void
       &cmdheight = saved_cmdheight
       &winminwidth = saved_minwidth
       &winminheight = saved_minheight
-      echom 'vproj: Cannot create commit view — ' .. v:exception
+      Error('vproj: Cannot create commit view — ' .. v:exception)
       return
     endtry
     &cmdheight = saved_cmdheight
@@ -2863,7 +2862,7 @@ def OpenCommitDetail(item: dict<any>): void
     rightbelow vsplit
   catch
     win_gotoid(pane_wid)
-    echom 'vproj: Cannot create commit view — ' .. v:exception
+    Error('vproj: Cannot create commit view — ' .. v:exception)
     return
   endtry
   enew
@@ -2950,7 +2949,7 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> - <Cmd>call vproj#ExcludeItem()<CR>
 
   # Refresh
-  nnoremap <buffer> <silent> r <Cmd>call vproj#Refresh()<CR>
+  nnoremap <buffer> <silent> <nowait> r <Cmd>call vproj#Refresh()<CR>
 
   # Preview toggle
   nnoremap <buffer> <silent> p <Cmd>call vproj#TogglePreview()<CR>

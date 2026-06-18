@@ -23,11 +23,11 @@ vproj#DefineHighlights()
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
-command! -nargs=0 VprojToggle  vproj#PaneToggle()
-command! -nargs=0 VprojOpen    vproj#PaneOpen()
-command! -nargs=0 VprojClose   vproj#PaneClose()
-command! -nargs=0 VprojRefresh vproj#Refresh()
-command! -nargs=0 VprojDiag    call vproj#PaneDiagnose()
+command! -bar -nargs=0 VprojToggle  vproj#PaneToggle()
+command! -bar -nargs=0 VprojOpen    vproj#PaneOpen()
+command! -bar -nargs=0 VprojClose   vproj#PaneClose()
+command! -bar -nargs=0 VprojRefresh vproj#Refresh()
+command! -bar -nargs=0 VprojDiag    call vproj#PaneDiagnose()
 
 # ---------------------------------------------------------------------------
 # Default key mapping: F4 toggles the project pane.
@@ -40,6 +40,9 @@ if !hasmapto('<Plug>VprojToggle', 'n')
   nmap <F4> <Plug>VprojToggle
 endif
 
-# F1 / Help — toggle info column inside pane, normal help outside
-nnoremap <silent> <F1> :call vproj#HandleF1()<CR>
-nnoremap <silent> <Help> :call vproj#HandleF1()<CR>
+nnoremap <silent> <Plug>VprojF1 :call vproj#HandleF1()<CR>
+
+if !hasmapto('<Plug>VprojF1', 'n')
+  nmap <F1> <Plug>VprojF1
+  nmap <Help> <Plug>VprojF1
+endif
