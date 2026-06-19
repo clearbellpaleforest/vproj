@@ -355,6 +355,8 @@ export def PaneDiagnose(): void
   echom 'Windows: ' .. winnr('$')
   echom 'winminwidth: ' .. &winminwidth .. '  winminheight: ' .. &winminheight
   echom 'winheight: ' .. &winheight .. '  cmdheight: ' .. &cmdheight
+  echom 'laststatus: ' .. &laststatus .. '  equalalways: ' .. &equalalways
+  echom 'splitbelow: ' .. &splitbelow .. '  splitright: ' .. &splitright
   echom 'pane_bufnr: ' .. pane_bufnr .. ' (exists: ' .. (pane_bufnr > 0 && bufexists(pane_bufnr)) .. ')'
   echom 'current_mode: ' .. current_mode
   echom 'saved_shortmess: "' .. saved_shortmess .. '"'
@@ -372,31 +374,66 @@ export def PaneDiagnose(): void
   endfor
   echom ''
 
-  # Lower winminwidth/winminheight before testing splits — same as PaneOpen
+  # Report preflight state — same logic PaneOpen uses to pick a split-safe window
+  var found_clear: bool = false
+  var found_no_wfh: bool = false
+  for info in getwininfo()
+    if !getwinvar(info.winid, '&winfixheight', 0) && !getwinvar(info.winid, '&winfixwidth', 0)
+      found_clear = true
+      break
+    endif
+    if !getwinvar(info.winid, '&winfixheight', 0)
+      found_no_wfh = true
+    endif
+  endfor
+  echom 'Pane open preflight:'
+  echom '  win clear of winfixheight+winfixwidth: ' .. found_clear
+  echom '  fallback (no winfixheight): ' .. found_no_wfh
+  echom ''
+
+  # Lower winminwidth, winminheight, AND cmdheight before testing splits — same as PaneOpen
   var saved_minwidth: number = &winminwidth
   var saved_minheight: number = &winminheight
+  var saved_ch: number = &cmdheight
   set winminwidth=1 winminheight=1
+  if &cmdheight > 2
+    set cmdheight=1
+  endif
   try
-    echom 'Testing bare :new (winmin set to 1x1)...'
+    echom 'Testing splits (winmin=1x1, cmdheight=' .. &cmdheight .. '):'
+
+    echom '  :new (horizontal split)...'
     try
       new
-      echom '  :new SUCCEEDED (bufnr=' .. bufnr('%') .. ')'
+      echom '    :new SUCCEEDED (bufnr=' .. bufnr('%') .. ')'
+
+      # Test vertical rotation — same as what PaneOpen does with wincmd H/L
+      echom '  wincmd H (rotate to vertical left)...'
+      try
+        wincmd H
+        echom '    wincmd H SUCCEEDED'
+        wincmd L
+      catch
+        echom '    wincmd H FAILED: ' .. v:exception
+      endtry
+
       close
     catch
-      echom '  :new FAILED: ' .. v:exception
+      echom '    :new FAILED: ' .. v:exception
     endtry
 
-    echom 'Testing :rightbelow vertical new...'
+    echom '  :rightbelow vertical new...'
     try
       rightbelow vertical new
-      echom '  vertical new SUCCEEDED'
+      echom '    vertical new SUCCEEDED'
       close
     catch
-      echom '  vertical new FAILED: ' .. v:exception
+      echom '    vertical new FAILED: ' .. v:exception
     endtry
   finally
     &winminwidth = saved_minwidth
     &winminheight = saved_minheight
+    &cmdheight = saved_ch
   endtry
 
   echom '=== end diagnostics ==='
