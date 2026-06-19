@@ -192,6 +192,7 @@ export def PaneOpen(): void
     catch
       echom 'vproj: render error: ' .. v:exception
     endtry
+    doautocmd <nomodeline> User VprojPaneReady
     return
   endif
 
@@ -290,6 +291,7 @@ export def PaneOpen(): void
     echom 'vproj: render error: ' .. v:exception
   endtry
   SetupPaneMappings()
+  doautocmd <nomodeline> User VprojPaneReady
 enddef
 
 export def PaneClose(): void
