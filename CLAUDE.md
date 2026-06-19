@@ -3,6 +3,10 @@
 Vim project manager. A sidebar pane for browsing files, switching buffers,
 and managing project structure.
 
+**All code is Vim9Script.** Every file begins with `vim9script`. Use `def`
+functions, script-local `var` for state, `export def` for public API. Never
+write legacy `function!` or `let`/`const` in these files.
+
 ## Rules
 
 1. **Start with data.** Before drawing flows or sequences, draw the data. What
@@ -127,6 +131,12 @@ tests/
 Two source files. The plugin file declares the public surface. The autoload file
 owns all logic and state. Nothing else.
 
+## Add-on Support
+
+vproj exports `GetPaneBufnr()` so add-ons (e.g. vproj_ai) can detect the pane
+buffer and inject buffer-local mappings via BufEnter autocommand. Add-ons call
+vproj# functions; vproj has no knowledge of add-ons. Keep it that way.
+
 ## Architecture
 
 Explicit imperative flow. State lives in script-local variables at the top of
@@ -205,6 +215,7 @@ Enter on the mode menu line cycles between modes.
 | `vproj#RenameProject()` | Rename/create project (git mode) |
 | `vproj#IsPaneVisible()` | Query visibility |
 | `vproj#GetPaneWidth()` / `vproj#GetCurrentMode()` | Query state |
+| `vproj#GetPaneBufnr()` | Return pane buffer number (for add-ons) |
 | `vproj#SelectFirst()` / `vproj#SelectLast()` | Jump to first / last item |
 | `vproj#NavigateIntoFirstDir()` | Enter first subdirectory |
 | `vproj#SelectByNavChar(ch)` | Jump to item by nav character |
@@ -326,6 +337,18 @@ Run all: `vim -N -u NONE -S tests/<test_file>.vim`
 
 ## Vim9Script Notes
 
+### Version-specific pitfalls
+- **`maparg()` 5th argument (buffer number)** is NOT available in Vim 9.2. Using
+  it causes `E118: Too many arguments for function`. Use 2-arg `maparg('key', 'mode')`
+  when already in the target buffer, or `win_execute()` to check mappings remotely.
+- **`maparg()` return type**: Vim9Script may type it as `dict<any>` even with
+  `{dict}=false`. Test with the target Vim version. Omit type annotation or use
+  `any` if compatibility across Vim 9.x is needed.
+- **`exists('*FuncName')`**: For autoload functions, returns 1 only if the
+  autoload file has been sourced (usually triggered by first call). Call a known
+  function first before checking existence in tests.
+
+### General
 - `def` functions are strict: lambda vars must start with capital
 - `readdir()` in `def`: no empty string filter argument
 - Use `=~ ':$'` and `substitute()` instead of negative string slices

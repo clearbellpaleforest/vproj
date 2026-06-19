@@ -869,6 +869,10 @@ export def GetCurrentMode(): string
   return current_mode
 enddef
 
+export def GetPaneBufnr(): number
+  return pane_bufnr
+enddef
+
 # ──────────────────────────────────────────────
 # Display
 # ──────────────────────────────────────────────
