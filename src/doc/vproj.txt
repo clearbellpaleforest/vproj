@@ -177,11 +177,6 @@ Paging:
     <C-N>               Next page
     <C-P>               Previous page
 
-                                               *vproj-paging*
-Paging:
-    <C-N>               Next page
-    <C-P>               Previous page
-
 Close:
     |Q|                 Close pane
     |F4|                Close pane
@@ -235,6 +230,34 @@ Highlight groups:
     VprojDirName        Directory name (bold)
     VprojSeparator      Separator line (dark grey)
     VprojStatusLine     Git mode status line (reverse video)
+
+                                               *vproj-troubleshooting*
+Troubleshooting ~
+
+                                               *vproj-cmdheight*
+    E36 "Not enough room" on split ~
+        If you see E36 "Not enough room" when opening files, blame,
+        or diffs from the pane, check your command-line height:
+>
+            :set cmdheight?
+<
+        If the value is unusually high (above 2), Vim may not have
+        enough window space to create vertical splits. Lower it:
+>
+            :set cmdheight=1
+<
+        Or set it permanently in your vimrc:
+>
+            set cmdheight=1
+<
+        Some terminal emulators and multiplexers configure high
+        cmdheight values automatically. vproj temporarily lowers
+        cmdheight, winminwidth, and winminheight during split
+        operations to prevent E36, but persistent high values can
+        still cause issues in edge cases.
+
+        If the problem persists, run |:VprojDiag| to see current
+        window dimensions and option values.
 
 Example vimrc:
 >
