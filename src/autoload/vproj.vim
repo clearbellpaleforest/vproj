@@ -1345,6 +1345,8 @@ export def OpenDiffPreview(): void
   setlocal readonly
   setlocal nomodifiable
   nnoremap <buffer> <silent> q <Cmd>close<CR>
+  nnoremap <buffer> <silent> do <Nop>
+  nnoremap <buffer> <silent> dp <Nop>
   silent execute 'read !' .. cmd
   cursor(1, 1)
   delete _
@@ -1448,6 +1450,8 @@ export def GitBlame(): void
   setlocal readonly
   setlocal nomodifiable
   nnoremap <buffer> <silent> q <Cmd>close<CR>
+  nnoremap <buffer> <silent> do <Nop>
+  nnoremap <buffer> <silent> dp <Nop>
   silent execute 'read !git -C ' .. shellescape(root) .. ' annotate ' .. shellescape(path)
   cursor(1, 1)
   delete _
@@ -3022,6 +3026,8 @@ def OpenCommitDetail(item: dict<any>): void
   setlocal readonly
   setlocal nomodifiable
   nnoremap <buffer> <silent> q <Cmd>close<CR>
+  nnoremap <buffer> <silent> do <Nop>
+  nnoremap <buffer> <silent> dp <Nop>
   var show_cmd: string = 'git -C ' .. shellescape(root) .. ' show --stat --format=fuller ' .. shellescape(hash)
   silent execute 'read !' .. show_cmd
   cursor(1, 1)
