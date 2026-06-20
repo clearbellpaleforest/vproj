@@ -6,6 +6,7 @@ vim9script
 var pane_bufnr: number = -1
 var pane_width: number = 40
 var current_mode: string = 'file'
+var pane_open_mode: string = 'temporary'
 var selected_line: number = 1
 var current_dir: string = ''
 var items: list<dict<any>> = []
@@ -92,9 +93,35 @@ enddef
 
 export def PaneToggle(): void
   if IsPaneVisible()
-    PaneClose()
+    if pane_open_mode == 'permanent'
+      # Transition to temporary mode (stays open, will close on ESC or file open)
+      pane_open_mode = 'temporary'
+      Render()
+      doautocmd <nomodeline> User VprojPaneOpenedTemporary
+    else
+      PaneClose()
+    endif
   else
+    pane_open_mode = 'temporary'
     PaneOpen()
+    doautocmd <nomodeline> User VprojPaneOpenedTemporary
+  endif
+enddef
+
+export def PaneTogglePermanent(): void
+  if IsPaneVisible()
+    if pane_open_mode == 'temporary'
+      # Transition to permanent mode (stays open, requires explicit close)
+      pane_open_mode = 'permanent'
+      Render()
+      doautocmd <nomodeline> User VprojPaneOpenedPermanent
+    else
+      PaneClose()
+    endif
+  else
+    pane_open_mode = 'permanent'
+    PaneOpen()
+    doautocmd <nomodeline> User VprojPaneOpenedPermanent
   endif
 enddef
 
@@ -305,8 +332,13 @@ export def PaneClose(): void
         try
           new
         catch
-          # Can't create spare window — close directly.
-          # HandleBufWipeout runs regardless so state always resets.
+          try
+            enew
+          catch
+            # Terminal too small for any spare window.
+            # Preserve pane state rather than corrupting it.
+            return
+          endtry
         endtry
       endif
       if win_id2win(pane_wid) > 0
@@ -315,6 +347,7 @@ export def PaneClose(): void
     endif
   endif
   HandleBufWipeout()
+  doautocmd <nomodeline> User VprojPaneClosed
 enddef
 
 export def HandleBufWipeout(): void
@@ -323,6 +356,7 @@ export def HandleBufWipeout(): void
   match_ids = []
   cursor_match_id = -1
   pane_bufnr = -1
+  pane_open_mode = 'temporary'
   selected_line = FirstSelectableLine()
   items = []
   log_entries = []
@@ -731,10 +765,16 @@ export def SelectCurrent(): void
       endif
     else
       OpenFile(get(item, 'path', ''))
+      if pane_open_mode == 'temporary'
+        PaneClose()
+      endif
     endif
   elseif current_mode == 'buf'
     if has_key(item, 'bufnr')
       OpenBuffer(item.bufnr)
+      if pane_open_mode == 'temporary'
+        PaneClose()
+      endif
     endif
   elseif current_mode == 'git'
     if get(item, 'is_parent', false)
@@ -743,14 +783,23 @@ export def SelectCurrent(): void
       NavigateInto(get(item, 'name', ''))
     else
       OpenFile(get(item, 'path', ''))
+      if pane_open_mode == 'temporary'
+        PaneClose()
+      endif
     endif
   elseif current_mode == 'qfix'
     if has_key(item, 'filename') && has_key(item, 'lnum')
       OpenQfixEntry(item)
+      if pane_open_mode == 'temporary'
+        PaneClose()
+      endif
     endif
   elseif current_mode == 'log'
     if has_key(item, 'hash')
       OpenCommitDetail(item)
+      if pane_open_mode == 'temporary'
+        PaneClose()
+      endif
     endif
   endif
 enddef
@@ -970,6 +1019,9 @@ def Render(): void
     endwhile
     if selected_line > len(lines)
       selected_line = len(lines)
+      while selected_line > 0 && SkipNonSelectable(selected_line)
+        selected_line -= 1
+      endwhile
     endif
   endif
   MoveCursor(selected_line)
@@ -1122,10 +1174,8 @@ def PageSlice(all_items: list<dict<any>>): list<dict<any>>
 enddef
 
 def BuildPageNavRow(): string
-  if total_pages < 1
-    total_pages = 1
-  endif
-  var text: string = printf(' >>> Page %d/%d  Ctrl-N Ctrl-P <<< ', current_page + 1, total_pages)
+  var tp: number = total_pages < 1 ? 1 : total_pages
+  var text: string = printf(' >>> Page %d/%d  Ctrl-N Ctrl-P <<< ', current_page + 1, tp)
   if strwidth(text) > pane_width
     text = strcharpart(text, 0, pane_width)
   endif
@@ -1386,8 +1436,9 @@ export def DiscardChanges(): void
   endif
 
   if st == "?"
-    delete(path)
-    if !filereadable(path)
+    var abs_path: string = fnamemodify(path, ':p')
+    delete(abs_path)
+    if !filereadable(abs_path)
       echom "Deleted: " .. name
     else
       echom "Failed to delete: " .. name
@@ -2274,7 +2325,6 @@ def OpenBuffer(bufnr: number): void
   endif
   execute 'buffer ' .. bufnr
   win_gotoid(pane_wid)
-  PaneClose()
 enddef
 
 export def PromptFilter(): void
@@ -2859,7 +2909,10 @@ def QfixItems(): list<dict<any>>
     if !get(entry, 'valid', true)
       continue
     endif
-    var fname: string = bufname(get(entry, 'bufnr', 0))
+    var fname: string = get(entry, 'filename', '')
+    if empty(fname) && get(entry, 'bufnr', 0) > 0
+      fname = bufname(entry.bufnr)
+    endif
     if empty(fname)
       if has_key(entry, 'module') && !empty(entry.module)
         fname = entry.module
@@ -2958,7 +3011,6 @@ def OpenQfixEntry(item: dict<any>): void
     execute 'normal! ' .. get(item, 'col', 0) .. '|'
   endif
   win_gotoid(pane_wid)
-  PaneClose()
 enddef
 
 def LogItems(): list<dict<any>>
@@ -3062,6 +3114,23 @@ def BuildLogLines(log_items: list<dict<any>>): list<string>
   return result
 enddef
 
+export def HandleEsc(): void
+  if IsPaneVisible() && pane_open_mode == 'temporary'
+    PaneClose()
+  endif
+enddef
+
+export def HandlePaneQ(): void
+  if !IsPaneVisible()
+    return
+  endif
+  if pane_open_mode == 'permanent'
+    PaneClose()
+  else
+    SwitchMode('qfix')
+  endif
+enddef
+
 # ──────────────────────────────────────────────
 # Pane setup
 # ──────────────────────────────────────────────
@@ -3094,7 +3163,7 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> T <Cmd>call vproj#ToggleTreeView()<CR>
   nnoremap <buffer> <silent> b <Cmd>call vproj#SwitchMode('buf')<CR>
   nnoremap <buffer> <silent> <nowait> g <Cmd>call vproj#SwitchMode('git')<CR>
-  nnoremap <buffer> <silent> <nowait> q <Cmd>call vproj#SwitchMode('qfix')<CR>
+  nnoremap <buffer> <silent> <nowait> q <Cmd>call HandlePaneQ()<CR>
   nnoremap <buffer> <silent> L <Cmd>call vproj#SwitchMode('log')<CR>
 
   # Include / exclude (git mode)
@@ -3115,8 +3184,8 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> x <Cmd>call vproj#CloseBuffer()<CR>
 
   # Nav indicator shift
-  nnoremap <buffer> <silent> <TAB> <Cmd>call vproj#ShiftNavForward()<CR>
-  nnoremap <buffer> <silent> <S-TAB> <Cmd>call vproj#ShiftNavBackward()<CR>
+  nnoremap <buffer> <silent> > <Cmd>call vproj#ShiftNavForward()<CR>
+  nnoremap <buffer> <silent> <lt> <Cmd>call vproj#ShiftNavBackward()<CR>
 
   # Filter
   nnoremap <buffer> <silent> / <Cmd>call vproj#PromptFilter()<CR>
@@ -3151,6 +3220,9 @@ def SetupPaneMappings(): void
   # Close pane
   nnoremap <buffer> <silent> Q <Cmd>call vproj#PaneClose()<CR>
   nnoremap <buffer> <silent> <F4> <Cmd>call vproj#PaneClose()<CR>
+
+  # ESC closes pane in temporary mode
+  nnoremap <buffer> <silent> <Esc> <Cmd>call vproj#HandleEsc()<CR>
 
   # Parent directory shortcut
   nnoremap <buffer> <silent> . <Cmd>call vproj#NavigateUp()<CR>

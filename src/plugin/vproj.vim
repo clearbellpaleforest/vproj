@@ -30,14 +30,20 @@ command! -bar -nargs=0 VprojRefresh vproj#Refresh()
 command! -bar -nargs=0 VprojDiag    call vproj#PaneDiagnose()
 
 # ---------------------------------------------------------------------------
-# Default key mapping: F4 toggles the project pane.
+# Default key mapping: Tab toggles the project pane (temporary mode).
+# Shift-Tab toggles in permanent mode.
 # Uses <Plug> indirection so users can remap in their vimrc without
 # clobbering the default.
 # ---------------------------------------------------------------------------
 nnoremap <silent> <Plug>VprojToggle :VprojToggle<CR>
+nnoremap <silent> <Plug>VprojTogglePermanent :call vproj#PaneTogglePermanent()<CR>
 
 if !hasmapto('<Plug>VprojToggle', 'n')
-  nmap <F4> <Plug>VprojToggle
+  nmap <Tab> <Plug>VprojToggle
+endif
+
+if !hasmapto('<Plug>VprojTogglePermanent', 'n')
+  nmap <S-Tab> <Plug>VprojTogglePermanent
 endif
 
 nnoremap <silent> <Plug>VprojF1 :call vproj#HandleF1()<CR>

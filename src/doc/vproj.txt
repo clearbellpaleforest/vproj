@@ -19,7 +19,10 @@ CONTENTS                                           *vproj-contents*
 vproj is a project manager sidebar for Vim. Browse files, switch buffers,
 and manage project structure from a vertical pane.
 
-Press |F4| to toggle the pane, or use |:VprojToggle|.
+Press |Tab| to toggle the pane (temporary mode), |Shift-Tab| for permanent
+mode, or use |:VprojToggle|. In temporary mode, the pane auto-closes when
+you open a file, press ESC, or press Tab again. In permanent mode, the
+pane stays open until you press Shift-Tab again or run |:VprojClose|.
 
 Installation: clone the repository and run install.sh, or create symlinks
 manually to ~/.vim/pack/bundle/start/vproj/.
@@ -28,7 +31,9 @@ manually to ~/.vim/pack/bundle/start/vproj/.
 2. COMMANDS                                         *vproj-commands*
 
 :VprojToggle                                        *:VprojToggle*
-    Toggle the project pane open or closed.
+    Toggle the project pane open (temporary mode) or closed.
+    If the pane is open in permanent mode, switches to temporary.
+    See |vproj-pane-modes|.
 
 :VprojOpen                                          *:VprojOpen*
     Open the project pane.
@@ -168,8 +173,8 @@ Actions:
     <F1>                Toggle info column
 
 Quick Nav:                                       *vproj-nav-char*
-    <Tab>               Shift nav indicators forward
-    <S-Tab>             Shift nav indicators backward
+    >                   Shift nav indicators forward
+    <                   Shift nav indicators backward
     |a|-|z|, |A|-|Z|, |1|-|9|  Jump to item by nav character
 
                                                *vproj-paging*
@@ -180,9 +185,24 @@ Paging:
 Close:
     |Q|                 Close pane
     |F4|                Close pane
+    |Esc|               Close pane (temporary mode only)
 
 Global (outside pane):
-    <F4>                Toggle pane open / closed
+    <Tab>               Open pane (temporary mode, auto-closes)
+    <S-Tab>             Open pane (permanent mode, stays open)
+
+Pane Modes:                                      *vproj-pane-modes*
+    Temporary mode (Tab): The pane auto-closes when you open a file,
+    press |Esc| in the pane, or press |Tab| again. This mode is for
+    quick file/buffer access — no extra keystroke to dismiss.
+
+    Permanent mode (Shift-Tab): The pane stays open until you press
+    |Shift-Tab| again, press |q| (with the pane focused), or close
+    the pane buffer via |:bdelete|. This mode is for extended project
+    management sessions.
+
+    Pressing the alternate toggle key while the pane is open
+    transitions between modes without closing the pane.
 
 ==============================================================================
 5. CONFIGURATION                                   *vproj-config*
@@ -264,9 +284,13 @@ Example vimrc:
     " Show hidden files
     let g:vproj_show_dotfiles = 1
 
-    " Remap toggle to F2
+    " Remap temporary toggle to F2
     nmap <F2> <Plug>VprojToggle
-    nunmap <F4>
+    nunmap <Tab>
+
+    " Remap permanent toggle to F3
+    nmap <F3> <Plug>VprojTogglePermanent
+    nunmap <S-Tab>
 <
 
 ==============================================================================
