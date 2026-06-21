@@ -2474,7 +2474,9 @@ def FindVprojFile(dir: string): string
         return m
       endif
     endfor
-    d = fnamemodify(d, ':h')
+    var parent = fnamemodify(d, ':h')
+    if parent == d | break | endif
+    d = parent
   endwhile
   return ''
 enddef
@@ -3377,7 +3379,7 @@ def LoadSession(): void
     var val: string = trim(line[eq + 1 : ])
     if key == 'mode' && !empty(val) && index(MODE_KEYS, val) >= 0
       saved_mode = val
-    elseif key == 'dir' && !empty(val) && isdirectory(val)
+    elseif key == 'dir' && !empty(val) && isdirectory(val) && val !~ '^//[^/]'
       current_dir = val
     elseif key == 'width'
       var w: number = str2nr(val)
