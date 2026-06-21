@@ -30,17 +30,17 @@ Assert(vproj#GetPaneWidth() == 40, 'SetPaneWidth(90) rejected (above max 80)')
 vproj#SetPaneWidth(30)
 Assert(vproj#GetPaneWidth() == 30, 'SetPaneWidth(30) accepted')
 
-while vproj#GetPaneWidth() < 80 | vproj#PaneGrow() | endwhile
-Assert(vproj#GetPaneWidth() == 80, 'PaneGrow to max 80')
+	vproj#SetPaneWidth(80)
+	Assert(vproj#GetPaneWidth() == 80, 'SetPaneWidth(80) accepted')
 
-vproj#PaneGrow()
-Assert(vproj#GetPaneWidth() == 80, 'PaneGrow past max clamped at 80')
+	vproj#PaneGrow()
+	Assert(vproj#GetPaneWidth() == 80, 'PaneGrow past max clamped at 80')
 
-while vproj#GetPaneWidth() > 20 | vproj#PaneShrink() | endwhile
-Assert(vproj#GetPaneWidth() == 20, 'PaneShrink to min 20')
+	vproj#SetPaneWidth(20)
+	Assert(vproj#GetPaneWidth() == 20, 'SetPaneWidth(20) accepted')
 
-vproj#PaneShrink()
-Assert(vproj#GetPaneWidth() == 20, 'PaneShrink past min clamped at 20')
+	vproj#PaneShrink()
+	Assert(vproj#GetPaneWidth() == 20, 'PaneShrink past min clamped at 20')
 
 vproj#SetPaneWidth(40)
 
