@@ -3221,7 +3221,6 @@ def SetupPaneMappings(): void
 
   # Close pane
   nnoremap <buffer> <silent> Q <Cmd>call vproj#PaneClose()<CR>
-  nnoremap <buffer> <silent> <F4> <Cmd>call vproj#PaneClose()<CR>
 
   # ESC closes pane in temporary mode
   nnoremap <buffer> <silent> <Esc> <Cmd>call vproj#HandleEsc()<CR>

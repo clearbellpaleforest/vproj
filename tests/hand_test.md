@@ -6,7 +6,7 @@ Run from the vproj project root:
 vim -N -u NONE --cmd 'set rtp+=src' --cmd 'runtime! plugin/vproj.vim'
 ```
 
-Press `F4` to open the pane, then work through each section.
+Press `Tab` to open the pane, then work through each section.
 
 ## Navigation
 
@@ -87,8 +87,8 @@ Navigate to a git-tracked file in file mode (or use git/log mode):
 ## Close
 
 - [ ] `Q` — close pane
-- [ ] `<F4>` — close pane (inside the pane)
-- [ ] `<F4>` — toggle pane open/closed (outside the pane, globally)
+- [ ] `Tab` — close pane (temporary mode, inside the pane)
+- [ ] `Tab` — toggle pane open/closed (outside the pane, globally)
 
 ## Passthrough — Standard Vim Keys
 

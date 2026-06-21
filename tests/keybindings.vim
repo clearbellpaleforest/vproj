@@ -244,6 +244,7 @@ endtry
 # ──────────────────────────────────────────────
 echom '--- Single Window File Open ---'
 Setup()
+vproj#PaneTogglePermanent()
 
 # Close the non-pane window so only pane remains (winnr('$') == 1)
 wincmd w

@@ -38,9 +38,9 @@ ShowState('Step 1: Closed')
 
 # --- STEP 2: Open pane ---
 echom ''
-echom 'STEP 2: Press F4 to open — cursor should be on first file item (line 3)'
+echom 'STEP 2: Press Tab to open — cursor should be on first file item (line 3)'
 vproj#PaneOpen()
-ShowState('Step 2: After F4 (PaneOpen)')
+ShowState('Step 2: After Tab (PaneOpen)')
 
 # --- STEP 3: Press j to move down ---
 echom ''
