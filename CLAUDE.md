@@ -103,7 +103,7 @@ state. `docs/` is design reference material — not shipped with the plugin.
 
 ```
 src/
-├── plugin/vproj.vim           # Entry point — commands, default F4 mapping
+├── plugin/vproj.vim           # Entry point — commands, default Tab mapping
 ├── autoload/vproj.vim         # All logic — Vim9Script
 └── doc/
     ├── vproj.txt               # Help file
@@ -257,7 +257,7 @@ Buffer-local (only active in the pane):
 | r | Refresh pane |
 | x | Close selected buffer (buf mode) |
 | +/- | Include / exclude item (git mode) |
-| Q, F4 | Close pane |
+| Q | Close pane |
 | . | Parent directory |
 | Ctrl-T / Ctrl-B | Jump to first / last item |
 | Ctrl-K / Ctrl-J | Parent dir / enter first subdir |
@@ -285,7 +285,7 @@ Buffer-local (only active in the pane):
 
 `:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`
 
-Default mapping: `<F4>` toggles pane (uses `<Plug>VprojToggle` indirection).
+Default mapping: `<Tab>` toggles pane (uses `<Plug>VprojToggle` indirection).
 
 ## .vproj File Format
 

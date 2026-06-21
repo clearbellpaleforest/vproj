@@ -3,7 +3,7 @@ vim9script
 # plugin/vproj.vim — VPROJ entry point.
 #
 # Loads the project pane and registers commands and default key mappings.
-# Stage 1 (ADR-012): Pane Infrastructure — toggle, open, close via F4.
+# Stage 1 (ADR-012): Pane Infrastructure — toggle, open, close via Tab.
 #
 # Commands:
 #   :VprojToggle  — Toggle the project pane open/closed.

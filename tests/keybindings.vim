@@ -167,7 +167,7 @@ execute "normal \<Left>"
 Assert(vproj#GetPaneWidth() == w_before, '<Left> shrinks pane')
 
 # ──────────────────────────────────────────────
-# SECTION 7: Close keys (q, F4)
+# SECTION 7: Close keys (q)
 # ──────────────────────────────────────────────
 echom '--- Close ---'
 
@@ -179,9 +179,9 @@ Assert(!vproj#IsPaneVisible(), 'Q closes pane')
 vproj#PaneOpen()
 Assert(vproj#IsPaneVisible(), 'reopen after Q')
 
-# F4 — close (may not send in headless, test the function path)
+# PaneClose function path
 vproj#PaneClose()
-Assert(!vproj#IsPaneVisible(), 'F4/close functions correctly')
+Assert(!vproj#IsPaneVisible(), 'PaneClose functions correctly')
 
 # ──────────────────────────────────────────────
 # SECTION 8: Passthrough keys (Vim defaults untouched)

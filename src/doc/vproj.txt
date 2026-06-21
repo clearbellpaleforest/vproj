@@ -184,7 +184,6 @@ Paging:
 
 Close:
     |Q|                 Close pane
-    |F4|                Close pane
     |Esc|               Close pane (temporary mode only)
 
 Global (outside pane):
