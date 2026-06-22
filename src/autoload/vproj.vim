@@ -357,10 +357,10 @@ export def HandleBufWipeout(): void
   cursor_match_id = -1
   pane_bufnr = -1
   pane_open_mode = 'temporary'
+  current_mode = 'file'
   selected_line = FirstSelectableLine()
   items = []
   log_entries = []
-  current_mode = 'file'
   current_dir = ''
   git_root = ''
   project = {}
@@ -734,8 +734,8 @@ export def SelectCurrent(): void
     return
   endif
 
-  # Git mode: status line (line 2) triggers rename
-  if current_mode == 'git' && selected_line == 2
+  # Git mode: status line triggers rename
+  if current_mode == 'git' && selected_line == GIT_STATUS_LINE
     RenameProject()
     return
   endif
@@ -818,9 +818,7 @@ export def SwitchMode(key: string): void
   current_mode = key
   var cwd: string = getcwd()
   if key != 'git'
-    if empty(current_dir)
-      current_dir = empty(cwd) ? expand('~') : cwd
-    endif
+    current_dir = empty(cwd) ? expand('~') : cwd
   endif
   if key == 'git'
     var vproj_path: string = FindVprojFile(current_dir)
@@ -866,6 +864,10 @@ export def SwitchMode(key: string): void
   log_entries = []
   tree_view_active = false
   expanded_dirs = {}
+  if key != 'git'
+    project = {}
+    git_root = ''
+  endif
   InvalidateGitCache()
   Render()
 enddef
@@ -1196,7 +1198,8 @@ def GitRoot(): string
     return git_root_cache
   endif
   var root: string = trim(system('git rev-parse --show-toplevel 2>/dev/null'))
-  if v:shell_error == 0
+  var shell_err: number = v:shell_error
+  if shell_err == 0
     git_root_cache = root
     return root
   endif
@@ -1208,7 +1211,8 @@ def GitBranch(): string
     return git_branch_cache
   endif
   var branch: string = trim(system('git branch --show-current 2>/dev/null'))
-  if v:shell_error == 0
+  var shell_err: number = v:shell_error
+  if shell_err == 0
     git_branch_cache = branch
     return branch
   endif
@@ -1224,7 +1228,8 @@ def GitStatusMap(): dict<string>
     return {}
   endif
   var output: string = system('git -C ' .. shellescape(root) .. ' status --porcelain 2>/dev/null')
-  if v:shell_error != 0
+  var shell_err: number = v:shell_error
+  if shell_err != 0
     return {}
   endif
   var result: dict<string> = {}
@@ -1452,7 +1457,7 @@ export def DiscardChanges(): void
       echom "Reverted: " .. name
     endif
   elseif st == "D"
-    system("git checkout -- " .. shellescape(path) .. " 2>/dev/null")
+    system("git checkout HEAD -- " .. shellescape(path) .. " 2>/dev/null")
     if v:shell_error == 0
       echom "Restored: " .. name
     endif
@@ -2002,7 +2007,7 @@ enddef
 # Tree view (file mode — T toggles)
 # ──────────────────────────────────────────────
 
-def TreeItems(dir: string, depth: number = 0, include_parent: bool = true): list<dict<any>>
+def TreeItems(dir: string, depth: number = 0, include_parent: bool = true, visited: dict<number> = {}): list<dict<any>>
   var result: list<dict<any>> = []
   var entries: list<dict<any>> = ReadDir(dir)
 
@@ -2014,8 +2019,9 @@ def TreeItems(dir: string, depth: number = 0, include_parent: bool = true): list
     entry.depth = depth
     result->add(entry)
     if entry.is_dir && !get(entry, 'is_parent', false)
-      if has_key(expanded_dirs, entry.path)
-        var children: list<dict<any>> = TreeItems(entry.path, depth + 1, false)
+      if has_key(expanded_dirs, entry.path) && !has_key(visited, entry.path)
+        visited[entry.path] = 1
+        var children: list<dict<any>> = TreeItems(entry.path, depth + 1, false, visited)
         result->extend(children)
       endif
     endif
@@ -2353,13 +2359,17 @@ export def GrepSearch(): void
   endif
   var cmd: string = 'git -C ' .. shellescape(root) .. ' grep -n -i -z -- ' .. shellescape(pattern) .. ' 2>&1'
   var output: string = system(cmd)
-  if v:shell_error != 0
+  var shell_err: number = v:shell_error
+  if shell_err != 0
     Error('vproj: no matches for: ' .. pattern)
     return
   endif
   var qflist: list<dict<any>> = []
   var nul: string = nr2char(0)
   var parts: list<string> = split(output, nul)
+  if len(parts) % 2 != 0
+    parts = parts[: -2]
+  endif
   var i: number = 0
   while i + 1 < len(parts)
     var fname: string = parts[i]
@@ -2446,7 +2456,12 @@ export def CloseBuffer(): void
     return
   endif
   if has_key(item, 'bufnr')
-    execute 'bdelete ' .. item.bufnr
+    try
+      execute 'bdelete! ' .. item.bufnr
+    catch
+      Error('vproj: Cannot close buffer — ' .. v:exception)
+      return
+    endtry
     if !bufexists(item.bufnr)
       selected_line = FirstSelectableLine()
       current_page = 0
@@ -2860,7 +2875,14 @@ export def RenameProject(): void
       echom 'vproj: Project name cannot contain path separators'
       return
     endif
-    project = {name: new_name, root: current_dir, vproj_file: current_dir .. '/' .. new_name .. '.vproj', included_dirs: [], included_files: [], excluded_dirs: [], excluded_files: []}
+    var target_path: string = current_dir .. '/' .. new_name .. '.vproj'
+    if filereadable(target_path)
+      var overwrite: string = tolower(input(target_path .. ' already exists. Overwrite? (y/N): '))
+      if overwrite != 'y'
+        return
+      endif
+    endif
+    project = {name: new_name, root: current_dir, vproj_file: target_path, included_dirs: [], included_files: [], excluded_dirs: [], excluded_files: []}
     git_root = current_dir
     if !WriteVprojFile()
       project = {}
