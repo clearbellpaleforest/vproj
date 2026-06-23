@@ -63,6 +63,25 @@ const AUTOGROUP: string = 'VprojPane'
 var match_ids: list<number> = []
 var cursor_match_id: number = -1
 var total_pages: number = 0
+var CmdheightNest: number = 0
+var CmdheightSaved: number = 0
+
+def LowerCmdheight(): void
+  if CmdheightNest == 0
+    CmdheightSaved = &cmdheight
+    if CmdheightSaved > 2
+      set cmdheight=1
+    endif
+  endif
+  CmdheightNest += 1
+enddef
+
+def RestoreCmdheight(): void
+  CmdheightNest -= 1
+  if CmdheightNest == 0
+    &cmdheight = CmdheightSaved
+  endif
+enddef
 
 def Error(msg: string): void
   echohl ErrorMsg
@@ -97,14 +116,14 @@ export def PaneToggle(): void
       # Transition to temporary mode (stays open, will close on ESC or file open)
       pane_open_mode = 'temporary'
       Render()
-      doautocmd <nomodeline> User VprojPaneOpenedTemporary
+      silent! doautocmd <nomodeline> User VprojPaneOpenedTemporary
     else
       PaneClose()
     endif
   else
     pane_open_mode = 'temporary'
     PaneOpen()
-    doautocmd <nomodeline> User VprojPaneOpenedTemporary
+    silent! doautocmd <nomodeline> User VprojPaneOpenedTemporary
   endif
 enddef
 
@@ -114,14 +133,14 @@ export def PaneTogglePermanent(): void
       # Transition to permanent mode (stays open, requires explicit close)
       pane_open_mode = 'permanent'
       Render()
-      doautocmd <nomodeline> User VprojPaneOpenedPermanent
+      silent! doautocmd <nomodeline> User VprojPaneOpenedPermanent
     else
       PaneClose()
     endif
   else
     pane_open_mode = 'permanent'
     PaneOpen()
-    doautocmd <nomodeline> User VprojPaneOpenedPermanent
+    silent! doautocmd <nomodeline> User VprojPaneOpenedPermanent
   endif
 enddef
 
@@ -156,9 +175,13 @@ export def PaneOpen(): void
   if pane_bufnr > 0 && bufexists(pane_bufnr)
     # Switch to a window without winfixheight/winfixwidth so splits succeed.
     # Plugins like NERDTree/Tagbar set these, which may block splits (E36).
+    # Only search windows in the current tab — do not switch tabs.
+    var current_tab: number = tabpagenr()
     var found_clear: bool = false
     for info in getwininfo()
-      if !getwinvar(info.winid, '&winfixheight', 0) && !getwinvar(info.winid, '&winfixwidth', 0)
+      if get(info, 'tabpage', 0) == current_tab
+          && !getwinvar(info.winid, '&winfixheight', 0)
+          && !getwinvar(info.winid, '&winfixwidth', 0)
         win_gotoid(info.winid)
         found_clear = true
         break
@@ -167,24 +190,22 @@ export def PaneOpen(): void
     if !found_clear
       # Fall back: find window without winfixheight (needed for :new)
       for info in getwininfo()
-        if !getwinvar(info.winid, '&winfixheight', 0)
+        if get(info, 'tabpage', 0) == current_tab
+            && !getwinvar(info.winid, '&winfixheight', 0)
           win_gotoid(info.winid)
           found_clear = true
           break
         endif
       endfor
       if !found_clear
-        setlocal winfixheight=0
+        setwinvar(win_getid(), '&winfixheight', 0)
+        setwinvar(win_getid(), '&winfixwidth', 0)
       endif
-      setlocal winfixwidth=0
     endif
     var saved_minwidth: number = &winminwidth
     var saved_minheight: number = &winminheight
-    var saved_cmdheight: number = &cmdheight
+    LowerCmdheight()
     set winminwidth=1 winminheight=1
-    if &cmdheight > 2
-      set cmdheight=1
-    endif
     try
       try
         new
@@ -204,7 +225,7 @@ export def PaneOpen(): void
     finally
       &winminwidth = saved_minwidth
       &winminheight = saved_minheight
-      &cmdheight = saved_cmdheight
+      RestoreCmdheight()
     endtry
     silent! execute 'vert resize ' .. pane_width
     selected_line = FirstSelectableLine()
@@ -219,14 +240,18 @@ export def PaneOpen(): void
     catch
       echom 'vproj: render error: ' .. v:exception
     endtry
-    doautocmd <nomodeline> User VprojPaneReady
+    silent! doautocmd <nomodeline> User VprojPaneReady
     return
   endif
 
   # Switch to a window without winfixheight/winfixwidth so splits succeed.
+  # Only search windows in the current tab — do not switch tabs.
+  var current_tab: number = tabpagenr()
   var found_clear: bool = false
   for info in getwininfo()
-    if !getwinvar(info.winid, '&winfixheight', 0) && !getwinvar(info.winid, '&winfixwidth', 0)
+    if get(info, 'tabpage', 0) == current_tab
+        && !getwinvar(info.winid, '&winfixheight', 0)
+        && !getwinvar(info.winid, '&winfixwidth', 0)
       win_gotoid(info.winid)
       found_clear = true
       break
@@ -234,16 +259,17 @@ export def PaneOpen(): void
   endfor
   if !found_clear
     for info in getwininfo()
-      if !getwinvar(info.winid, '&winfixheight', 0)
+      if get(info, 'tabpage', 0) == current_tab
+          && !getwinvar(info.winid, '&winfixheight', 0)
         win_gotoid(info.winid)
         found_clear = true
         break
       endif
     endfor
     if !found_clear
-      setlocal winfixheight=0
+      setwinvar(win_getid(), '&winfixheight', 0)
+      setwinvar(win_getid(), '&winfixwidth', 0)
     endif
-    setlocal winfixwidth=0
   endif
   # Open as horizontal split first — always succeeds regardless of
   # winfixwidth, narrow terms, or complex window layouts. Then try to
@@ -251,11 +277,8 @@ export def PaneOpen(): void
   # If rotation fails, the pane stays horizontal at the bottom.
   var saved_minwidth: number = &winminwidth
   var saved_minheight: number = &winminheight
-  var saved_cmdheight: number = &cmdheight
+  LowerCmdheight()
   set winminwidth=1 winminheight=1
-  if &cmdheight > 2
-    set cmdheight=1
-  endif
   try
     try
       new
@@ -275,7 +298,7 @@ export def PaneOpen(): void
   finally
     &winminwidth = saved_minwidth
     &winminheight = saved_minheight
-    &cmdheight = saved_cmdheight
+    RestoreCmdheight()
   endtry
   var new_buf: number = bufnr('%')
   var new_wid: number = win_getid()
@@ -318,13 +341,13 @@ export def PaneOpen(): void
     echom 'vproj: render error: ' .. v:exception
   endtry
   SetupPaneMappings()
-  doautocmd <nomodeline> User VprojPaneReady
+  silent! doautocmd <nomodeline> User VprojPaneReady
 enddef
 
 export def PaneClose(): void
   ClosePreview()
   SaveSession()
-  execute 'augroup ' .. AUTOGROUP .. ' | autocmd! | augroup END'
+  var did_enew: bool = false
   if pane_bufnr > 0 && bufexists(pane_bufnr)
     var pane_wid: number = win_getid(bufwinnr(pane_bufnr))
     if pane_wid > 0
@@ -334,6 +357,8 @@ export def PaneClose(): void
         catch
           try
             enew
+            # Replaced buffer in last window — skip :close (would E444).
+            did_enew = true
           catch
             # Terminal too small for any spare window.
             # Preserve pane state rather than corrupting it.
@@ -341,13 +366,14 @@ export def PaneClose(): void
           endtry
         endtry
       endif
-      if win_id2win(pane_wid) > 0
+      if !did_enew && win_id2win(pane_wid) > 0
         win_execute(pane_wid, 'close')
       endif
     endif
   endif
+  execute 'augroup ' .. AUTOGROUP .. ' | autocmd! | augroup END'
   HandleBufWipeout()
-  doautocmd <nomodeline> User VprojPaneClosed
+  silent! doautocmd <nomodeline> User VprojPaneClosed
 enddef
 
 export def HandleBufWipeout(): void
@@ -430,11 +456,8 @@ export def PaneDiagnose(): void
   # Lower winminwidth, winminheight, AND cmdheight before testing splits — same as PaneOpen
   var saved_minwidth: number = &winminwidth
   var saved_minheight: number = &winminheight
-  var saved_ch: number = &cmdheight
+  LowerCmdheight()
   set winminwidth=1 winminheight=1
-  if &cmdheight > 2
-    set cmdheight=1
-  endif
   try
     echom 'Testing splits (winmin=1x1, cmdheight=' .. &cmdheight .. '):'
 
@@ -469,7 +492,7 @@ export def PaneDiagnose(): void
   finally
     &winminwidth = saved_minwidth
     &winminheight = saved_minheight
-    &cmdheight = saved_ch
+    RestoreCmdheight()
   endtry
 
   echom '=== end diagnostics ==='
@@ -765,16 +788,10 @@ export def SelectCurrent(): void
       endif
     else
       OpenFile(get(item, 'path', ''))
-      if pane_open_mode == 'temporary'
-        PaneClose()
-      endif
     endif
   elseif current_mode == 'buf'
     if has_key(item, 'bufnr')
       OpenBuffer(item.bufnr)
-      if pane_open_mode == 'temporary'
-        PaneClose()
-      endif
     endif
   elseif current_mode == 'git'
     if get(item, 'is_parent', false)
@@ -783,23 +800,14 @@ export def SelectCurrent(): void
       NavigateInto(get(item, 'name', ''))
     else
       OpenFile(get(item, 'path', ''))
-      if pane_open_mode == 'temporary'
-        PaneClose()
-      endif
     endif
   elseif current_mode == 'qfix'
     if has_key(item, 'filename') && has_key(item, 'lnum')
       OpenQfixEntry(item)
-      if pane_open_mode == 'temporary'
-        PaneClose()
-      endif
     endif
   elseif current_mode == 'log'
     if has_key(item, 'hash')
       OpenCommitDetail(item)
-      if pane_open_mode == 'temporary'
-        PaneClose()
-      endif
     endif
   endif
 enddef
@@ -1536,20 +1544,19 @@ def OpenPreview(): void
     ClosePreview()
   endif
   var pane_wid: number = win_getid()
-  # Move to a non-pane window if one exists, so botright vnew splits
-  # the file area instead of nesting inside the pane
+  # Move to a non-pane window if one exists in the current tab, so botright vnew
+  # splits the file area instead of nesting inside the pane.
+  # Only search windows in the current tab — do not switch tabs.
+  var current_tab: number = tabpagenr()
   for info in getwininfo()
-    if info.winid != pane_wid
+    if info.winid != pane_wid && get(info, 'tabpage', 0) == current_tab
       win_gotoid(info.winid)
       break
     endif
   endfor
-  var saved_cmdheight: number = &cmdheight
+  LowerCmdheight()
   var saved_minwidth: number = &winminwidth
   var saved_minheight: number = &winminheight
-  if &cmdheight > 2
-    set cmdheight=1
-  endif
   set winminwidth=1 winminheight=1
   var before_buf: number = bufnr('%')
   try
@@ -1559,7 +1566,7 @@ def OpenPreview(): void
     Error('vproj: Cannot open preview — ' .. v:exception)
     return
   finally
-    &cmdheight = saved_cmdheight
+    RestoreCmdheight()
     &winminwidth = saved_minwidth
     &winminheight = saved_minheight
   endtry
@@ -2008,6 +2015,16 @@ enddef
 # ──────────────────────────────────────────────
 
 def TreeItems(dir: string, depth: number = 0, include_parent: bool = true, visited: dict<number> = {}): list<dict<any>>
+  # Vim9Script evaluates default arguments once at compile time, so = {} is shared
+  # across calls. At depth=0 (top-level entry), create a fresh dict to avoid the
+  # mutable-default gotcha. Recursive calls pass visited explicitly.
+  if depth == 0
+    return TreeItemsRec(dir, 0, include_parent, {})
+  endif
+  return TreeItemsRec(dir, depth, include_parent, visited)
+enddef
+
+def TreeItemsRec(dir: string, depth: number, include_parent: bool, visited: dict<number>): list<dict<any>>
   var result: list<dict<any>> = []
   var entries: list<dict<any>> = ReadDir(dir)
 
@@ -2021,7 +2038,7 @@ def TreeItems(dir: string, depth: number = 0, include_parent: bool = true, visit
     if entry.is_dir && !get(entry, 'is_parent', false)
       if has_key(expanded_dirs, entry.path) && !has_key(visited, entry.path)
         visited[entry.path] = 1
-        var children: list<dict<any>> = TreeItems(entry.path, depth + 1, false, visited)
+        var children: list<dict<any>> = TreeItemsRec(entry.path, depth + 1, false, visited)
         result->extend(children)
       endif
     endif
@@ -2172,17 +2189,15 @@ def OpenInRightPanel(): number
   # If a non-pane window already exists, move there (reuse it).
   # Returns with cursor in the target window.
   var pane_wid: number = win_getid()
-  var saved_cmdheight: number = &cmdheight
+  LowerCmdheight()
   var saved_minwidth: number = &winminwidth
   var saved_minheight: number = &winminheight
-  if &cmdheight > 2
-    set cmdheight=1
-  endif
   set winminwidth=1 winminheight=1
   try
     var found_non_pane: bool = false
+    var current_tab: number = tabpagenr()
     for info in getwininfo()
-      if info.winid != pane_wid
+      if info.winid != pane_wid && get(info, 'tabpage', 0) == current_tab
         win_gotoid(info.winid)
         found_non_pane = true
         break
@@ -2196,7 +2211,7 @@ def OpenInRightPanel(): number
     Error('vproj: Cannot open right panel — ' .. v:exception)
     return -1
   finally
-    &cmdheight = saved_cmdheight
+    RestoreCmdheight()
     &winminwidth = saved_minwidth
     &winminheight = saved_minheight
   endtry
@@ -2309,12 +2324,9 @@ def OpenBuffer(bufnr: number): void
   endif
   var pane_wid: number = win_getid()
   if winnr('$') < 2
-    var saved_cmdheight: number = &cmdheight
+    LowerCmdheight()
     var saved_minwidth: number = &winminwidth
     var saved_minheight: number = &winminheight
-    if &cmdheight > 2
-      set cmdheight=1
-    endif
     set winminwidth=1 winminheight=1
     try
       rightbelow split
@@ -2322,7 +2334,7 @@ def OpenBuffer(bufnr: number): void
       Error('vproj: Cannot open buffer — ' .. v:exception)
       return
     finally
-      &cmdheight = saved_cmdheight
+      RestoreCmdheight()
       &winminwidth = saved_minwidth
       &winminheight = saved_minheight
     endtry
@@ -2991,12 +3003,9 @@ def OpenQfixEntry(item: dict<any>): void
   var pane_wid: number = win_getid()
   # Find or create a non-pane window
   if winnr('$') < 2
-    var saved_cmdheight: number = &cmdheight
+    LowerCmdheight()
     var saved_minwidth: number = &winminwidth
     var saved_minheight: number = &winminheight
-    if &cmdheight > 2
-      set cmdheight=1
-    endif
     set winminwidth=1 winminheight=1
     try
       rightbelow split
@@ -3004,7 +3013,7 @@ def OpenQfixEntry(item: dict<any>): void
       Error('vproj: Cannot open qfix entry — ' .. v:exception)
       return
     finally
-      &cmdheight = saved_cmdheight
+      RestoreCmdheight()
       &winminwidth = saved_minwidth
       &winminheight = saved_minheight
     endtry
@@ -3069,12 +3078,9 @@ def OpenCommitDetail(item: dict<any>): void
     return
   endif
   var pane_wid: number = win_getid()
-  var saved_cmdheight: number = &cmdheight
+  LowerCmdheight()
   var saved_minwidth: number = &winminwidth
   var saved_minheight: number = &winminheight
-  if &cmdheight > 2
-    set cmdheight=1
-  endif
   set winminwidth=1 winminheight=1
   try
     if winnr('$') < 2
@@ -3088,7 +3094,7 @@ def OpenCommitDetail(item: dict<any>): void
     Error('vproj: Cannot create commit view — ' .. v:exception)
     return
   finally
-    &cmdheight = saved_cmdheight
+    RestoreCmdheight()
     &winminwidth = saved_minwidth
     &winminheight = saved_minheight
   endtry
