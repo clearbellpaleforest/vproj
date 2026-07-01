@@ -240,6 +240,12 @@ export def PaneOpen(): void
       RestoreCmdheight()
     endtry
     setwinvar(win_getid(), '&winfixwidth', 1)
+    setwinvar(win_getid(), '&cursorline', 0)
+    setwinvar(win_getid(), '&number', 0)
+    setwinvar(win_getid(), '&relativenumber', 0)
+    setwinvar(win_getid(), '&signcolumn', 'no')
+    setwinvar(win_getid(), '&foldenable', 0)
+    setwinvar(win_getid(), '&wrap', 0)
     silent! execute 'vert resize ' .. pane_width
     selected_line = FirstSelectableLine()
     SetupPaneMappings()
@@ -408,8 +414,6 @@ export def HandleBufWipeout(): void
   paging_active = false
   current_page = 0
   total_pages = 0
-  CmdheightNest = 0
-  CmdheightSaved = 0
   filter_pattern = ''
   git_filter_active = false
   tree_view_active = false
@@ -733,7 +737,7 @@ export def SelectByNavChar(ch: string): void
     return
   endif
   var display_items = empty(filter_pattern) ? items : ApplyFilter(items)
-  if git_filter_active
+  if git_filter_active && (current_mode == 'file' || current_mode == 'code')
     display_items = ApplyGitFilter(display_items)
   endif
   var paginated = PageSlice(display_items)
@@ -1063,6 +1067,9 @@ def Render(): void
       while selected_line > 0 && SkipNonSelectable(selected_line)
         selected_line -= 1
       endwhile
+      if selected_line < 1
+        selected_line = FirstSelectableLine()
+      endif
     endif
   endif
   MoveCursor(selected_line)
@@ -1257,7 +1264,7 @@ def GitRoot(): string
   if !empty(git_root_cache)
     return git_root_cache
   endif
-  var root: string = trim(system('git rev-parse --show-toplevel 2>/dev/null'))
+  var root: string = trim(system('git -C ' .. shellescape(getcwd()) .. ' rev-parse --show-toplevel 2>/dev/null'))
   var shell_err: number = v:shell_error
   if shell_err == 0
     git_root_cache = root
@@ -1270,7 +1277,7 @@ def GitBranch(): string
   if !empty(git_branch_cache)
     return git_branch_cache
   endif
-  var branch: string = trim(system('git branch --show-current 2>/dev/null'))
+  var branch: string = trim(system('git -C ' .. shellescape(getcwd()) .. ' branch --show-current 2>/dev/null'))
   var shell_err: number = v:shell_error
   if shell_err == 0
     git_branch_cache = branch
@@ -1407,16 +1414,22 @@ export def GitStageToggle(): void
     system('git add ' .. shellescape(path) .. ' 2>/dev/null')
     if v:shell_error == 0
       echom 'Staged: ' .. name
+    else
+      Error('vproj: Failed to stage ' .. name)
     endif
   elseif st == 'A' || st == 'M' || st == 'R'
     system('git reset HEAD -- ' .. shellescape(path) .. ' 2>/dev/null')
     if v:shell_error == 0
       echom 'Unstaged: ' .. name
+    else
+      Error('vproj: Failed to unstage ' .. name)
     endif
   elseif st == 'D'
     system('git rm --cached -- ' .. shellescape(path) .. ' 2>/dev/null')
     if v:shell_error == 0
       echom 'Staged deletion: ' .. name
+    else
+      Error('vproj: Failed to stage deletion of ' .. name)
     endif
   endif
 
@@ -1476,6 +1489,12 @@ export def OpenDiffPreview(): void
   nnoremap <buffer> <silent> do <Nop>
   nnoremap <buffer> <silent> dp <Nop>
   silent execute 'read !' .. cmd
+  if v:shell_error != 0
+    close
+    win_gotoid(pane_wid)
+    Error('vproj: Diff failed for ' .. get(item, "name", path))
+    return
+  endif
   cursor(1, 1)
   delete _
   setlocal nomodifiable
@@ -1526,16 +1545,22 @@ export def DiscardChanges(): void
     system("git reset HEAD -- " .. shellescape(path) .. " 2>/dev/null")
     if v:shell_error == 0
       echom "Unstaged: " .. name
+    else
+      Error("vproj: Failed to unstage " .. name)
     endif
   elseif st == "M" || st == "R"
     system("git checkout -- " .. shellescape(path) .. " 2>/dev/null")
     if v:shell_error == 0
       echom "Reverted: " .. name
+    else
+      Error("vproj: Failed to revert " .. name)
     endif
   elseif st == "D"
     system("git checkout HEAD -- " .. shellescape(path) .. " 2>/dev/null")
     if v:shell_error == 0
       echom "Restored: " .. name
+    else
+      Error("vproj: Failed to restore " .. name)
     endif
   endif
 
@@ -1584,6 +1609,12 @@ export def GitBlame(): void
   nnoremap <buffer> <silent> do <Nop>
   nnoremap <buffer> <silent> dp <Nop>
   silent execute 'read !git -C ' .. shellescape(root) .. ' annotate -- ' .. shellescape(path)
+  if v:shell_error != 0
+    close
+    win_gotoid(pane_wid)
+    Error('vproj: Blame failed for ' .. get(item, 'name', path))
+    return
+  endif
   cursor(1, 1)
   delete _
   setlocal nomodifiable
@@ -2050,7 +2081,7 @@ def BuildFileLines(file_items: list<dict<any>>): list<string>
   # Git status: 1-char indicator (space if no status or not in git repo)
   var in_git: bool = IsInGitRepo()
   var status_map: dict<string> = in_git ? GitStatusMap() : {}
-  var git_width: number = in_git ? 1 : 0
+  var git_width: number = in_git ? 2 : 0
   var prefix_width: number = 2 + git_width
 
   for item in file_items
@@ -2138,7 +2169,7 @@ def BuildTreeLines(visible: list<dict<any>>): list<string>
   var info_width: number = show_info_column ? 5 : 0
   var in_git: bool = IsInGitRepo()
   var status_map: dict<string> = in_git ? GitStatusMap() : {}
-  var git_width: number = in_git ? 1 : 0
+  var git_width: number = in_git ? 2 : 0
   var prefix_width: number = 2 + git_width
   var visible_idx: number = 0
 
