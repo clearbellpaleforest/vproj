@@ -26,5 +26,5 @@ ln -sf "$SRC_DIR/src/autoload" "$TARGET_DIR/autoload"
 ln -sf "$SRC_DIR/src/doc" "$TARGET_DIR/doc"
 vim --cmd "helptags $TARGET_DIR/doc" --cmd "q" 2>/dev/null || true
 
-echo "vproj installed. Start Vim and press F4 to open the project pane."
+echo "vproj installed. Start Vim and press Tab to open the project pane."
 echo "Run :help vproj for documentation."

@@ -71,7 +71,7 @@ vproj#CloseBuffer()
 Assert(vproj#IsPaneVisible(), 'CloseBuffer file mode does not crash')
 
 # ── Git mode: ToggleInclude on parent entry ──
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 # Navigate past line 1 (menu) and 2 (status), land on first item
 vproj#SelectNext()
 vproj#SelectNext()
@@ -115,8 +115,8 @@ Assert(vproj#GetCurrentMode() == 'buf', 'SelectCurrent in buf mode no crash')
 # ── Mode switch from empty state ──
 vproj#SwitchMode('file')
 Assert(vproj#IsPaneVisible(), 'Switch back to file mode works')
-vproj#SwitchMode('git')
-Assert(vproj#GetCurrentMode() == 'git', 'Switch to git mode works')
+vproj#SwitchMode('code')
+Assert(vproj#GetCurrentMode() == 'code', 'Switch to git mode works')
 vproj#SwitchMode('file')
 Assert(vproj#GetCurrentMode() == 'file', 'Switch back to file mode works')
 

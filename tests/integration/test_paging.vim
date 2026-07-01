@@ -27,6 +27,7 @@ enddef
 echom '=== Paging Integration Tests ==='
 
 # ── Setup: create temp directory with many files ──
+var saved_cwd: string = getcwd()
 var tmpdir: string = '/tmp/vproj_paging_test'
 silent! call delete(tmpdir, 'rf')
 mkdir(tmpdir)
@@ -67,7 +68,7 @@ Assert(vproj#IsPaneVisible(), 'PrevPage does not crash')
 vproj#SwitchMode('buf')
 Assert(PaneCursorLine() == 3, 'buf mode after paged file mode: cursor on line 3')
 
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 Assert(PaneCursorLine() == 4, 'git mode after paged file mode: cursor on line 4')
 
 # ── Nav offset doesn't leak between modes ──
@@ -78,7 +79,7 @@ Assert(PaneCursorLine() == 3, 'nav shifted then mode switched: SelectFirst still
 
 # ── Cleanup ──
 vproj#PaneClose()
-execute 'cd' '/home/aldous/Desktop/vproj'
+execute 'cd' saved_cwd
 silent! call delete(tmpdir, 'rf')
 
 Assert(!vproj#IsPaneVisible(), 'pane closed cleanly')

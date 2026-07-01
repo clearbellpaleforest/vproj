@@ -96,7 +96,7 @@ ShowState('Step 9: Buf mode')
 # --- STEP 10: Switch to git mode ---
 echom ''
 echom 'STEP 10: Switch to git mode (Shift-C)'
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 ShowState('Step 10: Git mode')
 
 # --- STEP 11: Back to file mode, close ---

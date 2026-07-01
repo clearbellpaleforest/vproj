@@ -112,7 +112,7 @@ execute 'normal b'
 Assert(vproj#GetCurrentMode() == 'buf', 'b switches to buf mode')
 
 execute 'normal g'
-Assert(vproj#GetCurrentMode() == 'git', 'g switches to git mode')
+Assert(vproj#GetCurrentMode() == 'code', 'g switches to git mode')
 
 execute 'normal f'
 Assert(vproj#GetCurrentMode() == 'file', 'f back to file mode')
@@ -138,7 +138,7 @@ catch
 endtry
 
 # +/- — toggle include (git mode)
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 try
   execute 'normal +'
   Assert(vproj#IsPaneVisible(), '+ (toggle include) does not crash')

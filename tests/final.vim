@@ -29,7 +29,7 @@ enddef
 # ── FIX 1: ToggleInclude doesn't crash on empty project ──
 echom '--- ToggleInclude with empty project (was CRASH) ---'
 vproj#PaneOpen()
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 
 # Navigate to first item (line 3), press +
 # Cursor starts on line 3 (first item) since FirstSelectableLine returns 3
@@ -73,14 +73,14 @@ Assert(vproj#IsPaneVisible(), 'reopen works after NavigateUp')
 
 # ── FIX 7: Git mode after file mode directory change ──
 echom '--- Mode switch refreshes current_dir ---'
-vproj#SwitchMode('git')
-Assert(vproj#GetCurrentMode() == 'git', 'switched to git mode')
+vproj#SwitchMode('code')
+Assert(vproj#GetCurrentMode() == 'code', 'switched to git mode')
 vproj#SwitchMode('file')
 Assert(vproj#GetCurrentMode() == 'file', 'switched back to file mode')
 
 # ── FIX 8: HandleBufWipeout uses FirstSelectableLine ──
 echom '--- HandleBufWipeout uses FirstSelectableLine ---'
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 # Verify the code path: HandleBufWipeout sets pane_bufnr = -1 then
 # PaneOpen sets selected_line via FirstSelectableLine()
 vproj#PaneClose()

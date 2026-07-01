@@ -201,7 +201,7 @@ Enter on the mode menu line cycles between modes.
 | `vproj#PaneToggle()` | Toggle pane open/closed |
 | `vproj#PaneOpen()` | Open pane |
 | `vproj#PaneClose()` | Close pane |
-| `vproj#SwitchMode(key)` | Switch to 'file', 'buf', 'git', 'qfix', or 'log' |
+| `vproj#SwitchMode(key)` | Switch to 'file', 'buf', 'code', 'qfix', or 'log' |
 | `vproj#SelectNext()` / `vproj#SelectPrev()` | Move selection |
 | `vproj#SelectCurrent()` | Activate selected item |
 | `vproj#PaneGrow()` / `vproj#PaneShrink()` | Width +/- 1 |
@@ -209,10 +209,10 @@ Enter on the mode menu line cycles between modes.
 | `vproj#NavigateUp()` | Parent directory |
 | `vproj#Refresh()` | Re-render pane contents |
 | `vproj#CloseBuffer()` | Close selected buffer (buf mode) |
-| `vproj#ToggleInclude()` | Include/exclude item (git mode) |
-| `vproj#IncludeItem()` | Include item (git mode, + key) |
-| `vproj#ExcludeItem()` | Exclude item (git mode, - key) |
-| `vproj#RenameProject()` | Rename/create project (git mode) |
+| `vproj#ToggleInclude()` | Include/exclude item (code mode) |
+| `vproj#IncludeItem()` | Include item (code mode, + key) |
+| `vproj#ExcludeItem()` | Exclude item (code mode, - key) |
+| `vproj#RenameProject()` | Rename/create project (code mode) |
 | `vproj#IsPaneVisible()` | Query visibility |
 | `vproj#GetPaneWidth()` / `vproj#GetCurrentMode()` | Query state |
 | `vproj#GetPaneBufnr()` | Return pane buffer number (for add-ons) |
@@ -253,10 +253,10 @@ Buffer-local (only active in the pane):
 | h | Parent directory |
 | Left/Right | Shrink/grow width |
 | Enter | Open file, switch buffer, cycle mode, or rename project |
-| f/b/g/q/L | File / Buf / Git / Qfix / Log mode |
+| Shift-F/Shift-B/Shift-C/q/Shift-L | File / Buf / Code / Qfix / Log mode |
 | r | Refresh pane |
 | x | Close selected buffer (buf mode) |
-| +/- | Include / exclude item (git mode) |
+| +/- | Include / exclude item (code mode) |
 | Q | Close pane |
 | . | Parent directory |
 | Ctrl-T / Ctrl-B | Jump to first / last item |
@@ -267,10 +267,10 @@ Buffer-local (only active in the pane):
 | s | Stage/unstage file (git) |
 | d | Diff preview for file under cursor |
 | D | Discard changes (with confirmation) |
-| C | Git commit (with message prompt) |
+| c | Git commit (with message prompt) |
 | P | Git push |
 | U | Git pull --ff-only |
-| B | Git branch switch |
+| b | Git branch switch |
 | z | Git stash push (with optional message) |
 | Z | Git stash pop (shows list, select by index) |
 | a | Git blame (annotate) for file under cursor |
@@ -303,7 +303,7 @@ Excluded Files:
 .env
 ```
 
-## Git Mode Behavior
+## Code Mode Behavior
 
 - No .vproj found: status line shows `* (no project found)`, all items in parentheses
 - Enter on status line: rename/create project (inline via `input()`)

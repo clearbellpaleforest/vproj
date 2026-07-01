@@ -59,7 +59,7 @@ vproj#SwitchMode('buf')
 vproj#SwitchMode('qfix')
 Assert(vproj#GetCurrentMode() == 'qfix', 'buf→qfix switch works')
 
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 vproj#SwitchMode('qfix')
 Assert(vproj#GetCurrentMode() == 'qfix', 'git→qfix switch works')
 

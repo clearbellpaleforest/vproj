@@ -35,7 +35,7 @@ Plug 'clearbellpaleforest/vproj'
 
 ## Key Map
 
-`F4` toggles the pane (outside the pane). Inside the pane:
+`Tab` toggles the pane. `Shift-Tab` toggles in permanent mode (stays open until you close it). Inside the pane:
 
 ### Navigation
 
@@ -44,7 +44,7 @@ Plug 'clearbellpaleforest/vproj'
 | `j` / `<Down>` | Move selection down |
 | `k` / `<Up>` | Move selection up |
 | `h` | Parent directory |
-| `l` / `Enter` | Open file or enter directory |
+| `Enter` | Open file or enter directory |
 | `.` | Parent directory |
 | `Ctrl-T` | Jump to first item |
 | `Ctrl-B` | Jump to last item |
@@ -57,25 +57,28 @@ Each mode has a distinct color on the menu line so you know what you're in:
 
 | Key | Mode | Color | Shows |
 |-----|------|-------|-------|
-| `f` | File | Yellow | Directory browsing, file sizes |
-| `b` | Buf | Green | Open buffers with flags + line counts |
-| `g` | Git | Magenta | Project tree from .vproj |
-| `q` | Qfix | Blue | Quickfix list entries |
-| `L` | Log | Cyan | Git commit log — `Enter` for full diff |
+| `Shift-F` | File | Yellow | Directory browsing, file sizes |
+| `Shift-B` | Buf | Green | Open buffers with flags + line counts |
+| `Shift-C` | Code | Blue | Project tree from .vproj |
+| `q` | Qfix | Blue | Quickfix list entries (in temp mode; closes pane in permanent mode) |
+| `Shift-L` | Log | Cyan | Git commit log — `Enter` for full diff |
 | `Enter` on menu line | — | — | Cycle to next mode |
 
-### Git Actions (file and log modes)
+### Git Actions (file and code mode)
 
 | Key | Action |
 |-----|--------|
 | `s` | Stage / unstage file under cursor |
 | `d` | Open diff preview in vertical split |
 | `D` | Discard file changes (with confirmation) |
-| `C` | Commit with message prompt |
+| `c` | Commit with message prompt |
 | `P` | Push to remote |
 | `U` | Pull --ff-only from remote |
-| `B` | Switch branch (with prompt) |
-| `Ctrl-G` | Toggle showing only git-changed files |
+| `b` | Switch branch (with prompt) |
+| `z` | Stash changes |
+| `Z` | Pop a stash |
+| `a` | Blame file under cursor |
+| `Ctrl-G` | Toggle showing only git-changed files (file mode) |
 
 ### Actions
 
@@ -83,15 +86,15 @@ Each mode has a distinct color on the menu line so you know what you're in:
 |-----|--------|
 | `r` | Refresh listing |
 | `x` | Close selected buffer (buf mode only) |
-| `+` / `-` | Include / exclude item (git mode) |
+| `+` / `-` | Include / exclude item (code mode) |
 | `T` | Toggle tree view (file mode — indented with expand/collapse) |
 | `p` | Toggle file preview split (updates on cursor move) |
 | `/` | Filter files by name pattern |
 | `*` | Grep project and populate quickfix |
 | `<Left>` / `<Right>` | Shrink / grow pane width |
 | `F1` | Toggle info column (inside pane) |
-| `Tab` / `Shift-Tab` | Shift nav indicators forward / backward |
-| `a` – `z`, `A` – `Z`, `1` – `9` | Jump to item by nav character (cyan) |
+| `>` / `<` | Shift nav indicators forward / backward |
+| Nav characters | Jump to item by nav character (orange) |
 
 ### Paging
 
@@ -105,7 +108,7 @@ Each mode has a distinct color on the menu line so you know what you're in:
 | Key | Action |
 |-----|--------|
 | `Q` | Close pane |
-| `F4` | Close pane (or toggle when outside pane) |
+| `Tab` | Close pane (or toggle when outside pane) |
 
 ### Standard Vim Keys (passthrough)
 
@@ -113,19 +116,14 @@ These work as usual inside the pane — we don't override them:
 
 | Key(s) | Behavior |
 |--------|----------|
-| `w` `b` `e` | Word motions |
 | `0` `^` `$` | Line start / end |
-| `t<char>` | Find until character |
-| `H` `M` | Screen top / middle |
 | `?` | Search backward |
-| `y` | Yank (copy filename on current line) |
 | `Ctrl-F` | Page down |
 | `Ctrl-D` `Ctrl-U` | Half-page down / up |
 | `Ctrl-W` keys | Window management |
 | `%` `{` `}` `(` `)` | Jump / matching pair |
-| `zz` `zt` `zb` | Scroll cursor to center / top / bottom |
 
-Or use commands: `:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`.
+Or use commands: `:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`, `:VprojDiag`.
 
 Use `let g:vproj_show_dotfiles = 1` to show hidden files.
 
@@ -133,7 +131,7 @@ See `:help vproj` for full documentation.
 
 ## .vproj File Format
 
-Git Mode reads a `.vproj` file at the project root to determine which files and directories to include. Example:
+Code Mode reads a `.vproj` file at the project root to determine which files and directories to include. Example:
 
 ```
 Project Name: my-project
@@ -157,8 +155,8 @@ Lines starting with `#` are comments. See `:help vproj-file-format` for details.
 " Change the toggle key
 nmap <F2> <Plug>VprojToggle
 
-" Disable default F4
-nunmap <F4>
+" Disable default Tab
+nunmap <Tab>
 ```
 
 ## Requirements
