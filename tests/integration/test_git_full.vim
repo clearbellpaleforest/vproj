@@ -185,7 +185,7 @@ catch
   Assert(false, 'DiscardChanges in buf mode crash: ' .. v:exception)
 endtry
 
-# Discard in git mode should exit early
+# Discard in code mode should exit early
 vproj#SwitchMode('code')
 try
   call vproj#DiscardChanges()
@@ -205,7 +205,7 @@ Assert(d_map.lhs == 'D', 'D map lhs is D')
 
 # D key without interactive input — verify mapping exists and doesn't crash visual
 # Note: D with no input in a script will be at input() prompt
-# We verify the function is callable without crash via the early exit in buf/git mode
+# We verify the function is callable without crash via the early exit in buf/code mode
 var d_cmd = substitute(d_map.rhs, '^<Cmd>', '', '')
 var d_cmd_clean = substitute(d_cmd, '<CR>$', '', '')
 Assert(d_cmd_clean =~ 'vproj#DiscardChanges', 'D maps to DiscardChanges')

@@ -137,7 +137,7 @@ catch
   Assert(false, 'x error: ' .. v:exception)
 endtry
 
-# +/- — toggle include (git mode)
+# +/- — toggle include (code mode)
 vproj#SwitchMode('code')
 try
   execute 'normal +'

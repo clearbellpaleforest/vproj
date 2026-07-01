@@ -42,7 +42,7 @@ Assert(vproj#IsPaneVisible(), 'pane visible in qfix mode')
 # ── Layout: empty state ──
 var line1 = PaneLine(1)
 Assert(line1 =~ '\[F\]ile', 'qfix empty: line 1 is mode menu')
-Assert(line1 =~ '\[Q\]fix', 'qfix empty: qfix label in mode menu')
+Assert(line1 =~ '\[q\]fix', 'qfix empty: qfix label in mode menu')
 
 var line2 = PaneLine(2)
 Assert(line2 =~ '^-\+$', 'qfix empty: line 2 is separator')
@@ -109,8 +109,8 @@ vproj#SelectLast()
 Assert(PaneCursorLine() == 5, 'qfix: SelectLast goes to line 5')
 
 # ── SelectByNavChar ──
-vproj#SelectByNavChar('c')
-Assert(PaneCursorLine() == 3, 'qfix: nav char c jumps to line 3')
+vproj#SelectByNavChar('e')
+Assert(PaneCursorLine() == 3, 'qfix: nav char e jumps to line 3')
 
 # ── PaneGrow/Shrink in qfix ──
 var w0 = vproj#GetPaneWidth()
