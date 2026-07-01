@@ -2669,7 +2669,7 @@ export def ParseVprojFile(path: string): dict<any>
     endif
     # Only skip # comments at top level (before any section), not inside
     # list sections where filenames may legitimately start with #
-    if empty(section) && t[0] == '#'
+    if (empty(section) || section == 'name' || section == 'root') && t[0] == '#'
       continue
     endif
 
@@ -2919,13 +2919,13 @@ def BuildCodeLines(code_items: list<dict<any>>): list<string>
       info = repeat(' ', info_width - strwidth(info)) .. info
     endif
 
-    # Non-included items in parentheses (wrap before truncation)
-    if !get(item, 'included', false) && !is_parent
-      name = '(' .. name .. ')'
-    endif
-    var name_width: number = pane_width - label_width - info_width
+    # Non-included items in parentheses after truncation (so closing paren not clipped)
+    var name_width: number = pane_width - label_width - strwidth(info)
     if strwidth(name) > name_width
       name = strcharpart(name, 0, name_width)
+    endif
+    if !get(item, 'included', false) && !is_parent
+      name = '(' .. name .. ')'
     endif
     var line: string = prefix .. name
     var pad: number = pane_width - strwidth(line) - strwidth(info)
@@ -3081,19 +3081,16 @@ export def RenameProject(): void
   var old_file = project.vproj_file
   project.name = new_name
   project.vproj_file = fnamemodify(old_file, ':h') .. '/' .. new_name .. '.vproj'
-  if old_file != project.vproj_file && filereadable(old_file)
-    if delete(old_file) != 0
-      project.name = old_name
-      project.vproj_file = old_file
-      Error('vproj: Failed to remove old project file — rename aborted')
-      return
-    endif
-  endif
   if !WriteVprojFile()
     project.name = old_name
     project.vproj_file = old_file
     Error('vproj: Failed to save renamed project — name reverted')
     return
+  endif
+  if old_file != project.vproj_file && filereadable(old_file)
+    if delete(old_file) != 0
+      Error('vproj: Renamed project saved, but old file ' .. old_file .. ' could not be removed')
+    endif
   endif
   Render()
 enddef
@@ -3346,8 +3343,8 @@ def SetupPaneMappings(): void
   # Navigation
   nnoremap <buffer> <silent> <Down> <Cmd>call vproj#SelectNext()<CR>
   nnoremap <buffer> <silent> <Up> <Cmd>call vproj#SelectPrev()<CR>
-  nnoremap <buffer> <silent> j <Cmd>call vproj#SelectNext()<CR>
-  nnoremap <buffer> <silent> k <Cmd>call vproj#SelectPrev()<CR>
+  nnoremap <buffer> <silent> <nowait> j <Cmd>call vproj#SelectNext()<CR>
+  nnoremap <buffer> <silent> <nowait> k <Cmd>call vproj#SelectPrev()<CR>
   nnoremap <buffer> <silent> h <Cmd>call vproj#NavigateUp()<CR>
   nnoremap <buffer> <silent> <C-T> <Cmd>call vproj#SelectFirst()<CR>
   nnoremap <buffer> <silent> <C-B> <Cmd>call vproj#SelectLast()<CR>
@@ -3388,7 +3385,7 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> <C-P> <Cmd>call vproj#PrevPage()<CR>
 
   # Close buffer (buf mode)
-  nnoremap <buffer> <silent> x <Cmd>call vproj#CloseBuffer()<CR>
+  nnoremap <buffer> <silent> <nowait> x <Cmd>call vproj#CloseBuffer()<CR>
 
   # Nav indicator shift
   nnoremap <buffer> <silent> <nowait> > <Cmd>call vproj#ShiftNavForward()<CR>
@@ -3410,7 +3407,7 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> <C-G> <Cmd>call vproj#ToggleGitFilter()<CR>
 
   # Git: stage/unstage file
-  nnoremap <buffer> <silent> s <Cmd>call vproj#GitStageToggle()<CR>
+  nnoremap <buffer> <silent> <nowait> s <Cmd>call vproj#GitStageToggle()<CR>
 
   # Git: diff preview and discard
   nnoremap <buffer> <silent> <nowait> d <Cmd>call vproj#OpenDiffPreview()<CR>
@@ -3557,6 +3554,7 @@ def SaveSession(): void
   lines->add('width=' .. pane_width)
   lines->add('info=' .. (show_info_column ? '1' : '0'))
   lines->add('open=' .. pane_open_mode)
+  lines->add('git_filter=' .. (git_filter_active ? '1' : '0'))
   var tmp: string = path .. '.tmp'
   try
     writefile(lines, tmp)
@@ -3607,6 +3605,8 @@ def LoadSession(): void
       if val == 'temporary' || val == 'permanent'
         pane_open_mode = val
       endif
+    elseif key == 'git_filter'
+      git_filter_active = (val == '1')
     endif
   endfor
   if !empty(saved_mode)
