@@ -62,7 +62,7 @@ Assert(CursorInPane() == 4, 'k moves cursor back to line 4')
 echom '--- NavigateUp (.. parent dir) ---'
 vproj#SwitchMode('file')
 vproj#NavigateUp()
-Assert(vproj#IsPaneVisible(), 'NavigateUp re-renders without crash')
+Assert(vproj#IsPaneVisible(), 'NavigateUp: re-renders, pane stays visible')
 
 # ── FIX 6: NavigateInto ──
 echom '--- NavigateInto (subdir) ---'
@@ -100,7 +100,7 @@ Assert(vproj#GetCurrentMode() == 'file', 'back to file mode after doc')
 echom '--- OnDirChanged ---'
 vproj#SwitchMode('file')
 vproj#OnDirChanged()
-Assert(vproj#IsPaneVisible(), 'OnDirChanged does not crash')
+Assert(vproj#IsPaneVisible(), 'OnDirChanged: pane stays visible')
 
 # ── Cleanup ──
 vproj#PaneClose()

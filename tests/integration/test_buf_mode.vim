@@ -25,6 +25,12 @@ def PaneCursorLine(): number
   return empty(wins) ? -1 : line('.', wins[0])
 enddef
 
+def PaneText(lnum: number): string
+  var pbuf = bufnr('VPROJ')
+  var lines = getbufline(pbuf, lnum)
+  return empty(lines) ? '' : lines[0]
+enddef
+
 echom '=== Buf Mode Integration Tests ==='
 
 # Clean up stale swap files from previous runs
@@ -71,10 +77,35 @@ Assert(PaneCursorLine() == 3, 'buf mode after round-trip: cursor on line 3')
 vproj#SelectFirst()
 Assert(PaneCursorLine() == 3, 'buf mode: SelectFirst to line 3')
 
-# ── NavigateUp in buf mode ──
+# ── NavigateUp in buf mode — verify no crash, mode unchanged ──
 vproj#NavigateUp()
-Assert(vproj#IsPaneVisible(), 'NavigateUp in buf mode does not crash')
+Assert(vproj#IsPaneVisible(), 'NavigateUp in buf mode: pane stays visible')
+Assert(vproj#GetCurrentMode() == 'buf', 'NavigateUp in buf mode: mode stays buf')
 
+	# ── 	# ── CloseBuffer last buffer: verify placeholder appears (gap 3) ──
+	# Close all buffers except VPROJ, then reopen in buf mode to see empty state
+	vproj#PaneClose()
+	# Wipe all test buffers
+	for tf in test_files
+	  try
+	    execute 'bwipeout! ' .. fnameescape(tf)
+	  catch
+	  endtry
+	endfor
+	# Reopen in buf mode — should show empty placeholder
+	vproj#PaneOpen()
+	vproj#SwitchMode('buf')
+	var lb_lines = getbufline(bufnr('VPROJ'), 1, '$')
+	var has_placeholder = false
+	for l in lb_lines
+	  if l =~ '(no open buffers)'
+	    has_placeholder = true
+	    break
+	  endif
+	endfor
+	Assert(has_placeholder, 'CloseBuffer last buf: "(no open buffers)" placeholder appears')
+	Assert(vproj#IsPaneVisible(), 'CloseBuffer last buf: pane stays visible')
+	vproj#PaneClose()
 # ── Cleanup ──
 vproj#PaneClose()
 for tf in test_files
@@ -93,4 +124,5 @@ else
   echohl None
   cquit!
 endif
+call delete(expand('~/.cache/vproj/session'))
 qa!

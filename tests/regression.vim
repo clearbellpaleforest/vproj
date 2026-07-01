@@ -47,10 +47,10 @@ vproj#SwitchMode('file')
 vproj#SelectNext()
 vproj#SelectNext()
 # Should not crash and should move cursor down. Mode should still be file.
-Assert(vproj#GetCurrentMode() == 'file', 'SelectNext does not crash or change mode')
+Assert(vproj#GetCurrentMode() == 'file', 'SelectNext: mode stays file')
 
 vproj#SelectPrev()
-Assert(vproj#GetCurrentMode() == 'file', 'SelectPrev does not crash or change mode')
+Assert(vproj#GetCurrentMode() == 'file', 'SelectPrev: mode stays file')
 
 # --- Bug #5: .. parent directory navigation ---
 # Switch to file mode at a known directory
@@ -62,7 +62,7 @@ vproj#PaneOpen()
 vproj#NavigateUp()
 # Should have moved to parent of /tmp, which is /
 # We can verify the pane re-rendered without error
-Assert(vproj#IsPaneVisible(), 'NavigateUp re-renders without crashing')
+Assert(vproj#IsPaneVisible(), 'NavigateUp: re-renders, pane stays visible')
 
 # --- Bug #3: Directory change detection ---
 # Simulate what happens when user does :cd
@@ -72,7 +72,7 @@ vproj#PaneOpen()  # opens at /tmp (from above, actually after NavigateUp we were
 # Actually let's test the OnDirChanged callback directly
 execute 'cd /tmp'
 vproj#OnDirChanged()
-Assert(vproj#IsPaneVisible(), 'OnDirChanged works without crash')
+Assert(vproj#IsPaneVisible(), 'OnDirChanged: pane stays visible')
 
 # --- Bug #6: Underline / cursorline on separator ---
 # The separator is line 2. We can verify SelectNext skips it.

@@ -84,7 +84,7 @@ Setup()
 vproj#SwitchMode('file')
 try
   execute 'normal +'
-  Assert(vproj#IsPaneVisible(), '+ in file mode does not crash')
+  Assert(vproj#IsPaneVisible(), '+ in file mode: pane stays visible')
 catch
   Assert(false, '+ in file mode error: ' .. v:exception)
 endtry
@@ -92,11 +92,11 @@ endtry
 # In code mode with no project, cursor on first item (line 3), press +
 vproj#SwitchMode('code')
 execute 'normal +'
-Assert(vproj#IsPaneVisible(), '+ in git mode no-project does not crash')
+Assert(vproj#IsPaneVisible(), '+ in code mode no-project: pane stays visible')
 
 # - key similarly
 execute 'normal -'
-Assert(vproj#IsPaneVisible(), '- in git mode no-project does not crash')
+Assert(vproj#IsPaneVisible(), '- in code mode no-project: pane stays visible')
 
 # ──────────────────────────────────────────────
 # CloseBuffer outside buf mode
@@ -106,7 +106,7 @@ Setup()
 vproj#SwitchMode('file')
 try
   execute 'normal x'
-  Assert(vproj#IsPaneVisible(), 'x in file mode shows message, does not crash')
+  Assert(vproj#IsPaneVisible(), 'x in file mode: pane stays visible, mode unchanged')
 catch
   Assert(false, 'x in file mode error: ' .. v:exception)
 endtry
@@ -114,7 +114,7 @@ endtry
 vproj#SwitchMode('code')
 try
   execute 'normal x'
-  Assert(vproj#IsPaneVisible(), 'x in git mode shows message, does not crash')
+  Assert(vproj#IsPaneVisible(), 'x in code mode: pane stays visible, mode unchanged')
 catch
   Assert(false, 'x in git mode error: ' .. v:exception)
 endtry
@@ -155,13 +155,13 @@ vproj#SwitchMode('file')
 
 # nav_offset is 0 after Setup; test uppercase nav char
 vproj#SelectByNavChar('A')
-Assert(vproj#IsPaneVisible(), 'SelectByNavChar uppercase does not crash')
+Assert(vproj#IsPaneVisible(), 'SelectByNavChar uppercase: pane stays visible')
 
 # Shift nav offset forward a few times, then test digit
 vproj#ShiftNavForward()
 vproj#ShiftNavForward()
 vproj#SelectByNavChar('3')
-Assert(vproj#IsPaneVisible(), 'SelectByNavChar digit does not crash')
+Assert(vproj#IsPaneVisible(), 'SelectByNavChar digit: pane stays visible')
 
 # ──────────────────────────────────────────────
 # Mode cycling (SwitchMode covers same logic as Enter on menu)
@@ -307,7 +307,7 @@ Setup()
 # Press a nav char that doesn't exist on current page (only '..' has no char)
 try
   execute 'normal m'
-  Assert(vproj#IsPaneVisible(), 'nav char m (not on page) does not crash')
+  Assert(vproj#IsPaneVisible(), 'nav char m off-page: pane stays visible')
 catch
   Assert(false, 'nav char m error: ' .. v:exception)
 endtry
@@ -321,7 +321,7 @@ vproj#SwitchMode('file')
 
 try
   vproj#RenameProject()
-  Assert(vproj#IsPaneVisible(), 'RenameProject in file mode exits early')
+  Assert(vproj#IsPaneVisible(), 'RenameProject in file mode: pane stays visible, no rename')
 catch
   Assert(false, 'RenameProject in file mode error: ' .. v:exception)
 endtry

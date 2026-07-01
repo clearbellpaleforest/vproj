@@ -24,7 +24,7 @@ def PaneCursorLine(): number
   return empty(wins) ? -1 : line('.', wins[0])
 enddef
 
-def PaneLine(lnum: number): string
+def PaneText(lnum: number): string
   var pbuf = bufnr('VPROJ')
   var lines = getbufline(pbuf, lnum)
   return empty(lines) ? '' : lines[0]
@@ -40,14 +40,14 @@ Assert(vproj#GetCurrentMode() == 'qfix', 'qfix mode active with empty qflist')
 Assert(vproj#IsPaneVisible(), 'pane visible in qfix mode')
 
 # ── Layout: empty state ──
-var line1 = PaneLine(1)
+var line1 = PaneText(1)
 Assert(line1 =~ '\[F\]ile', 'qfix empty: line 1 is mode menu')
 Assert(line1 =~ '\[q\]fix', 'qfix empty: qfix label in mode menu')
 
-var line2 = PaneLine(2)
+var line2 = PaneText(2)
 Assert(line2 =~ '^-\+$', 'qfix empty: line 2 is separator')
 
-var line3 = PaneLine(3)
+var line3 = PaneText(3)
 Assert(line3 =~ 'no quickfix', 'qfix empty: line 3 shows empty message')
 
 # ── Switch to qfix from other modes ──
@@ -64,7 +64,6 @@ vproj#SwitchMode('qfix')
 Assert(vproj#GetCurrentMode() == 'qfix', 'git→qfix switch works')
 
 # ── Populate qflist with test entries ──
-# Use project-relative paths so qfix displays readable relative paths
 writefile(['line one', 'line two', 'line three'], 'test_a.txt')
 writefile(['alpha', 'beta', 'gamma'], 'test_b.txt')
 
@@ -82,14 +81,14 @@ vproj#PaneOpen()
 vproj#SwitchMode('qfix')
 
 # ── Layout: populated state ──
-var p1 = PaneLine(1)
+var p1 = PaneText(1)
 Assert(p1 =~ '\[F\]ile', 'qfix populated: line 1 is mode menu')
-var p2 = PaneLine(2)
+var p2 = PaneText(2)
 Assert(p2 =~ '^-\+$', 'qfix populated: line 2 is separator')
 
 # Should have 3 entries starting at line 3
 Assert(PaneCursorLine() == 3, 'qfix populated: cursor on first entry (line 3)')
-var p3 = PaneLine(3)
+var p3 = PaneText(3)
 Assert(p3 =~ 'test_a.txt', 'qfix populated: line 3 has first filename')
 Assert(p3 =~ 'first entry', 'qfix populated: line 3 has entry text')
 
@@ -109,8 +108,8 @@ vproj#SelectLast()
 Assert(PaneCursorLine() == 5, 'qfix: SelectLast goes to line 5')
 
 # ── SelectByNavChar ──
-vproj#SelectByNavChar('e')
-Assert(PaneCursorLine() == 3, 'qfix: nav char e jumps to line 3')
+vproj#SelectByNavChar('a')
+Assert(PaneCursorLine() == 3, 'qfix: nav char a jumps to line 3')
 
 # ── PaneGrow/Shrink in qfix ──
 var w0 = vproj#GetPaneWidth()
@@ -119,13 +118,19 @@ Assert(vproj#GetPaneWidth() == w0 + 1, 'qfix: PaneGrow works')
 vproj#PaneShrink()
 Assert(vproj#GetPaneWidth() == w0, 'qfix: PaneShrink works')
 
-# ── NavigateUp in qfix ──
+# -- NavigateUp in qfix -- verify listing preserved, mode unchanged --
+var qfix_lines_before = getbufline(bufnr('VPROJ'), 1, '$')
 vproj#NavigateUp()
-Assert(vproj#IsPaneVisible(), 'qfix: NavigateUp does not crash')
+var qfix_lines_after = getbufline(bufnr('VPROJ'), 1, '$')
+Assert(qfix_lines_before == qfix_lines_after, 'qfix: NavigateUp preserves listing (absolute paths)')
+Assert(vproj#GetCurrentMode() == 'qfix', 'qfix: NavigateUp mode stays qfix')
+Assert(vproj#IsPaneVisible(), 'qfix: NavigateUp pane stays visible')
 
-# ── ToggleInfoColumn in qfix ──
+# -- ToggleInfoColumn in qfix -- verify visibility toggled --
+var qfix_info_before = vproj#IsInfoColumnVisible()
 vproj#ToggleInfoColumn()
-Assert(vproj#IsPaneVisible(), 'qfix: ToggleInfoColumn does not crash')
+Assert(vproj#IsInfoColumnVisible() != qfix_info_before, 'qfix: ToggleInfoColumn visibility toggled')
+Assert(vproj#IsPaneVisible(), 'qfix: ToggleInfoColumn pane stays visible')
 
 # ── Refresh ──
 vproj#Refresh()
@@ -138,6 +143,7 @@ Assert(!vproj#IsPaneVisible(), 'qfix: pane closes cleanly')
 # ── Cleanup ──
 delete('test_a.txt')
 delete('test_b.txt')
+call delete(expand('~/.cache/vproj/session'))
 
 echom ''
 if failures == 0

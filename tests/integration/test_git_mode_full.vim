@@ -24,6 +24,12 @@ def PaneCursorLine(): number
   return empty(wins) ? -1 : line('.', wins[0])
 enddef
 
+def PaneText(lnum: number): string
+  var pbuf = bufnr('VPROJ')
+  var lines = getbufline(pbuf, lnum)
+  return empty(lines) ? '' : lines[0]
+enddef
+
 echom '=== Code Mode Integration Tests ==='
 
 # ── Setup: open pane in code mode ──
@@ -71,10 +77,13 @@ vproj#PaneOpen()
 # Session persistence restores last mode (git) after close/reopen
 Assert(PaneCursorLine() == 4, 'reopen: cursor on first item in git mode (session restore)')
 
-# ── Test 6: NavigateUp from code mode works ──
+# ── Test 6: NavigateUp from code mode — verify listing changed ──
 vproj#SwitchMode('code')
+var gline_before = PaneText(PaneCursorLine())
 vproj#NavigateUp()
-Assert(vproj#IsPaneVisible(), 'NavigateUp in git mode keeps pane visible')
+Assert(vproj#IsPaneVisible(), 'NavigateUp in git mode: pane stays visible')
+var gline_after = PaneText(PaneCursorLine())
+Assert(gline_before != gline_after, 'NavigateUp in git mode: listing content changed')
 
 # ── Cleanup ──
 vproj#PaneClose()
@@ -89,4 +98,5 @@ else
   echohl None
   cquit!
 endif
+call delete(expand('~/.cache/vproj/session'))
 qa!

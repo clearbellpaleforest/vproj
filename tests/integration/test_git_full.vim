@@ -1,6 +1,6 @@
 vim9script
 
-# Integration tests for git full features: Log mode, Diff, Commit, Push, Pull, Branch
+# Integration tests for git features: Diff, Commit, Push, Pull, Branch (Log mode removed)
 # Run: vim -N -u NONE -S tests/integration/test_git_full.vim
 
 set rtp+=src
@@ -10,12 +10,9 @@ set nomore
 var failures: number = 0
 
 def PaneCursorLine(): number
-  var wnr = bufwinnr(bufnr('VPROJ'))
-  if wnr <= 0
-    return -1
-  endif
-  var cl = win_execute(win_getid(wnr), 'echom line(".")')
-  return trim(cl)->str2nr()
+  var pbuf = bufnr('VPROJ')
+  var wins = win_findbuf(pbuf)
+  return empty(wins) ? -1 : line('.', wins[0])
 enddef
 
 def Assert(cond: bool, msg: string): void
@@ -34,91 +31,40 @@ vproj#PaneClose()
 call delete(expand('~/.cache/vproj/session'))
 
 # ──────────────────────────────────────────────
-# SECTION 1: Log Mode Basics
+# SECTION 1: Log mode removed (John Chamberlain directive #5)
 # ──────────────────────────────────────────────
-echom '--- Log Mode ---'
+echom '--- Log Mode Removed ---'
 vproj#PaneOpen()
+
+# 'log' is not in MODE_KEYS — SwitchMode is a no-op, stays in current mode
 vproj#SwitchMode('log')
+Assert(vproj#IsPaneVisible(), 'log removed: pane still visible')
+Assert(vproj#GetCurrentMode() == 'file', 'log removed: mode stays file')
 
-Assert(vproj#IsPaneVisible(), 'log mode: pane visible')
-Assert(vproj#GetCurrentMode() == 'log', 'log mode: GetCurrentMode returns log')
-
-# Verify display lines
+# Mode menu shows 4 modes, not 5 — no [L]og
 var lines = getbufline(bufnr('VPROJ'), 1, '$')
-Assert(len(lines) >= 3, 'log mode: at least 3 lines (menu + sep + item)')
-Assert(lines[0] =~ '\[L\]og', 'log mode: menu line has [L]og')
-Assert(lines[1] =~ '^-\+$', 'log mode: separator line is dashes')
+Assert(len(lines) >= 3, 'log removed: at least 3 lines (menu + sep + item)')
+Assert(lines[0] !~ '\[L\]og', 'log removed: menu has no [L]og')
+Assert(lines[0] =~ '\[F\]ile.*\[B\]uf.*\[C\]ode.*\[q\]fix', 'log removed: menu shows 4 modes')
 
-# Verify cursor position
+# Cursor is on first selectable item (file mode)
 var cursor_line = PaneCursorLine()
-Assert(cursor_line == 3, 'log mode: cursor on first item (line 3)')
+Assert(cursor_line == 3, 'log removed: cursor on first item')
 
-# Verify first item has git hash format (nav char + 7-char hex)
-var first_item = lines[2]
-Assert(first_item =~ '^[a-zA-Z0-9]  [0-9a-f]\{7,}', 'log mode: first item has nav char + hash')
-
-# ──────────────────────────────────────────────
-# SECTION 2: Log Mode Navigation
-# ──────────────────────────────────────────────
-echom '--- Log Mode Navigation ---'
-
-# SelectNext
-execute 'normal j'
-cursor_line = PaneCursorLine()
-Assert(cursor_line == 4, 'log mode: j moves to line 4')
-
-# SelectPrev
-execute 'normal k'
-cursor_line = PaneCursorLine()
-Assert(cursor_line == 3, 'log mode: k returns to line 3')
-
-# SelectFirst / SelectLast
-vproj#SelectLast()
-cursor_line = PaneCursorLine()
-Assert(cursor_line >= 3, 'log mode: SelectLast does not crash')
-
-vproj#SelectFirst()
-cursor_line = PaneCursorLine()
-Assert(cursor_line == 3, 'log mode: SelectFirst returns to line 3')
-
-# ──────────────────────────────────────────────
-# SECTION 3: Log Mode Switching Round-Trip
-# ──────────────────────────────────────────────
-echom '--- Log Mode Switching ---'
-
-vproj#SwitchMode('file')
-Assert(vproj#GetCurrentMode() == 'file', 'log→file: mode is file')
-cursor_line = PaneCursorLine()
-Assert(cursor_line == 3, 'log→file: cursor on line 3')
-
-vproj#SwitchMode('buf')
-Assert(vproj#GetCurrentMode() == 'buf', 'log→buf: mode is buf')
-
-vproj#SwitchMode('code')
-Assert(vproj#GetCurrentMode() == 'code', 'log→git: mode is git')
-
-vproj#SwitchMode('qfix')
-Assert(vproj#GetCurrentMode() == 'qfix', 'log→qfix: mode is qfix')
-
-vproj#SwitchMode('log')
-Assert(vproj#GetCurrentMode() == 'log', 'qfix→log: mode is log')
-cursor_line = PaneCursorLine()
-Assert(cursor_line == 3, 'qfix→log: cursor on line 3')
-
-# ──────────────────────────────────────────────
-# SECTION 4: L Key Mapping (log mode)
-# ──────────────────────────────────────────────
-echom '--- L Key Mapping ---'
-
-# L is mapped to SwitchMode('log')
+# L is not mapped — log mode key removed, L is a nav char
 var L_map = maparg('L', 'n', 0, 1)
-Assert(!empty(L_map), 'L is mapped in pane buffer')
-Assert(L_map.lhs == 'L', 'L map lhs is L')
+Assert(!empty(L_map), 'L is now a nav char')
+Assert(L_map.rhs =~ 'SelectByNavChar', 'L maps to SelectByNavChar (nav char, not log mode)')
 
-# Verify switching via L key
+# Verify mode switching works correctly with 4 modes only
+vproj#SwitchMode('buf')
+Assert(vproj#GetCurrentMode() == 'buf', 'mode: buf')
+vproj#SwitchMode('code')
+Assert(vproj#GetCurrentMode() == 'code', 'mode: code')
+vproj#SwitchMode('qfix')
+Assert(vproj#GetCurrentMode() == 'qfix', 'mode: qfix')
 vproj#SwitchMode('file')
-execute 'normal L'
-Assert(vproj#GetCurrentMode() == 'log', 'L key switches to log mode from file')
+Assert(vproj#GetCurrentMode() == 'file', 'mode: file')
 
 # ──────────────────────────────────────────────
 # SECTION 5: Diff Preview
@@ -127,22 +73,20 @@ echom '--- Diff Preview ---'
 
 vproj#SwitchMode('file')
 
-# Move cursor to first selectable item
-# We're in the vproj repo root — files from 'git status' are modified
-# Navigate to modified files area (they should be present)
-# The test just verifies d key doesn't crash
+# \d opens a diff preview window — verify window count changes
+var wins_before: number = winnr('$')
 try
-  execute 'normal d'
-  Assert(vproj#IsPaneVisible(), 'd key diff preview does not crash')
+  execute 'normal \d'
+  var wins_after: number = winnr('$')
+  Assert(vproj#IsPaneVisible(), '\d diff preview: pane stays visible')
+  Assert(wins_after >= wins_before, '\d diff preview: window count did not decrease')
 catch
-  Assert(false, 'd key diff error: ' .. v:exception)
+  Assert(false, '\d diff preview error: ' .. v:exception)
 endtry
 
-# Close any diff window that may have opened. Use win_gotoid to avoid
-# the execute-N-wincmd-w bug (E1050).
+# Close any diff window that may have opened
 var pane_wnr = bufwinnr(bufnr('VPROJ'))
 var pane_wid = pane_wnr > 0 ? win_getid(pane_wnr) : 0
-# Find and close any non-pane window
 var all_wins = range(1, winnr('$'))
 for wnr in all_wins
   if wnr != pane_wnr && getbufvar(winbufnr(wnr), '&filetype') == 'diff'
@@ -161,54 +105,98 @@ endif
 # ──────────────────────────────────────────────
 echom '--- Diff Preview Edge Cases ---'
 
-# Test on directory (should be no-op)
-# Use normal mode j/k to navigate to parent dir (..)
-# Rather than navigating, just verify the exported function doesn't crash
+# OpenDiffPreview on first item (.. is a dir, so it exits early)
+var wins_edge_before: number = winnr('$')
 try
   call vproj#OpenDiffPreview()
-  Assert(true, 'OpenDiffPreview on any item does not crash')
+  var wins_edge_after: number = winnr('$')
+  Assert(wins_edge_after == wins_edge_before, 'OpenDiffPreview on dir: no windows created')
+  Assert(vproj#IsPaneVisible(), 'OpenDiffPreview on dir: pane still visible')
 catch
   Assert(false, 'OpenDiffPreview crash: ' .. v:exception)
 endtry
+
+# ──────────────────────────────────────────────
+# SECTION 6b: IsRegularFile with symlink (gap 5)
+# ──────────────────────────────────────────────
+echom '--- IsRegularFile Symlink ---'
+
+# IsRegularFile is used by ReadDir (line 2079) to filter directory entries.
+# A symlink to a regular file should pass IsRegularFile and appear in the listing.
+var sl_dir = '/tmp/vproj_symlink_test'
+if isdirectory(sl_dir) | delete(sl_dir, 'rf') | endif
+mkdir(sl_dir)
+writefile(['symlink test content', 'line 2'], sl_dir .. '/real_file.txt')
+silent! system('ln -s ' .. shellescape(sl_dir .. '/real_file.txt') .. ' ' .. shellescape(sl_dir .. '/link_to_file.txt'))
+
+execute 'cd' sl_dir
+vproj#PaneClose()
+vproj#PaneOpen()
+vproj#SwitchMode('file')
+
+# Scan the listing for the symlink — IsRegularFile must return true for it to appear
+var sl_lines = getbufline(bufnr('VPROJ'), 1, '$')
+var sl_symlink_found = false
+var sl_real_found = false
+for l in sl_lines
+  if l =~ 'link_to_file'
+    sl_symlink_found = true
+  endif
+  if l =~ 'real_file'
+    sl_real_found = true
+  endif
+endfor
+Assert(sl_real_found, 'symlink: real_file.txt appears in listing')
+Assert(sl_symlink_found, 'symlink: link_to_file.txt appears in listing (IsRegularFile returned true)')
+
+vproj#PaneClose()
+execute 'cd' getcwd()
+delete(sl_dir, 'rf')
+
+# Reopen pane for subsequent sections
+vproj#PaneOpen()
+vproj#SwitchMode('file')
 
 # ──────────────────────────────────────────────
 # SECTION 7: Discard Changes Edge Cases
 # ──────────────────────────────────────────────
 echom '--- Discard Edge Cases ---'
 
-# Discard in buf mode should exit early
+# Discard in buf mode should exit early (guard: mode != 'file' && mode != 'code')
 vproj#SwitchMode('buf')
+var wins_discard1: number = winnr('$')
 try
   call vproj#DiscardChanges()
-  Assert(true, 'DiscardChanges in buf mode exits early (no crash)')
+  Assert(winnr('$') == wins_discard1, 'DiscardChanges in buf mode: no windows created')
+  Assert(vproj#GetCurrentMode() == 'buf', 'DiscardChanges in buf mode: mode unchanged')
 catch
   Assert(false, 'DiscardChanges in buf mode crash: ' .. v:exception)
 endtry
 
-# Discard in code mode should exit early
+# Discard in code mode should exit early (guard: empty item or not in git)
 vproj#SwitchMode('code')
+var wins_discard2: number = winnr('$')
 try
   call vproj#DiscardChanges()
-  Assert(true, 'DiscardChanges in git mode exits early (no crash)')
+  Assert(winnr('$') == wins_discard2, 'DiscardChanges in code mode: no windows created')
+  Assert(vproj#GetCurrentMode() == 'code', 'DiscardChanges in code mode: mode unchanged')
 catch
-  Assert(false, 'DiscardChanges in git mode crash: ' .. v:exception)
+  Assert(false, 'DiscardChanges in code mode crash: ' .. v:exception)
 endtry
 
 # ──────────────────────────────────────────────
-# SECTION 8: D Key Discard Mapping
+# SECTION 8: D Key is Nav Char (DiscardChanges uses \D)
 # ──────────────────────────────────────────────
 echom '--- D Key Mapping ---'
 vproj#SwitchMode('file')
 var d_map = maparg('D', 'n', 0, 1)
 Assert(!empty(d_map), 'D is mapped in pane buffer')
-Assert(d_map.lhs == 'D', 'D map lhs is D')
+Assert(d_map.rhs =~ 'SelectByNavChar', 'D is nav char (freed from git)')
 
-# D key without interactive input — verify mapping exists and doesn't crash visual
-# Note: D with no input in a script will be at input() prompt
-# We verify the function is callable without crash via the early exit in buf/code mode
-var d_cmd = substitute(d_map.rhs, '^<Cmd>', '', '')
-var d_cmd_clean = substitute(d_cmd, '<CR>$', '', '')
-Assert(d_cmd_clean =~ 'vproj#DiscardChanges', 'D maps to DiscardChanges')
+# \D maps to DiscardChanges
+var bslash_D_map = maparg('\D', 'n', 0, 1)
+Assert(!empty(bslash_D_map), '\D has a mapping')
+Assert(bslash_D_map.rhs =~ 'DiscardChanges', '\D maps to DiscardChanges')
 
 # ──────────────────────────────────────────────
 # SECTION 9: Git Functions Exist
@@ -225,15 +213,18 @@ Assert(exists('*vproj#OpenDiffPreview') == 1, 'OpenDiffPreview function exists')
 Assert(exists('*vproj#DiscardChanges') == 1, 'DiscardChanges function exists')
 
 # ──────────────────────────────────────────────
-# SECTION 10: GitPush / GitPull Exist
+# SECTION 10: GitPush / GitPull Mappings
 # ──────────────────────────────────────────────
-echom '--- Push/Pull ---'
+echom '--- Push/Pull Mappings ---'
 
-# Already verified existence in section 9.
-# GitPush and GitPull would execute real git commands if called
-# from within a repo — don't call them. Key mapping tests in
-# section 12 confirm they're wired up correctly.
-Assert(true, 'GitPush/GitPull existence verified in section 9')
+# Verify the key mappings for \p and \u are wired to GitPush/GitPull
+var p_map = maparg('\p', 'n', 0, 1)
+Assert(!empty(p_map), '\p is mapped')
+Assert(p_map.rhs =~ 'GitPush', '\p maps to GitPush')
+
+var u_map = maparg('\u', 'n', 0, 1)
+Assert(!empty(u_map), '\u is mapped')
+Assert(u_map.rhs =~ 'GitPull', '\u maps to GitPull')
 
 # ──────────────────────────────────────────────
 # SECTION 12: C, P, U, B Key Mappings
@@ -246,13 +237,13 @@ var c_map = maparg('C', 'n', 0, 1)
 Assert(!empty(c_map), 'C is mapped in pane buffer')
 Assert(c_map.lhs == 'C', 'C map exists')
 
-var p_map = maparg('P', 'n', 0, 1)
-Assert(!empty(p_map), 'P is mapped in pane buffer')
-Assert(p_map.lhs == 'P', 'P map exists')
+var P_map = maparg('P', 'n', 0, 1)
+Assert(!empty(P_map), 'P is mapped in pane buffer')
+Assert(P_map.lhs == 'P', 'P map exists')
 
-var u_map = maparg('U', 'n', 0, 1)
-Assert(!empty(u_map), 'U is mapped in pane buffer')
-Assert(u_map.lhs == 'U', 'U map exists')
+var U_map = maparg('U', 'n', 0, 1)
+Assert(!empty(U_map), 'U is mapped in pane buffer')
+Assert(U_map.lhs == 'U', 'U map exists')
 
 var b_map = maparg('B', 'n', 0, 1)
 Assert(!empty(b_map), 'B is mapped in pane buffer')
@@ -263,87 +254,60 @@ Assert(b_map.lhs == 'B', 'B map exists')
 # ──────────────────────────────────────────────
 echom '--- NAV_CHARS Exclusion ---'
 
-# Verify that action keys are NOT in the nav char loop mappings
-# d, D, L, C, P, U, B should be action keys, not nav char jumps
-vproj#SwitchMode('log')
+# Verify git action keys use \ prefix (per John Chamberlain spec)
+# d, D, c, P, U, b, a, z, Z are now nav chars — git actions use \ prefix
+vproj#SwitchMode('file')
 
-# Check that the pane buffer has explicit mappings (not nav char mappings)
+# d is a nav char (freed by \ prefix), not a direct action key
 var d_nav_map = maparg('d', 'n', 0, 1)
 Assert(!empty(d_nav_map), 'd has a mapping')
-Assert(d_nav_map.rhs =~ 'OpenDiffPreview', 'd maps to OpenDiffPreview (not nav char)')
+Assert(d_nav_map.rhs =~ 'SelectByNavChar', 'd is nav char (git actions use \\ prefix)')
 
+# \d maps to OpenDiffPreview
+var bslash_d_map = maparg('\d', 'n', 0, 1)
+Assert(!empty(bslash_d_map), '\\d has a mapping')
+Assert(bslash_d_map.rhs =~ 'OpenDiffPreview', '\\d maps to OpenDiffPreview')
+
+# L is a nav char (log mode removed — L freed for navigation)
 var L_action_map = maparg('L', 'n', 0, 1)
-Assert(!empty(L_action_map), 'L has a mapping')
-Assert(L_action_map.rhs =~ "SwitchMode('log')", 'L maps to SwitchMode log (not nav char)')
+Assert(!empty(L_action_map), 'L is mapped as nav char')
+Assert(L_action_map.rhs =~ 'SelectByNavChar', 'L maps to SelectByNavChar (nav char, log removed)')
 
 # ──────────────────────────────────────────────
-# SECTION 14: Session Persistence with Log Mode
+# SECTION 14: Session Persistence — log→file migration
 # ──────────────────────────────────────────────
 echom '--- Session Persistence ---'
 
 vproj#SwitchMode('log')
 vproj#PaneClose()
 
-# Reopen — session should restore log mode
+# Reopen — session with 'log' should migrate to 'file'
 vproj#PaneOpen()
-Assert(vproj#IsPaneVisible(), 'open after log mode: pane visible')
-Assert(vproj#GetCurrentMode() == 'log', 'open after log mode: restores log mode')
+Assert(vproj#IsPaneVisible(), 'session: pane visible after reopen')
+Assert(vproj#GetCurrentMode() == 'file', 'session: log migrated to file')
 
 # ──────────────────────────────────────────────
-# SECTION 15: Empty Log Mode (outside git repo)
+# SECTION 15: SwitchMode('log') is a no-op
 # ──────────────────────────────────────────────
-echom '--- Empty Log Mode ---'
-
-vproj#PaneClose()
-
-# Test in non-git directory
-var orig_cwd = getcwd()
-cd /tmp
-vproj#PaneOpen()
-vproj#SwitchMode('log')
-
-var log_lines = getbufline(bufnr('VPROJ'), 1, '$')
-Assert(log_lines[2] =~ 'no commits', 'log mode: empty state shows placeholder')
-
-cd `=orig_cwd`
-
-# ──────────────────────────────────────────────
-# SECTION 16: Log Mode Refresh
-# ──────────────────────────────────────────────
-echom '--- Log Mode Refresh ---'
+echom '--- SwitchMode(log) no-op ---'
 
 vproj#SwitchMode('log')
-Assert(vproj#GetCurrentMode() == 'log', 'log refresh: stays in log mode')
-
-vproj#Refresh()
-Assert(vproj#GetCurrentMode() == 'log', 'log refresh: still in log mode after refresh')
-Assert(vproj#IsPaneVisible(), 'log refresh: pane still visible')
-
-# ──────────────────────────────────────────────
-# SECTION 17: Log Mode Width Config
-# ──────────────────────────────────────────────
-echom '--- Log Mode Width Config ---'
-
-g:vproj_pane_width_log = 50
-vproj#SwitchMode('log')
-Assert(vproj#GetPaneWidth() == 50, 'log mode: width config 50 applied')
-
-g:vproj_pane_width_log = 0
-vproj#SwitchMode('file')
+Assert(vproj#GetCurrentMode() == 'file', 'log→file: mode stays file')
 var w_before = vproj#GetPaneWidth()
-vproj#SwitchMode('log')
-Assert(vproj#GetPaneWidth() == w_before, 'log mode: width 0 does not change width')
 
-# ──────────────────────────────────────────────
-# SECTION 18: Log Mode Info Column
-# ──────────────────────────────────────────────
-echom '--- Log Mode Info Column ---'
-
+# SwitchMode('log') should not change width
 vproj#SwitchMode('log')
+Assert(vproj#GetPaneWidth() == w_before, 'log→file: width unchanged')
+
+# ToggleInfoColumn verification after log→file migration
+var info_state_before = vproj#IsInfoColumnVisible()
 vproj#ToggleInfoColumn()
-Assert(vproj#IsPaneVisible(), 'log mode: info column toggle keeps pane visible')
+Assert(vproj#IsInfoColumnVisible() != info_state_before, 'log→file: info column toggle changed visibility')
+Assert(vproj#IsPaneVisible(), 'log→file: pane visible after first toggle')
+
 vproj#ToggleInfoColumn()
-Assert(vproj#IsPaneVisible(), 'log mode: info column toggle back keeps pane visible')
+Assert(vproj#IsInfoColumnVisible() == info_state_before, 'log→file: info column toggle back to original')
+Assert(vproj#IsPaneVisible(), 'log→file: pane visible after second toggle')
 
 # SECTION 19: GitStashPush / GitStashPop Function Existence
 # ──────────────────────────────────────────────
@@ -358,21 +322,25 @@ echom '--- Blame Function Existence ---'
 
 Assert(exists('*vproj#GitBlame'), 'GitBlame function exists')
 
-# Blame is file-mode-only — should exit silently in other modes
+# Blame is file+code-mode-only — should exit silently in other modes
 vproj#SwitchMode('buf')
+var wins_blame1: number = winnr('$')
 try
   call vproj#GitBlame()
-  Assert(true, 'GitBlame in buf mode: exits without crash')
+  Assert(winnr('$') == wins_blame1, 'GitBlame in buf mode: no windows created')
+  Assert(vproj#GetCurrentMode() == 'buf', 'GitBlame in buf mode: mode unchanged')
 catch
   Assert(false, 'GitBlame in buf mode threw: ' .. v:exception)
 endtry
 
 vproj#SwitchMode('code')
+var wins_blame2: number = winnr('$')
 try
   call vproj#GitBlame()
-  Assert(true, 'GitBlame in git mode: exits without crash')
+  Assert(winnr('$') == wins_blame2, 'GitBlame in code mode: no windows created')
+  Assert(vproj#GetCurrentMode() == 'code', 'GitBlame in code mode: mode unchanged')
 catch
-  Assert(false, 'GitBlame in git mode threw: ' .. v:exception)
+  Assert(false, 'GitBlame in code mode threw: ' .. v:exception)
 endtry
 
 # Switch back to file mode for further tests

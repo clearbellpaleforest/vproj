@@ -29,6 +29,14 @@ def PaneCursorLine(): number
   return wid == 0 ? -1 : line('.', wid)
 enddef
 
+# Focus the pane window so normal-mode commands target it
+def FocusPane(): void
+  var wid = PaneWinID()
+  if wid > 0
+    win_gotoid(wid)
+  endif
+enddef
+
 # Ensure pane is open in file mode
 def Setup(): void
   if vproj#IsPaneVisible()
@@ -74,11 +82,11 @@ Assert(vproj#IsPaneVisible() && vproj#GetCurrentMode() == 'file',
 execute 'normal .'
 Assert(vproj#IsPaneVisible(), '. (parent) keeps pane open')
 
-# S-L — Log mode (Shift key, like other mode switches)
+# S-L — Log mode removed; verify S-L is not mapped to a mode switch
 Setup()
 try
   execute "normal \<S-L>"
-  Assert(vproj#GetCurrentMode() == 'log', 'S-L switches to log mode')
+  Assert(vproj#GetCurrentMode() == 'file', 'S-L no longer switches (log mode removed)')
 catch
   Assert(false, 'S-L error: ' .. v:exception)
 endtry
@@ -89,14 +97,16 @@ endtry
 echom '--- Enter ---'
 Setup()
 
-# Verify Enter is mapped — should not crash
+# Enter on first item (.. in file mode) calls NavigateUp, re-renders pane
 try
   execute "normal \<CR>"
-  Assert(true, 'Enter dispatched without crash')
+  Assert(vproj#GetCurrentMode() == 'file', 'Enter on .. preserves file mode')
+  Assert(vproj#IsPaneVisible(), 'Enter on .. pane stays visible')
+  Assert(PaneCursorLine() >= 3, 'Enter on .. cursor on valid selectable line')
 catch
   Assert(false, 'Enter error: ' .. v:exception)
 endtry
-# Pane stays open after file open in new two-panel layout
+# Re-setup for next section
 Setup()
 
 # ──────────────────────────────────────────────
@@ -125,32 +135,53 @@ Assert(vproj#GetCurrentMode() == 'file', 'S-F back to file mode')
 echom '--- Actions ---'
 Setup()
 
-# r — refresh
+# r — refresh (in pane buffer)
 execute 'normal r'
 Assert(vproj#IsPaneVisible(), 'r (refresh) keeps pane open')
 Assert(vproj#GetCurrentMode() == 'file', 'r preserves mode')
 
-# x — close buffer (buf mode)
+# x — close buffer (buf mode); create a buffer in right panel, close from pane
+# Open test file in the RIGHT panel (not the pane), then focus pane and close it
+if winnr('$') > 1
+  wincmd l
+else
+  # Only one window — open a split
+  rightbelow new
+endif
+edit /tmp/vproj_test_xbuf.txt
+write!
+# Back to pane, switch to buf mode, close the test buffer
+FocusPane()
 vproj#SwitchMode('buf')
+FocusPane()
+var buf_count_before = len(getbufinfo({'buflisted': 1}))
 try
   execute 'normal x'
-  Assert(vproj#IsPaneVisible(), 'x (close buffer) does not crash')
+  var buf_count_after = len(getbufinfo({'buflisted': 1}))
+  Assert(buf_count_after < buf_count_before, 'x (close buffer): buffer count decreased')
+  Assert(vproj#IsPaneVisible(), 'x (close buffer): pane stays visible')
 catch
   Assert(false, 'x error: ' .. v:exception)
 endtry
+# Clean up test file
+silent! call delete('/tmp/vproj_test_xbuf.txt')
 
-# +/- — toggle include (code mode)
+# +/- — toggle include (code mode); verify mode preserved
+Setup()
 vproj#SwitchMode('code')
+FocusPane()
 try
   execute 'normal +'
-  Assert(vproj#IsPaneVisible(), '+ (toggle include) does not crash')
+  Assert(vproj#GetCurrentMode() == 'code', '+ (toggle include): mode stays code')
+  Assert(vproj#IsPaneVisible(), '+ (toggle include): pane stays visible')
 catch
   Assert(false, '+ error: ' .. v:exception)
 endtry
 
 try
   execute 'normal -'
-  Assert(vproj#IsPaneVisible(), '- (toggle include) does not crash')
+  Assert(vproj#GetCurrentMode() == 'code', '- (toggle include): mode stays code')
+  Assert(vproj#IsPaneVisible(), '- (toggle include): pane stays visible')
 catch
   Assert(false, '- error: ' .. v:exception)
 endtry
@@ -159,7 +190,9 @@ endtry
 # SECTION 6: Width keys (Left, Right)
 # ──────────────────────────────────────────────
 echom '--- Width ---'
+Setup()
 vproj#SwitchMode('file')
+FocusPane()
 var w_before: number = vproj#GetPaneWidth()
 
 execute "normal \<Right>"
@@ -172,6 +205,7 @@ Assert(vproj#GetPaneWidth() == w_before, '<Left> shrinks pane')
 # SECTION 7: Close keys (q)
 # ──────────────────────────────────────────────
 echom '--- Close ---'
+Setup()
 
 # Q — close
 execute 'normal Q'
@@ -186,45 +220,89 @@ vproj#PaneClose()
 Assert(!vproj#IsPaneVisible(), 'PaneClose functions correctly')
 
 # ──────────────────────────────────────────────
+# SECTION 7b: HandleEsc — temp vs permanent mode (gap 1)
+# ──────────────────────────────────────────────
+echom '--- HandleEsc ---'
+Setup()
+
+# Esc in temporary mode (default): should close the pane
+execute "normal \<Esc>"
+Assert(!vproj#IsPaneVisible(), 'Esc (temp mode): pane closes')
+
+# Reopen, toggle to permanent mode, Esc should NOT close
+vproj#PaneOpen()
+vproj#PaneTogglePermanent()
+execute "normal \<Esc>"
+Assert(vproj#IsPaneVisible(), 'Esc (perm mode): pane stays open')
+vproj#PaneClose()
+
+# ──────────────────────────────────────────────
+# SECTION 7c: HandlePaneQ — temp vs permanent mode (gap 2)
+# ──────────────────────────────────────────────
+echom '--- HandlePaneQ ---'
+Setup()
+
+# q in temporary mode (default): should switch to qfix, not close
+execute 'normal q'
+Assert(vproj#IsPaneVisible(), 'q (temp mode): pane stays open')
+Assert(vproj#GetCurrentMode() == 'qfix', 'q (temp mode): switches to qfix mode')
+
+# Switch back to file, toggle to permanent, q should close
+vproj#SwitchMode('file')
+vproj#PaneTogglePermanent()
+execute 'normal q'
+Assert(!vproj#IsPaneVisible(), 'q (perm mode): pane closes')
+
+# ──────────────────────────────────────────────
 # SECTION 8: Passthrough keys (Vim defaults untouched)
 # ──────────────────────────────────────────────
 echom '--- Passthrough ---'
 Setup()
+FocusPane()
+var wid_passthru = PaneWinID()
 
-# Build list of passthrough keys and expected behavior
-  # Mode switching uses Shift keys (S-F, S-B, S-C, S-L).
-  # Nav chars (f, g, etc.) are mapped with <nowait> to SelectByNavChar.
-  # These Vim motion keys should still work as passthrough.
-var passthrough_tests: list<list<string>> = [
-  ['t' .. 'e',         't (find until)'],
-  ['w',                'w (word forward)'],
-  ['0',                '0 (line start)'],
-  ['$',                '$ (line end)'],
-  ['G',                'G (buffer bottom)'],
-  ["\<C-F>",           'Ctrl-F (page down)'],
-  ['H',                'H (screen top)'],
-  ['%',                '% (match pair)'],
-]
+# 0 — line start (column 1)
+execute 'normal $0'
+Assert(col('.', wid_passthru) == 1, '0: cursor goes to column 1')
 
-for [key, label] in passthrough_tests
-  try
-    execute 'normal ' .. key
-    Assert(true, label .. ' works')
-  catch
-    Assert(false, label .. ' error: ' .. v:exception)
-  endtry
-endfor
+# $ — line end
+execute 'normal $'
+Assert(col('.', wid_passthru) >= 1, '$: cursor at valid column')
 
-# y — yank (nomodifiable doesn't block yank)
+# w — word forward: verify cursor moves from start of line
+execute 'normal 0'
+var col_before_w = col('.', wid_passthru)
+execute 'normal w'
+var col_after_w = col('.', wid_passthru)
+# w may stay on same col if line has no word break; verify it did not crash
+Assert(col_after_w >= col_before_w, 'w: cursor did not go backwards')
+
+# G — buffer bottom: verify cursor line changed (unless already at bottom)
+execute 'normal gg'
+var line_before_G = line('.', wid_passthru)
+execute 'normal G'
+var line_after_G = line('.', wid_passthru)
+# In a short buffer, gg and G may go to same line
+Assert(line_after_G >= line_before_G, 'G: cursor moved to >= start line')
+
+# H — screen top (line should be valid)
+execute 'normal H'
+Assert(line('.', wid_passthru) >= 1, 'H: cursor on a valid line')
+
+# Ctrl-F — page down (line should be valid after scroll)
 try
-  execute 'normal yw'
-  Assert(true, 'y (yank) works')
+  execute "normal \<C-F>"
+  Assert(line('.', wid_passthru) >= 1, 'Ctrl-F: cursor on a valid line after page down')
 catch
-  Assert(false, 'y error: ' .. v:exception)
+  Assert(false, 'Ctrl-F error: ' .. v:exception)
 endtry
 
+# y — yank (nomodifiable does not block yank)
+execute 'normal 0wyw'
+var yanked = getreg('"')
+Assert(!empty(yanked), 'y (yank): register is non-empty after yank')
+
 # / — filter prompt (was passthrough, now mapped to PromptFilter)
-# Verify mapping exists (can't test directly: input() blocks in script)
 try
   var slash_map = maparg('/', 'n', 0, 1)
   Assert(!empty(slash_map), '/ is mapped in pane')
@@ -249,22 +327,42 @@ Setup()
 vproj#PaneTogglePermanent()
 
 # Close the non-pane window so only pane remains (winnr('$') == 1)
-wincmd w
-close!
+if winnr('$') > 1
+  wincmd w
+  close!
+endif
 
 # Move past parent dir (..) and subdirs to a file item (max 100 attempts)
 var attempts: number = 0
-while attempts < 100 && getbufline(bufnr('VPROJ'), PaneCursorLine())[0] =~ '/'
-  execute 'normal j'
-  attempts += 1
-endwhile
+var pbuf: number = bufnr('VPROJ')
+var cline: number = PaneCursorLine()
+if pbuf > 0 && cline > 0
+  var line_text: string = getbufline(pbuf, cline)[0]
+  while attempts < 100 && line_text =~ '/'
+    execute 'normal j'
+    attempts += 1
+    cline = PaneCursorLine()
+    if cline <= 0 || empty(getbufline(pbuf, cline))
+      break
+    endif
+    line_text = getbufline(pbuf, cline)[0]
+  endwhile
+endif
 
 if attempts >= 100
-  Assert(true, 'Single-window: no non-dir item found (all dirs) — skipped')
+  # All items are directories — Enter on dir navigates into it
+  execute 'normal gg3G'
+  try
+    execute "normal \<CR>"
+    Assert(vproj#IsPaneVisible(), 'Single-window: Enter on dir keeps pane visible')
+    Assert(vproj#GetCurrentMode() == 'file', 'Single-window: Enter on dir preserves mode')
+  catch
+    Assert(false, 'Single-window dir enter error: ' .. v:exception)
+  endtry
 else
   try
     execute "normal \<CR>"
-    Assert(winnr('$') >= 2, 'Enter on file: two-panel layout exists')
+    Assert(winnr('$') == 2, 'Enter on file: exactly 2 windows (pane + file)')
     Assert(vproj#IsPaneVisible(), 'Pane stays open after file open')
     # Cursor should be back in the pane after file open
     Assert(bufname('%') == 'VPROJ', 'Cursor returned to pane')
@@ -273,23 +371,153 @@ else
   endtry
 endif
 
+
+	# ──────────────────────────────────────────────
+	# ──────────────────────────────────────────────
+	# SECTION 9a: Two-panel file open (Enter must not create 3rd window)
+	# ──────────────────────────────────────────────
+	echom '--- Two-Panel File Open ---'
+	Setup()
+	# Setup() already creates a 2-panel layout via PaneOpen
+	# Press Enter on a file — must reuse existing right panel, not create a 3rd
+	var wins_before_9a = winnr('$')
+	# Navigate past dirs to a file
+	var pbuf_9a = bufnr('VPROJ')
+	var cline_9a = PaneCursorLine()
+	var attempts_9a = 0
+	if pbuf_9a > 0 && cline_9a > 0
+	  var line_text_9a = getbufline(pbuf_9a, cline_9a)[0]
+	  while attempts_9a < 100 && line_text_9a =~ '/'
+	    execute 'normal j'
+	    attempts_9a += 1
+	    cline_9a = PaneCursorLine()
+	    if cline_9a <= 0 || empty(getbufline(pbuf_9a, cline_9a))
+	      break
+	    endif
+	    line_text_9a = getbufline(pbuf_9a, cline_9a)[0]
+	  endwhile
+	endif
+
+	if attempts_9a < 100
+	  try
+	    execute "normal \<CR>"
+	    # Must stay at exactly 2 windows — pane + file (not 3)
+	    Assert(winnr('$') == wins_before_9a, 'Two-panel Enter on file: window count unchanged')
+	    Assert(vproj#IsPaneVisible(), 'Two-panel Enter: pane stays visible')
+	    Assert(bufname('%') == 'VPROJ', 'Two-panel Enter: cursor returns to pane')
+	  catch
+	    Assert(false, 'Two-panel Enter error: ' .. v:exception)
+	  endtry
+	else
+	  # All items are dirs — Enter on one navigates into it
+	  execute 'normal gg3G'
+	  try
+	    execute "normal \<CR>"
+	    Assert(vproj#IsPaneVisible(), 'Two-panel: Enter on dir keeps pane visible')
+	    Assert(vproj#GetCurrentMode() == 'file', 'Two-panel: Enter on dir preserves mode')
+	  catch
+	    Assert(false, 'Two-panel dir enter error: ' .. v:exception)
+	  endtry
+	endif
 # ──────────────────────────────────────────────
-# SECTION 10: Git stash and blame mappings
+# SECTION 9b: PaneTogglePermanent double-toggle
 # ──────────────────────────────────────────────
-echom '--- Git Stash/Blame Mappings ---'
+echom '--- PaneTogglePermanent Double-Toggle ---'
 Setup()
 
-var stash_z_map = maparg('z', 'n', 0, 1)
-Assert(!empty(stash_z_map), 'z is mapped in pane buffer')
-Assert(stash_z_map.rhs =~ 'GitStashPush', 'z maps to GitStashPush')
+# First toggle: temporary → permanent
+vproj#PaneTogglePermanent()
+Assert(vproj#IsPaneVisible(), 'perm-1: pane visible after first toggle')
 
-var stash_Z_map = maparg('Z', 'n', 0, 1)
-Assert(!empty(stash_Z_map), 'Z is mapped in pane buffer')
-Assert(stash_Z_map.rhs =~ 'GitStashPop', 'Z maps to GitStashPop')
+# Second toggle: permanent → close
+vproj#PaneTogglePermanent()
+Assert(!vproj#IsPaneVisible(), 'perm-2: pane closed after second toggle')
 
-var blame_a_map = maparg('a', 'n', 0, 1)
-Assert(!empty(blame_a_map), 'a is mapped in pane buffer')
-Assert(blame_a_map.rhs =~ 'GitBlame', 'a maps to GitBlame')
+# Third toggle: closed → open in permanent
+vproj#PaneTogglePermanent()
+Assert(vproj#IsPaneVisible(), 'perm-3: pane reopened after third toggle')
+
+# Fourth toggle: permanent → close
+vproj#PaneTogglePermanent()
+Assert(!vproj#IsPaneVisible(), 'perm-4: pane closed after fourth toggle')
+
+# ──────────────────────────────────────────────
+# SECTION 9c: ToggleInfoColumn edge cases
+# ──────────────────────────────────────────────
+echom '--- ToggleInfoColumn ---'
+Setup()
+
+var info_before: bool = vproj#IsInfoColumnVisible()
+vproj#ToggleInfoColumn()
+Assert(vproj#IsInfoColumnVisible() != info_before, 'ToggleInfoColumn: toggles visibility')
+Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn: pane stays visible')
+
+vproj#ToggleInfoColumn()
+Assert(vproj#IsInfoColumnVisible() == info_before, 'ToggleInfoColumn: toggles back')
+
+# Toggle in buf mode
+vproj#SwitchMode('buf')
+var info_buf_before = vproj#IsInfoColumnVisible()
+vproj#ToggleInfoColumn()
+Assert(vproj#IsInfoColumnVisible() != info_buf_before, 'ToggleInfoColumn in buf: visibility toggled')
+Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in buf: pane stays visible')
+
+# Toggle in code mode
+vproj#SwitchMode('code')
+var info_code_before = vproj#IsInfoColumnVisible()
+vproj#ToggleInfoColumn()
+Assert(vproj#IsInfoColumnVisible() != info_code_before, 'ToggleInfoColumn in code: visibility toggled')
+Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in code: pane stays visible')
+
+# ──────────────────────────────────────────────
+# SECTION 9d: Tree view toggle
+# ──────────────────────────────────────────────
+echom '--- Tree View Toggle ---'
+Setup()
+
+var tree_before: bool = vproj#IsTreeViewActive()
+Assert(!tree_before, 'tree view: starts inactive')
+
+execute 'normal T'
+Assert(vproj#IsTreeViewActive() != tree_before, 'tree view: T toggles on')
+Assert(vproj#IsPaneVisible(), 'tree view: pane stays visible after toggle on')
+
+execute 'normal T'
+Assert(vproj#IsTreeViewActive() == tree_before, 'tree view: T toggles back off')
+Assert(vproj#IsPaneVisible(), 'tree view: pane stays visible after toggle off')
+
+# ──────────────────────────────────────────────
+# SECTION 10: Git actions (\ prefix, per John Chamberlain spec)
+# ──────────────────────────────────────────────
+echom '--- Git Action Mappings ---'
+Setup()
+
+# All git actions now use \ prefix
+var expected_mappings: list<list<string>> = [
+  ['\s', 'GitStageToggle'],
+  ['\d', 'OpenDiffPreview'],
+  ['\D', 'DiscardChanges'],
+  ['\c', 'GitCommit'],
+  ['\p', 'GitPush'],
+  ['\u', 'GitPull'],
+  ['\b', 'GitBranchSwitch'],
+  ['\z', 'GitStashPush'],
+  ['\Z', 'GitStashPop'],
+  ['\a', 'GitBlame'],
+]
+
+for [lhs, rhs_fragment] in expected_mappings
+  var m = maparg(lhs, 'n', 0, 1)
+  Assert(!empty(m), lhs .. ' is mapped in pane buffer')
+  Assert(m.rhs =~ rhs_fragment, lhs .. ' maps to ' .. rhs_fragment)
+endfor
+
+# Verify single-letter git keys are now nav chars (freed from git duty)
+for ch in ['s', 'd', 'c', 'b', 'z', 'a', 'D', 'P', 'U', 'Z']
+  var m = maparg(ch, 'n', 0, 1)
+  Assert(!empty(m), ch .. ' mapped as nav char')
+  Assert(m.rhs =~ 'SelectByNavChar', ch .. ' maps to SelectByNavChar (freed from git)')
+endfor
 
 # ──────────────────────────────────────────────
 # Cleanup

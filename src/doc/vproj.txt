@@ -87,25 +87,25 @@ Code Mode  ([C]ode)                                 *vproj-mode-code*
     Press |+| or |-| to toggle inclusion. Press Enter on the
     status line to rename or create the project.
 
-    Git actions (|s|, |d|, |D|, |c|, |P|, |U|, |b|, |z|, |Z|,
-    |a|, |Ctrl-G|) work in both File and Code modes.
+    Git actions (|\s|, |\d|, |\D|, |\c|, |\p|, |\u|, |\b|, |\z|,
+    |\Z|, |\a|, |Ctrl-G|) use a backslash prefix in both File and Code modes.
 
                                                *vproj-git-actions*
-    Git actions work in file and code modes. Stage (|s|)
-    uses `git add` / `git reset HEAD`. Diff preview (|d|) opens
-    a vertical split with `git diff`. Discard (|D|) prompts for
-    confirmation before `git checkout`. Commit (|c|) prompts for
-    a message. Push (|P|), pull (|U|), and branch switch (|b|)
-    use prompts for target/confirmation.
+    Git actions work in file and code modes via \(bslash) prefix.
+    Stage (|\s|) uses `git add` / `git reset HEAD`. Diff preview
+    (|\d|) opens a vertical split with `git diff`. Discard (|\D|)
+    prompts for confirmation before `git checkout`. Commit (|\c|)
+    prompts for a message. Push (|\p|), pull (|\u|), and branch
+    switch (|\b|) use prompts for target/confirmation.
 
                                                *vproj-git-stash*
-    Stash (|z|) pushes current changes with an optional message via
-    `git stash push`. Stash pop (|Z|) lists all stashes first, then
+    Stash (|\z|) pushes current changes with an optional message via
+    `git stash push`. Stash pop (|\Z|) lists all stashes first, then
     prompts for which to pop (default: top). Both operate on the
     whole repository.
 
                                                *vproj-git-blame*
-    Blame (|a|) opens a vertical split showing `git annotate` output
+    Blame (|\a|) opens a vertical split showing `git annotate` output
     for the file under cursor. Requires the file be tracked by git.
     Press |q| in the blame window to close it.
 
@@ -113,14 +113,9 @@ Qfix Mode  ([Q]fix)                                 *vproj-mode-qfix*
     Displays the Vim quickfix list. Press Enter to open the
     selected entry at the file and line number.
 
-Log Mode  ([L]og)                                   *vproj-mode-log*
-    Git commit history. Shows `git log --oneline` output with
-    nav characters. Press Enter on a commit to open a detailed
-    diff in a split. Press |Shift-L| to switch to Log mode.
-
 Press Enter on the mode menu line (line 1) to cycle through modes.
-Press |Shift-F|, |Shift-B|, |Shift-C|, or |Shift-L| inside the pane
-to switch directly.
+Press |Shift-F|, |Shift-B|, or |Shift-C| inside the pane to switch
+directly.
 
 ==============================================================================
 4. KEY MAPPINGS                                    *vproj-mappings*
@@ -143,19 +138,18 @@ Mode switching:
     |Shift-F|            File mode
     |Shift-B|            Buf mode
     |Shift-C|            Code mode
-    |Shift-L|            Log mode
 
-Git actions (file and code modes):
-    |s|                 Stage / unstage file under cursor
-    |d|                 Open diff preview in vertical split
-    |D|                 Discard file changes (with confirmation)
-    |c|                 Commit with message prompt
-    |P|                 Push to remote
-    |U|                 Pull --ff-only from remote
-    |b|                 Switch branch (with prompt)
-    |z|                 Stash changes (optional message)
-    |Z|                 Pop a stash (shows list, select by index)
-    |a|                 Blame file under cursor (git annotate)
+Git actions — backslash prefix (file and code modes):
+    |\s|                Stage / unstage file under cursor
+    |\d|                Open diff preview in vertical split
+    |\D|                Discard file changes (with confirmation)
+    |\c|                Commit with message prompt
+    |\p|                Push to remote
+    |\u|                Pull --ff-only from remote
+    |\b|                Switch branch (with prompt)
+    |\z|                Stash changes (optional message)
+    |\Z|                Pop a stash (shows list, select by index)
+    |\a|                Blame file under cursor (git annotate)
     <C-G>               Toggle showing only git-changed files
 
 Actions:

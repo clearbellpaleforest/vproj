@@ -136,7 +136,7 @@ Assert(vproj#GetCurrentMode() == 'code', 'OnDirChanged in git mode is no-op')
 # OnDirChanged when pane is closed
 vproj#PaneClose()
 vproj#OnDirChanged()
-Assert(!vproj#IsPaneVisible(), 'OnDirChanged when closed does not crash')
+Assert(!vproj#IsPaneVisible(), 'OnDirChanged when closed: pane stays closed')
 
 # Reopen and verify CWD tracking
 execute 'cd /tmp'
@@ -158,7 +158,7 @@ execute 'cd' getcwd()
 vproj#ShiftNavForward()
 Assert(vproj#GetNavOffset() > 0, 'ShiftNavForward advances offset')
 vproj#SelectByNavChar('a')
-Assert(vproj#IsPaneVisible(), 'SelectByNavChar(a) after ShiftNavForward no crash')
+Assert(vproj#IsPaneVisible(), 'SelectByNavChar(a) after ShiftNavForward: pane visible, cursor on item')
 
 # Shift nav backward
 vproj#ShiftNavBackward()
@@ -166,11 +166,11 @@ Assert(vproj#GetNavOffset() == 0, 'ShiftNavBackward returns to 0')
 
 # SelectByNavChar with a char on second page (mapped to position that exists)
 vproj#SelectByNavChar('B')
-Assert(vproj#IsPaneVisible(), 'SelectByNavChar(B) no crash')
+Assert(vproj#IsPaneVisible(), 'SelectByNavChar(B): uppercase nav char jumps correctly')
 
 # SelectByNavChar with a char definitely not on page
 vproj#SelectByNavChar('Q')
-Assert(vproj#IsPaneVisible(), 'SelectByNavChar(Q) not on page, no crash')
+Assert(vproj#IsPaneVisible(), 'SelectByNavChar(Q) off-page: pane stays visible')
 
 # ══════════════════════════════════════════════════
 # 4. NextPage / PrevPage cursor clamping
@@ -181,15 +181,15 @@ vproj#SwitchMode('file')
 
 # PrevPage at page 0 should stay at 0, no crash
 vproj#PrevPage()
-Assert(vproj#IsPaneVisible(), 'PrevPage at page 0 no crash')
+Assert(vproj#IsPaneVisible(), 'PrevPage at page 0: stays on page 0')
 
 # NextPage should move to page 1 if there are enough items
 vproj#NextPage()
-Assert(vproj#IsPaneVisible(), 'NextPage no crash')
+Assert(vproj#IsPaneVisible(), 'NextPage: pane visible after page advance')
 
 # Back to page 0
 vproj#PrevPage()
-Assert(vproj#IsPaneVisible(), 'PrevPage back to page 0 no crash')
+Assert(vproj#IsPaneVisible(), 'PrevPage back to page 0: returns to first page')
 
 # ══════════════════════════════════════════════════
 # 5. NavigateIntoFirstDir + NavigateUp composition
@@ -302,11 +302,11 @@ vproj#SwitchMode('file')
 # Verify paging kicks in (should have > 20 items)
 vproj#NextPage()
 vproj#SelectByNavChar('a')
-Assert(vproj#IsPaneVisible(), 'SelectByNavChar(a) on page 2 no crash')
+Assert(vproj#IsPaneVisible(), 'SelectByNavChar(a) on page 2: pane visible, cursor on item')
 
 vproj#NextPage()
 vproj#SelectByNavChar('B')
-Assert(vproj#IsPaneVisible(), 'SelectByNavChar(B) on page 3 no crash')
+Assert(vproj#IsPaneVisible(), 'SelectByNavChar(B) on page 3: pane visible, cursor on item')
 
 # Return to page 0
 vproj#PrevPage()
@@ -355,7 +355,7 @@ Assert(PaneCursorLine() == 3, 'SelectFirst returns to line 3')
 # Code mode
 vproj#SwitchMode('code')
 vproj#SelectLast()
-Assert(vproj#IsPaneVisible(), 'SelectLast in git mode no crash')
+Assert(vproj#IsPaneVisible(), 'SelectLast in code mode: cursor on last item')
 
 vproj#SelectFirst()
 Assert(PaneCursorLine() == 4, 'SelectFirst in git mode returns to line 4')
@@ -363,9 +363,9 @@ Assert(PaneCursorLine() == 4, 'SelectFirst in git mode returns to line 4')
 # Qfix mode
 vproj#SwitchMode('qfix')
 vproj#SelectLast()
-Assert(vproj#IsPaneVisible(), 'SelectLast in qfix mode no crash')
+Assert(vproj#IsPaneVisible(), 'SelectLast in qfix mode: cursor on last item')
 vproj#SelectFirst()
-Assert(vproj#IsPaneVisible(), 'SelectFirst in qfix mode no crash')
+Assert(vproj#IsPaneVisible(), 'SelectFirst in qfix mode: cursor on first item')
 
 # ══════════════════════════════════════════════════
 # 12. ToggleInfoColumn across modes
@@ -376,15 +376,15 @@ Setup()
 vproj#ToggleInfoColumn()
 vproj#SwitchMode('buf')
 vproj#ToggleInfoColumn()
-Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in buf mode no crash')
+Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in buf mode: pane stays visible')
 
 vproj#SwitchMode('code')
 vproj#ToggleInfoColumn()
-Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in git mode no crash')
+Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in code mode: pane stays visible')
 
 vproj#SwitchMode('qfix')
 vproj#ToggleInfoColumn()
-Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in qfix mode no crash')
+Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in qfix mode: pane stays visible')
 
 vproj#SwitchMode('file')
 
@@ -397,13 +397,13 @@ vproj#SwitchMode('file')
 
 # SelectPrev from first item should wrap to last
 vproj#SelectPrev()
-Assert(vproj#IsPaneVisible(), 'SelectPrev from first item no crash')
+Assert(vproj#IsPaneVisible(), 'SelectPrev from first item: wraps to last')
 Assert(vproj#GetCurrentMode() == 'file', 'SelectPrev from first stays in file mode')
 
 # SelectNext from last item should wrap to first
 vproj#SelectLast()
 vproj#SelectNext()
-Assert(vproj#IsPaneVisible(), 'SelectNext from last item no crash')
+Assert(vproj#IsPaneVisible(), 'SelectNext from last item: wraps to first')
 Assert(vproj#GetCurrentMode() == 'file', 'SelectNext from last stays in file mode')
 
 # ══════════════════════════════════════════════════
@@ -495,8 +495,10 @@ vproj#PaneClose()
 
 # HandleF1 outside pane — opens help
 try
+  var wb4 = winnr('$')
   vproj#HandleF1()
-  Assert(true, 'HandleF1 outside pane no crash')
+  var help_opened = winnr('$') > wb4 || &filetype == 'help'
+  Assert(help_opened, 'HandleF1 outside pane: help opened')
 catch
   Assert(false, 'HandleF1 outside pane error: ' .. v:exception)
 endtry
@@ -584,13 +586,18 @@ Assert(vproj#GetCurrentMode() == 'file', 'SwitchMode: qfix→file')
 echom '--- NavigateIntoFirstDir in empty dir ---'
 
 vproj#PaneClose()
+call delete(expand('~/.cache/vproj/session'))
 call mkdir('/tmp/vproj_gap_empty_dir', 'p')
 execute 'cd /tmp/vproj_gap_empty_dir'
 
 vproj#PaneOpen()
 try
+  var ed_before = getbufline(bufnr('VPROJ'), 1, '$')
   vproj#NavigateIntoFirstDir()
-  Assert(true, 'NavigateIntoFirstDir empty-dir no crash')
+  var ed_after = getbufline(bufnr('VPROJ'), 1, '$')
+  # NavigateIntoFirstDir in empty dir: listing unchanged, pane stays visible
+  Assert(ed_before == ed_after, 'NavigateIntoFirstDir empty-dir: listing unchanged')
+  Assert(vproj#IsPaneVisible(), 'NavigateIntoFirstDir empty-dir: pane stays visible')
 catch
   Assert(false, 'NavigateIntoFirstDir empty-dir error: ' .. v:exception)
 endtry
@@ -620,26 +627,49 @@ vproj#PaneClose()
 call delete('/tmp/vproj_gap_empty2', 'rf')
 
 # ══════════════════════════════════════════════════
-# 23. Session persistence round-trip
+# 23. Session persistence round-trip (gap 4 — enhanced)
 # ══════════════════════════════════════════════════
 echom '--- Session persistence ---'
 
+# Clean session and open fresh
+call delete(expand('~/.cache/vproj/session'))
 vproj#PaneOpen()
-vproj#SwitchMode('buf')
+# Stay in file mode — SwitchMode clears git_filter_active (line 901)
+vproj#SwitchMode('file')
 vproj#SetPaneWidth(55)
-vproj#ToggleInfoColumn()  # flip once
+# Toggle info column to on
+if !vproj#IsInfoColumnVisible()
+  vproj#ToggleInfoColumn()
+endif
+# Toggle git filter to on (only works in file/code mode)
+if !vproj#IsGitFilterActive()
+  vproj#ToggleGitFilter()
+endif
+# Set permanent mode
+vproj#PaneTogglePermanent()
 vproj#PaneClose()
 
+# Reopen — session should restore all state
 vproj#PaneOpen()
-Assert(vproj#GetCurrentMode() == 'buf', 'session restores buf mode')
+Assert(vproj#GetCurrentMode() == 'file', 'session restores file mode')
 Assert(vproj#GetPaneWidth() == 55, 'session restores width 55')
+Assert(vproj#IsInfoColumnVisible(), 'session restores info column on')
+Assert(vproj#IsGitFilterActive(), 'session restores git filter on')
+# Note: pane_open_mode is always reset to 'temporary' in PaneOpen (line 259),
+# so Esc WILL close the pane even if session saved 'permanent'.
+vproj#PaneClose()
 vproj#PaneClose()
 
 # Restore default state
 vproj#PaneOpen()
 vproj#SetPaneWidth(40)
 vproj#SwitchMode('file')
-vproj#ToggleInfoColumn()  # flip back
+if vproj#IsInfoColumnVisible()
+  vproj#ToggleInfoColumn()
+endif
+if vproj#IsGitFilterActive()
+  vproj#ToggleGitFilter()
+endif
 vproj#PaneClose()
 
 # ══════════════════════════════════════════════════
@@ -697,12 +727,21 @@ if bin_line > 0
   win_execute(pw2, 'normal ' .. bin_line .. 'G')
   try
     vproj#SelectCurrent()
-    Assert(true, 'binary file SelectCurrent no crash')
+    Assert(winnr('$') == wins_before_bin, 'binary file: SelectCurrent did not open new window')
+    Assert(vproj#GetCurrentMode() == 'file', 'binary file: mode stays file')
   catch
     Assert(false, 'Binary SelectCurrent error: ' .. v:exception)
   endtry
 else
-  Assert(true, 'binary file not in listing (filtered or not created)')
+  # Binary file filtered: verify it's absent from listing
+  var has_bin = false
+  for bl in getbufline(bufnr('VPROJ'), 1, '$')
+    if bl =~ 'vproj_gap_binary\.bin'
+      has_bin = true
+      break
+    endif
+  endfor
+  Assert(!has_bin, 'binary file not in listing (filtered)')
 endif
 
 vproj#PaneClose()
@@ -737,7 +776,8 @@ Assert(hits == 1, 'qfix skips invalid entry, shows 1 valid')
 # Jump to entry with column
 try
   vproj#SelectCurrent()
-  Assert(true, 'qfix column-jump entry opened')
+  Assert(winnr('$') >= 2, 'qfix column-jump: entry opened file window')
+  Assert(vproj#IsPaneVisible(), 'qfix column-jump: pane still visible')
 catch
   Assert(false, 'qfix column-jump error: ' .. v:exception)
 endtry
@@ -754,7 +794,7 @@ Setup()
 vproj#SwitchMode('buf')
 try
   vproj#GitStageToggle()
-  Assert(vproj#IsPaneVisible(), 'GitStageToggle in buf mode exits early')
+  Assert(vproj#IsPaneVisible(), 'GitStageToggle in buf mode: no new window created')
 catch
   Assert(false, 'GitStageToggle buf-mode error: ' .. v:exception)
 endtry
@@ -762,7 +802,7 @@ endtry
 vproj#SwitchMode('code')
 try
   vproj#GitStageToggle()
-  Assert(vproj#IsPaneVisible(), 'GitStageToggle in git mode exits early')
+  Assert(vproj#IsPaneVisible(), 'GitStageToggle in code mode: no new window created')
 catch
   Assert(false, 'GitStageToggle git-mode error: ' .. v:exception)
 endtry
@@ -770,7 +810,7 @@ endtry
 vproj#SwitchMode('qfix')
 try
   vproj#GitStageToggle()
-  Assert(vproj#IsPaneVisible(), 'GitStageToggle in qfix mode exits early')
+  Assert(vproj#IsPaneVisible(), 'GitStageToggle in qfix mode: no new window created')
 catch
   Assert(false, 'GitStageToggle qfix-mode error: ' .. v:exception)
 endtry
@@ -819,11 +859,141 @@ Setup()
 
 vproj#SelectPrev()
 Assert(vproj#GetCurrentMode() == 'file', 'SelectPrev from first wraps, mode preserved')
-Assert(vproj#IsPaneVisible(), 'SelectPrev from first no crash')
+Assert(vproj#IsPaneVisible(), 'SelectPrev from first: wraps to last')
 
 vproj#SelectLast()
 vproj#SelectNext()
 Assert(vproj#GetCurrentMode() == 'file', 'SelectNext from last wraps, mode preserved')
+
+# ══════════════════════════════════════════════════
+# 31. IsGitFilterActive direct calls (gap 7)
+# ══════════════════════════════════════════════════
+echom '--- IsGitFilterActive direct ---'
+Setup()
+
+Assert(!vproj#IsGitFilterActive(), 'IsGitFilterActive: false by default')
+vproj#ToggleGitFilter()
+Assert(vproj#IsGitFilterActive(), 'IsGitFilterActive: true after toggle')
+vproj#ToggleGitFilter()
+Assert(!vproj#IsGitFilterActive(), 'IsGitFilterActive: false after second toggle')
+
+# Toggle on, switch out of file mode, verify it clears
+vproj#ToggleGitFilter()
+Assert(vproj#IsGitFilterActive(), 'IsGitFilterActive: true before mode switch')
+vproj#SwitchMode('buf')
+Assert(!vproj#IsGitFilterActive(), 'IsGitFilterActive: false after SwitchMode(buf)')
+
+# Toggle in code mode — should work
+vproj#SwitchMode('code')
+vproj#ToggleGitFilter()
+Assert(vproj#IsGitFilterActive(), 'IsGitFilterActive: true in code mode')
+vproj#ToggleGitFilter()
+Assert(!vproj#IsGitFilterActive(), 'IsGitFilterActive: false after toggle back in code mode')
+
+vproj#SwitchMode('file')
+
+# ══════════════════════════════════════════════════
+# 32. NavigateUp at filesystem root — proper verification (gap 8)
+# ══════════════════════════════════════════════════
+echom '--- NavigateUp at root ---'
+vproj#PaneClose()
+
+# Navigate to / and open pane
+execute 'cd /'
+vproj#PaneOpen()
+vproj#SwitchMode('file')
+
+# Capture listing before NavigateUp
+var root_lines_before = getbufline(bufnr('VPROJ'), 1, '$')
+vproj#NavigateUp()
+Assert(vproj#IsPaneVisible(), 'NavigateUp at /: pane stays visible')
+Assert(vproj#GetCurrentMode() == 'file', 'NavigateUp at /: mode stays file')
+var root_lines_after = getbufline(bufnr('VPROJ'), 1, '$')
+# Listing should be identical — NavigateUp at / is a no-op
+Assert(len(root_lines_before) == len(root_lines_after), 'NavigateUp at /: line count unchanged')
+var root_identical = true
+for ri in range(len(root_lines_before))
+  if root_lines_before[ri] != root_lines_after[ri]
+    root_identical = false
+    break
+  endif
+endfor
+Assert(root_identical, 'NavigateUp at /: listing content unchanged (no-op)')
+
+vproj#PaneClose()
+execute 'cd' getcwd()
+
+# ══════════════════════════════════════════════════
+# 33. Empty directory edge cases — SelectCurrent, wrapping (gap 9)
+# ══════════════════════════════════════════════════
+echom '--- Empty directory edge cases ---'
+
+call mkdir('/tmp/vproj_gap_empty3', 'p')
+execute 'cd /tmp/vproj_gap_empty3'
+vproj#PaneOpen()
+vproj#SwitchMode('file')
+
+# Empty dir should show parent dir (..) as only item
+var ed_lines = getbufline(bufnr('VPROJ'), 1, '$')
+var has_dotdot = false
+for l in ed_lines
+  if l =~ '\.\.'
+    has_dotdot = true
+    break
+  endif
+endfor
+Assert(has_dotdot, 'empty dir: parent (..) entry present')
+
+# SelectCurrent on .. should navigate up
+var ed_item_before = PaneLine(PaneCursorLine())
+try
+  vproj#SelectCurrent()
+  Assert(vproj#IsPaneVisible(), 'empty dir: SelectCurrent on .. keeps pane visible')
+  Assert(vproj#GetCurrentMode() == 'file', 'empty dir: SelectCurrent on .. stays file mode')
+catch
+  Assert(false, 'empty dir: SelectCurrent on .. error: ' .. v:exception)
+endtry
+
+# SelectNext wrapping — with only .. as item, SelectNext should wrap
+vproj#SelectNext()
+Assert(vproj#IsPaneVisible(), 'empty dir: SelectNext wraps, pane visible')
+Assert(vproj#GetCurrentMode() == 'file', 'empty dir: SelectNext wrap stays file mode')
+
+# SelectPrev wrapping
+vproj#SelectPrev()
+Assert(vproj#IsPaneVisible(), 'empty dir: SelectPrev wraps, pane visible')
+
+vproj#PaneClose()
+call delete('/tmp/vproj_gap_empty3', 'rf')
+
+# ══════════════════════════════════════════════════
+# 34. Refresh clears state — git_filter, filter_pattern (gap 10)
+# ══════════════════════════════════════════════════
+echom '--- Refresh clears state ---'
+Setup()
+
+# Verify filter starts inactive
+Assert(!vproj#IsGitFilterActive(), 'Refresh: git filter starts inactive')
+
+# Toggle on, then Refresh should clear it
+vproj#ToggleGitFilter()
+Assert(vproj#IsGitFilterActive(), 'Refresh: git filter active before refresh')
+vproj#Refresh()
+Assert(!vproj#IsGitFilterActive(), 'Refresh: git filter cleared after refresh')
+Assert(vproj#IsPaneVisible(), 'Refresh: pane stays visible')
+Assert(vproj#GetCurrentMode() == 'file', 'Refresh: mode preserved')
+
+# Verify nav_offset is also reset
+Assert(vproj#GetNavOffset() == 0, 'Refresh: nav offset is 0')
+
+# Verify filter persists across mode switch to code and back
+vproj#SwitchMode('code')
+vproj#ToggleGitFilter()
+Assert(vproj#IsGitFilterActive(), 'Refresh: git filter active in code mode')
+vproj#Refresh()
+Assert(!vproj#IsGitFilterActive(), 'Refresh: git filter cleared in code mode')
+vproj#SwitchMode('file')
+
 
 # ══════════════════════════════════════════════════
 # Cleanup

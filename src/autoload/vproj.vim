@@ -39,11 +39,11 @@ var expanded_dirs: dict<number> = {}
 var preview_active: bool = false
 var preview_bufnr: number = -1
 
-const MODE_KEYS: list<string> = ['file', 'buf', 'code', 'qfix', 'log']
-const MODE_LABELS: dict<string> = {file: '[F]ile', buf: '[B]uf', code: '[C]ode', qfix: '[q]fix', log: '[L]og'}
+const MODE_KEYS: list<string> = ['file', 'buf', 'code', 'qfix']
+const MODE_LABELS: dict<string> = {file: '[F]ile', buf: '[B]uf', code: '[C]ode', qfix: '[q]fix'}
 const MODE_HIGHLIGHT_GROUPS: dict<string> = {
   file: 'VprojModeFile', buf: 'VprojModeBuf', code: 'VprojModeCode',
-  qfix: 'VprojModeQfix', log: 'VprojModeLog',
+  qfix: 'VprojModeQfix',
 }
 const MATCH_AUTO_ID: number = -1
 const MODE_MENU_LINE: number = 1
@@ -54,11 +54,12 @@ const FIRST_FILE_ITEM_LINE: number = 3
 const FIRST_CODE_ITEM_LINE: number = 4
 const QFIX_SEP_LINE: number = 2
 const FIRST_QFIX_ITEM_LINE: number = 3
-const LOG_SEP_LINE: number = 2
-const FIRST_LOG_ITEM_LINE: number = 3
+# Nav chars for direct item selection. Excluded lowercase: h, j, k (nav keys),
+# p (preview), q (qfix/close), r (refresh), x (close buffer). Excluded uppercase:
+# B, C, F (mode keys), Q (close pane), T (tree toggle). All others available.
 const NAV_CHARS: list<string> = [
-  'e', 'f', 'g', 'i', 'l', 'm', 'n', 'o', 't', 'u', 'v', 'w', 'y',
-  'E', 'G', 'H', 'I', 'J', 'K', 'M', 'N', 'O', 'R', 'S', 'V', 'W', 'X', 'Y',
+  'a', 'b', 'c', 'd', 'e', 'f', 'g', 'i', 'l', 'm', 'n', 'o', 's', 't', 'u', 'v', 'w', 'y', 'z',
+  'A', 'D', 'E', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'R', 'S', 'U', 'V', 'W', 'X', 'Y', 'Z',
   '1', '2', '3', '4', '5', '6', '7', '8', '9',
 ]
 const MIN_WIDTH: number = 20
@@ -187,24 +188,22 @@ export def PaneOpen(): void
   if pane_bufnr > 0 && bufexists(pane_bufnr)
     # Switch to a window without winfixheight/winfixwidth so splits succeed.
     # Plugins like NERDTree/Tagbar set these, which may block splits (E36).
-    # Only search windows in the current tab — do not switch tabs.
-    var current_tab: number = tabpagenr()
     var found_clear: bool = false
-    for info in getwininfo()
-      if get(info, 'tabpage', 0) == current_tab
-          && !getwinvar(info.winid, '&winfixheight', 0)
-          && !getwinvar(info.winid, '&winfixwidth', 0)
-        win_gotoid(info.winid)
+    for wnr in range(1, winnr('$'))
+      var wid: number = win_getid(wnr)
+      if !getwinvar(wid, '&winfixheight', 0)
+          && !getwinvar(wid, '&winfixwidth', 0)
+        win_gotoid(wid)
         found_clear = true
         break
       endif
     endfor
     if !found_clear
       # Fall back: find window without winfixheight (needed for :new)
-      for info in getwininfo()
-        if get(info, 'tabpage', 0) == current_tab
-            && !getwinvar(info.winid, '&winfixheight', 0)
-          win_gotoid(info.winid)
+      for wnr in range(1, winnr('$'))
+        var wid2: number = win_getid(wnr)
+        if !getwinvar(wid2, '&winfixheight', 0)
+          win_gotoid(wid2)
           found_clear = true
           break
         endif
@@ -249,38 +248,39 @@ export def PaneOpen(): void
     silent! execute 'vert resize ' .. pane_width
     selected_line = FirstSelectableLine()
     SetupPaneMappings()
+    SetupAutocommands()
     try
       LoadSession()
     catch
       echom 'vproj: session load error: ' .. v:exception
     endtry
+    pane_open_mode = 'temporary'
     try
       Render()
     catch
       echom 'vproj: render error: ' .. v:exception
     endtry
+
     silent! doautocmd <nomodeline> User VprojPaneReady
     return
   endif
 
   # Switch to a window without winfixheight/winfixwidth so splits succeed.
-  # Only search windows in the current tab — do not switch tabs.
-  var current_tab: number = tabpagenr()
   var found_clear: bool = false
-  for info in getwininfo()
-    if get(info, 'tabpage', 0) == current_tab
-        && !getwinvar(info.winid, '&winfixheight', 0)
-        && !getwinvar(info.winid, '&winfixwidth', 0)
-      win_gotoid(info.winid)
+  for wnr in range(1, winnr('$'))
+    var wid: number = win_getid(wnr)
+    if !getwinvar(wid, '&winfixheight', 0)
+        && !getwinvar(wid, '&winfixwidth', 0)
+      win_gotoid(wid)
       found_clear = true
       break
     endif
   endfor
   if !found_clear
-    for info in getwininfo()
-      if get(info, 'tabpage', 0) == current_tab
-          && !getwinvar(info.winid, '&winfixheight', 0)
-        win_gotoid(info.winid)
+    for wnr in range(1, winnr('$'))
+      var wid2: number = win_getid(wnr)
+      if !getwinvar(wid2, '&winfixheight', 0)
+        win_gotoid(wid2)
         found_clear = true
         break
       endif
@@ -303,17 +303,17 @@ export def PaneOpen(): void
       new
     catch
       Error('vproj: Cannot open pane (new) — ' .. v:exception .. ' (' .. &columns .. ' cols, ' .. winnr('$') .. ' wins)')
-    return
-  endtry
-  try
-    wincmd H
-  catch
-    try
-      wincmd L
-    catch
-      # Both edges blocked by winfixwidth — keep horizontal layout
+      return
     endtry
-  endtry
+    try
+      wincmd H
+    catch
+      try
+        wincmd L
+      catch
+        # Both edges blocked by winfixwidth — keep horizontal layout
+      endtry
+    endtry
   finally
     &winminwidth = saved_minwidth
     &winminheight = saved_minheight
@@ -354,6 +354,7 @@ export def PaneOpen(): void
   catch
     echom 'vproj: session load error: ' .. v:exception
   endtry
+  pane_open_mode = 'temporary'
   try
     Render()
   catch
@@ -556,16 +557,13 @@ def SkipNonSelectable(line: number): bool
   if line == MODE_MENU_LINE
     return true
   endif
-  if current_mode != 'code' && current_mode != 'qfix' && current_mode != 'log' && line == FILE_STATUS_SEP_LINE
+  if current_mode != 'code' && current_mode != 'qfix' && line == FILE_STATUS_SEP_LINE
     return true
   endif
   if current_mode == 'code' && line == CODE_SEP_LINE
     return true
   endif
   if current_mode == 'qfix' && line == QFIX_SEP_LINE
-    return true
-  endif
-  if current_mode == 'log' && line == LOG_SEP_LINE
     return true
   endif
   if paging_active
@@ -584,8 +582,6 @@ def FirstSelectableLine(): number
     return FIRST_CODE_ITEM_LINE
   elseif current_mode == 'qfix'
     return FIRST_QFIX_ITEM_LINE
-  elseif current_mode == 'log'
-    return FIRST_LOG_ITEM_LINE
   else
     return FIRST_FILE_ITEM_LINE
   endif
@@ -840,10 +836,6 @@ export def SelectCurrent(): void
     if has_key(item, 'filename') && has_key(item, 'lnum')
       OpenQfixEntry(item)
     endif
-  elseif current_mode == 'log'
-    if has_key(item, 'hash')
-      OpenCommitDetail(item)
-    endif
   endif
 enddef
 
@@ -894,8 +886,6 @@ export def SwitchMode(key: string): void
     mode_width = get(g:, 'vproj_pane_width_code', 0)
   elseif mode == 'qfix'
     mode_width = get(g:, 'vproj_pane_width_qfix', 0)
-  elseif mode == 'log'
-    mode_width = get(g:, 'vproj_pane_width_log', 0)
   endif
   if type(mode_width) == v:t_number && mode_width >= MIN_WIDTH && mode_width <= MAX_WIDTH
     pane_width = mode_width
@@ -969,6 +959,30 @@ export def GetPaneBufnr(): number
   return pane_bufnr
 enddef
 
+export def IsPagingActive(): bool
+  return paging_active
+enddef
+
+export def GetCurrentPage(): number
+  return current_page
+enddef
+
+export def GetTotalPages(): number
+  return total_pages
+enddef
+
+export def IsTreeViewActive(): bool
+  return tree_view_active
+enddef
+
+export def IsInfoColumnVisible(): bool
+  return show_info_column
+enddef
+
+export def IsGitFilterActive(): bool
+  return git_filter_active
+enddef
+
 # ──────────────────────────────────────────────
 # Display
 # ──────────────────────────────────────────────
@@ -980,8 +994,6 @@ def RefreshItems(): void
     items = tree_view_active ? TreeItems(current_dir) : ReadDir(current_dir)
   elseif current_mode == 'buf'
     items = BufferList()
-  elseif current_mode == 'log'
-    items = LogItems()
   else
     items = QfixItems()
   endif
@@ -1014,8 +1026,6 @@ def BuildDisplayLines(visible: list<dict<any>>): list<string>
       lines->extend(tree_view_active ? BuildTreeLines(visible) : BuildFileLines(visible))
     elseif current_mode == 'buf'
       lines->extend(BuildBufLines(visible))
-    elseif current_mode == 'log'
-      lines->extend(BuildLogLines(visible))
     else
       lines->extend(BuildQfixLines(visible))
     endif
@@ -1120,8 +1130,6 @@ def BuildStatusline(): string
     mode_letter = 'c'
   elseif current_mode == 'qfix'
     mode_letter = 'q'
-  elseif current_mode == 'log'
-    mode_letter = 'l'
   else
     mode_letter = '?'
   endif
@@ -1148,33 +1156,37 @@ def BuildStatusline(): string
     endif
   endif
 
-  # 3. Git overlay: ⎇ branch [N]M [N]? [N]A
-  var branch: string = GitBranch()
-  if !empty(branch)
-    var git_part: string = '⎇ ' .. branch
-    var sm: dict<string> = GitStatusMap()
-    var m_count: number = 0
-    var q_count: number = 0
-    var a_count: number = 0
-    for status in sm->values()
-      if status == 'M'
-        m_count += 1
-      elseif status == '?'
-        q_count += 1
-      elseif status == 'A'
-        a_count += 1
+  # 3. Git overlay (code mode only per John Chamberlain directive #3)
+  if current_mode == 'code'
+    var branch: string = GitBranch()
+    if !empty(branch)
+      var git_part: string = '⎇ ' .. branch
+      var sm: dict<string> = GitStatusMap()
+      var m_count: number = 0
+      var q_count: number = 0
+      var a_count: number = 0
+      for status in sm->values()
+        if status == 'M'
+          m_count += 1
+        elseif status == '?'
+          q_count += 1
+        elseif status == 'A'
+          a_count += 1
+        endif
+      endfor
+      if m_count > 0
+        git_part ..= '  ' .. m_count .. 'M'
       endif
-    endfor
-    if m_count > 0
-      git_part ..= '  ' .. m_count .. 'M'
+      if q_count > 0
+        git_part ..= '  ' .. q_count .. '?'
+      endif
+      if a_count > 0
+        git_part ..= '  ' .. a_count .. 'A'
+      endif
+      add(parts, git_part)
+    elseif IsInGitRepo()
+      add(parts, 'untracked')
     endif
-    if q_count > 0
-      git_part ..= '  ' .. q_count .. '?'
-    endif
-    if a_count > 0
-      git_part ..= '  ' .. a_count .. 'A'
-    endif
-    add(parts, git_part)
   endif
 
   var left: string = join(parts, '  ')
@@ -1643,13 +1655,12 @@ def OpenPreview(): void
     ClosePreview()
   endif
   var pane_wid: number = win_getid()
-  # Move to a non-pane window if one exists in the current tab, so botright vnew
+  # Move to a non-pane window if one exists, so botright vnew
   # splits the file area instead of nesting inside the pane.
-  # Only search windows in the current tab — do not switch tabs.
-  var current_tab: number = tabpagenr()
-  for info in getwininfo()
-    if info.winid != pane_wid && get(info, 'tabpage', 0) == current_tab
-      win_gotoid(info.winid)
+  for wnr in range(1, winnr('$'))
+    var wid: number = win_getid(wnr)
+    if wid != pane_wid
+      win_gotoid(wid)
       break
     endif
   endfor
@@ -2078,11 +2089,7 @@ def BuildFileLines(file_items: list<dict<any>>): list<string>
   var result: list<string> = []
   var info_width: number = show_info_column ? 5 : 0
   var visible_idx: number = 0
-  # Git status: 1-char indicator (space if no status or not in git repo)
-  var in_git: bool = IsInGitRepo()
-  var status_map: dict<string> = in_git ? GitStatusMap() : {}
-  var git_width: number = in_git ? 2 : 0
-  var prefix_width: number = 2 + git_width
+  var prefix_width: number = 2
 
   for item in file_items
     var name: string = get(item, 'name', '')
@@ -2097,18 +2104,12 @@ def BuildFileLines(file_items: list<dict<any>>): list<string>
       info = repeat(' ', info_width - strwidth(info)) .. info
     endif
 
-    # Build line with nav indicator, optional git status, and name
     var indicator: string = NavChar(item, visible_idx)
-    var git_char: string = ' '
-    if in_git && !get(item, 'is_parent', false) && !is_dir
-      var st: string = get(status_map, get(item, 'path', ''), '')
-      git_char = empty(st) ? ' ' : st
-    endif
     var name_width: number = pane_width - info_width - prefix_width
     if strwidth(name) > name_width
       name = strcharpart(name, 0, name_width)
     endif
-    var line: string = indicator .. (in_git ? git_char : '') .. name
+    var line: string = indicator .. name
     var pad: number = pane_width - strwidth(line) - strwidth(info)
     if pad > 0
       line = line .. repeat(' ', pad)
@@ -2167,10 +2168,7 @@ enddef
 def BuildTreeLines(visible: list<dict<any>>): list<string>
   var result: list<string> = []
   var info_width: number = show_info_column ? 5 : 0
-  var in_git: bool = IsInGitRepo()
-  var status_map: dict<string> = in_git ? GitStatusMap() : {}
-  var git_width: number = in_git ? 2 : 0
-  var prefix_width: number = 2 + git_width
+  var prefix_width: number = 2
   var visible_idx: number = 0
 
   for item in visible
@@ -2190,14 +2188,8 @@ def BuildTreeLines(visible: list<dict<any>>): list<string>
       visible_idx += 1
     endif
 
-    var git_char: string = ' '
-    if in_git && !get(item, 'is_parent', false) && !is_dir
-      var st: string = get(status_map, get(item, 'path', ''), '')
-      git_char = empty(st) ? ' ' : st
-    endif
-
-    # Format: [nav][git][indent][expand_char] name
-    var line: string = indicator .. (in_git ? git_char .. ' ' : '') .. indent .. expand_char
+    # Format: [nav][indent][expand_char] name
+    var line: string = indicator .. indent .. expand_char
     if expand_char != ''
       line = line .. ' '
     endif
@@ -2213,7 +2205,7 @@ def BuildTreeLines(visible: list<dict<any>>): list<string>
     if strwidth(name) > name_width
       name = strcharpart(name, 0, name_width)
       # Rebuild line with truncated name
-      line = indicator .. (in_git ? git_char .. ' ' : '') .. indent .. expand_char
+      line = indicator .. indent .. expand_char
       if expand_char != ''
         line = line .. ' '
       endif
@@ -2315,10 +2307,10 @@ def OpenInRightPanel(): number
   set winminwidth=1 winminheight=1
   try
     var found_non_pane: bool = false
-    var current_tab: number = tabpagenr()
-    for info in getwininfo()
-      if info.winid != pane_wid && get(info, 'tabpage', 0) == current_tab
-        win_gotoid(info.winid)
+    for wnr in range(1, winnr('$'))
+      var wid: number = win_getid(wnr)
+      if wid != pane_wid
+        win_gotoid(wid)
         found_non_pane = true
         break
       endif
@@ -2356,7 +2348,13 @@ def OpenFile(path: string): void
   if OpenInRightPanel() < 0
     return
   endif
-  execute 'edit ' .. fnameescape(path)
+  var saved_shm: string = &shortmess
+  set shortmess+=A
+  try
+    execute 'edit ' .. fnameescape(path)
+  finally
+    &shortmess = saved_shm
+  endtry
   win_gotoid(pane_wid)
 enddef
 
@@ -3191,7 +3189,13 @@ def OpenQfixEntry(item: dict<any>): void
   if bufnr >= 1
     execute 'buffer ' .. bufnr
   elseif filereadable(fname)
-    execute 'edit ' .. fnameescape(fname)
+    var saved_shm_qf: string = &shortmess
+    set shortmess+=A
+    try
+      execute 'edit ' .. fnameescape(fname)
+    finally
+      &shortmess = saved_shm_qf
+    endtry
   else
     Error('vproj: Cannot open: ' .. fname)
     win_gotoid(pane_wid)
@@ -3205,113 +3209,6 @@ def OpenQfixEntry(item: dict<any>): void
     execute 'normal! ' .. get(item, 'col', 0) .. '|'
   endif
   win_gotoid(pane_wid)
-enddef
-
-def LogItems(): list<dict<any>>
-  var root: string = GitRoot()
-  if empty(root)
-    return []
-  endif
-  var output: string = system('git -C ' .. shellescape(root) .. ' log --oneline --decorate -n 100 2>/dev/null')
-  if v:shell_error != 0 || empty(output)
-    return []
-  endif
-  var result: list<dict<any>> = []
-  for line in output->split('\n')
-    if empty(line)
-      continue
-    endif
-    var space_idx: number = stridx(line, ' ')
-    if space_idx < 1
-      continue
-    endif
-    var hash: string = line[ : space_idx - 1]
-    var rest: string = line[space_idx + 1 : ]
-    result->add({hash: hash, subject: rest})
-  endfor
-  return result
-enddef
-
-def OpenCommitDetail(item: dict<any>): void
-  var hash: string = get(item, 'hash', '')
-  if empty(hash)
-    return
-  endif
-  var root: string = GitRoot()
-  if empty(root)
-    return
-  endif
-  var pane_wid: number = win_getid()
-  LowerCmdheight()
-  var saved_minwidth: number = &winminwidth
-  var saved_minheight: number = &winminheight
-  set winminwidth=1 winminheight=1
-  try
-    if winnr('$') < 2
-      rightbelow split
-    else
-      wincmd p
-    endif
-    rightbelow vsplit
-  catch
-    win_gotoid(pane_wid)
-    Error('vproj: Cannot create commit view — ' .. v:exception)
-    return
-  finally
-    RestoreCmdheight()
-    &winminwidth = saved_minwidth
-    &winminheight = saved_minheight
-  endtry
-  enew
-  setlocal buftype=nofile
-  setlocal bufhidden=wipe
-  setlocal noswapfile
-  setlocal nobuflisted
-  setlocal filetype=git
-  setlocal wrap=0
-  setlocal readonly
-  nnoremap <buffer> <silent> q <Cmd>close<CR>
-  nnoremap <buffer> <silent> do <Nop>
-  nnoremap <buffer> <silent> dp <Nop>
-  var show_cmd: string = 'git -C ' .. shellescape(root) .. ' show --stat --format=fuller ' .. shellescape(hash)
-  silent execute 'read !' .. show_cmd
-  if v:shell_error != 0
-    close
-    win_gotoid(pane_wid)
-    Error('vproj: Failed to show commit ' .. hash)
-    return
-  endif
-  cursor(1, 1)
-  delete _
-  setlocal nomodifiable
-  setlocal nomodified
-
-  win_gotoid(pane_wid)
-  echom 'Commit: ' .. hash
-enddef
-
-def BuildLogLines(log_items: list<dict<any>>): list<string>
-  var result: list<string> = []
-  if empty(log_items)
-    result->add('  (no commits)')
-    return result
-  endif
-  var visible_idx: number = 0
-  for item in log_items
-    var nav: string = NavChar(item, visible_idx)
-    var hash: string = item.hash
-    var subject: string = item.subject
-    var line: string = nav .. ' ' .. hash .. ' ' .. subject
-    var w: number = strwidth(line)
-    if w > pane_width
-      line = strcharpart(line, 0, pane_width)
-    elseif w < pane_width
-      line = line .. repeat(' ', pane_width - w)
-    endif
-    result->add(line)
-    visible_idx += 1
-  endfor
-  return result
 enddef
 
 export def HandleEsc(): void
@@ -3345,7 +3242,7 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> <Up> <Cmd>call vproj#SelectPrev()<CR>
   nnoremap <buffer> <silent> <nowait> j <Cmd>call vproj#SelectNext()<CR>
   nnoremap <buffer> <silent> <nowait> k <Cmd>call vproj#SelectPrev()<CR>
-  nnoremap <buffer> <silent> h <Cmd>call vproj#NavigateUp()<CR>
+  nnoremap <buffer> <silent> <nowait> h <Cmd>call vproj#NavigateUp()<CR>
   nnoremap <buffer> <silent> <C-T> <Cmd>call vproj#SelectFirst()<CR>
   nnoremap <buffer> <silent> <C-B> <Cmd>call vproj#SelectLast()<CR>
   nnoremap <buffer> <silent> <C-K> <Cmd>call vproj#NavigateUp()<CR>
@@ -3362,23 +3259,21 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> <S-F> <Cmd>call vproj#SwitchMode('file')<CR>
   nnoremap <buffer> <silent> <S-B> <Cmd>call vproj#SwitchMode('buf')<CR>
   nnoremap <buffer> <silent> <S-C> <Cmd>call vproj#SwitchMode('code')<CR>
-  nnoremap <buffer> <silent> <S-L> <Cmd>call vproj#SwitchMode('log')<CR>
-
   # Toggle tree view
-  nnoremap <buffer> <silent> T <Cmd>call vproj#ToggleTreeView()<CR>
+  nnoremap <buffer> <silent> <nowait> T <Cmd>call vproj#ToggleTreeView()<CR>
 
   # Qfix / close (q in permanent mode closes pane; in temporary switches to qfix)
   nnoremap <buffer> <silent> <nowait> q <Cmd>call vproj#HandlePaneQ()<CR>
 
   # Include / exclude (code mode)
-  nnoremap <buffer> <silent> + <Cmd>call vproj#IncludeItem()<CR>
-  nnoremap <buffer> <silent> - <Cmd>call vproj#ExcludeItem()<CR>
+  nnoremap <buffer> <silent> <nowait> + <Cmd>call vproj#IncludeItem()<CR>
+  nnoremap <buffer> <silent> <nowait> - <Cmd>call vproj#ExcludeItem()<CR>
 
   # Refresh
   nnoremap <buffer> <silent> <nowait> r <Cmd>call vproj#Refresh()<CR>
 
   # Preview toggle
-  nnoremap <buffer> <silent> p <Cmd>call vproj#TogglePreview()<CR>
+  nnoremap <buffer> <silent> <nowait> p <Cmd>call vproj#TogglePreview()<CR>
 
   # Paging
   nnoremap <buffer> <silent> <C-N> <Cmd>call vproj#NextPage()<CR>
@@ -3389,11 +3284,11 @@ def SetupPaneMappings(): void
 
   # Nav indicator shift
   nnoremap <buffer> <silent> <nowait> > <Cmd>call vproj#ShiftNavForward()<CR>
-  nnoremap <buffer> <silent> <lt> <Cmd>call vproj#ShiftNavBackward()<CR>
+  nnoremap <buffer> <silent> <nowait> <lt> <Cmd>call vproj#ShiftNavBackward()<CR>
 
   # Filter
-  nnoremap <buffer> <silent> / <Cmd>call vproj#PromptFilter()<CR>
-  nnoremap <buffer> <silent> * <Cmd>call vproj#GrepSearch()<CR>
+  nnoremap <buffer> <silent> <nowait> / <Cmd>call vproj#PromptFilter()<CR>
+  nnoremap <buffer> <silent> <nowait> * <Cmd>call vproj#GrepSearch()<CR>
 
   # Nav indicator direct selection (alphanumeric chars only)
   for ch in NAV_CHARS
@@ -3406,32 +3301,27 @@ def SetupPaneMappings(): void
   # Git: toggle status filter
   nnoremap <buffer> <silent> <C-G> <Cmd>call vproj#ToggleGitFilter()<CR>
 
-  # Git: stage/unstage file
-  nnoremap <buffer> <silent> <nowait> s <Cmd>call vproj#GitStageToggle()<CR>
-
-  # Git: diff preview and discard
-  nnoremap <buffer> <silent> <nowait> d <Cmd>call vproj#OpenDiffPreview()<CR>
-  nnoremap <buffer> <silent> D <Cmd>call vproj#DiscardChanges()<CR>
-
-  # Git: whole-repo actions
-  nnoremap <buffer> <silent> <nowait> c <Cmd>call vproj#GitCommit()<CR>
-  nnoremap <buffer> <silent> P <Cmd>call vproj#GitPush()<CR>
-  nnoremap <buffer> <silent> U <Cmd>call vproj#GitPull()<CR>
-  nnoremap <buffer> <silent> <nowait> b <Cmd>call vproj#GitBranchSwitch()<CR>
-
-  # Git: stash and blame
-  nnoremap <buffer> <silent> <nowait> z <Cmd>call vproj#GitStashPush()<CR>
-  nnoremap <buffer> <silent> <nowait> Z <Cmd>call vproj#GitStashPop()<CR>
-  nnoremap <buffer> <silent> a <Cmd>call vproj#GitBlame()<CR>
+  # Git actions use \ prefix (per John Chamberlain spec)
+  # All lowercase a-z are reserved for nav chars
+  nnoremap <buffer> <silent> \s <Cmd>call vproj#GitStageToggle()<CR>
+  nnoremap <buffer> <silent> \d <Cmd>call vproj#OpenDiffPreview()<CR>
+  nnoremap <buffer> <silent> \D <Cmd>call vproj#DiscardChanges()<CR>
+  nnoremap <buffer> <silent> \c <Cmd>call vproj#GitCommit()<CR>
+  nnoremap <buffer> <silent> \p <Cmd>call vproj#GitPush()<CR>
+  nnoremap <buffer> <silent> \u <Cmd>call vproj#GitPull()<CR>
+  nnoremap <buffer> <silent> \b <Cmd>call vproj#GitBranchSwitch()<CR>
+  nnoremap <buffer> <silent> \z <Cmd>call vproj#GitStashPush()<CR>
+  nnoremap <buffer> <silent> \Z <Cmd>call vproj#GitStashPop()<CR>
+  nnoremap <buffer> <silent> \a <Cmd>call vproj#GitBlame()<CR>
 
   # Close pane
-  nnoremap <buffer> <silent> Q <Cmd>call vproj#PaneClose()<CR>
+  nnoremap <buffer> <silent> <nowait> Q <Cmd>call vproj#PaneClose()<CR>
 
   # ESC closes pane in temporary mode
   nnoremap <buffer> <silent> <Esc> <Cmd>call vproj#HandleEsc()<CR>
 
   # Parent directory shortcut
-  nnoremap <buffer> <silent> . <Cmd>call vproj#NavigateUp()<CR>
+  nnoremap <buffer> <silent> <nowait> . <Cmd>call vproj#NavigateUp()<CR>
 enddef
 
 def SetupAutocommands(): void
@@ -3584,8 +3474,8 @@ def LoadSession(): void
     var key: string = trim(line[ : eq - 1])
     var val: string = trim(line[eq + 1 : ])
     if key == 'mode' && !empty(val)
-      if val == 'ind'
-        val = 'log'
+      if val == 'ind' || val == 'log'
+        val = 'file'
       elseif val == 'git'
         val = 'code'
       endif
@@ -3637,13 +3527,11 @@ export def DefineHighlights(): void
   highlight default link VprojGitConflict ErrorMsg
   highlight default link VprojGitIgnored Ignore
 
-  # ── Mode labels — hardcoded backgrounds for visual distinction ──
-  highlight default VprojModeFile ctermfg=0   ctermbg=178 cterm=bold guifg=#1A1A1A guibg=#D7AF00 gui=bold
-  highlight default VprojModeBuf ctermfg=0   ctermbg=76  cterm=bold guifg=#1A1A1A guibg=#5FD700 gui=bold
-  highlight default VprojModeCode ctermfg=0   ctermbg=75  cterm=bold guifg=#1A1A1A guibg=#5FAFFF gui=bold
-
-  highlight default VprojModeQfix ctermfg=0   ctermbg=39  cterm=bold guifg=#1A1A1A guibg=#00AFFF gui=bold
-  highlight default VprojModeLog ctermfg=0   ctermbg=44  cterm=bold guifg=#1A1A1A guibg=#00D7D7 gui=bold
+  # ── Mode labels — linked to semantic groups for colorscheme compatibility ──
+  highlight default link VprojModeFile Title
+  highlight default link VprojModeBuf Directory
+  highlight default link VprojModeCode Special
+  highlight default link VprojModeQfix Question
 
   # ── Cursor, navigation, info ──
   highlight default link VprojCursorLine CursorLine

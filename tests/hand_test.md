@@ -23,7 +23,6 @@ Press `Tab` to open the pane, then work through each section.
 - [ ] `j` / `k` — move cursor down / up
 - [ ] `<Down>` / `<Up>` — same as j / k
 - [ ] `h` — go to parent directory
-- [ ] `l` — enter directory or open file
 - [ ] `.` — same as h (parent directory)
 - [ ] `<CR>` (Enter) on a file — open file in right split
 - [ ] `<CR>` on a directory — navigate into it
@@ -40,10 +39,8 @@ Pressing these while pane is focused:
 - [ ] `<S-F>` (Shift-F) — File mode (browse filesystem)
 - [ ] `<S-B>` (Shift-B) — Buf mode (open buffers)
 - [ ] `<S-C>` (Shift-C) — Code mode (project tree from .vproj)
-- [ ] `<S-L>` (Shift-L) — Log mode (git commit history)
-
 Verify each mode label appears on line 1 with colored background.
-Mode menu: `[F]ile  [B]uf  [C]ode  [Q]fix  [L]og`
+Mode menu: `[F]ile  [B]uf  [C]ode  [Q]fix`
 
 ## 4. Width
 
@@ -78,35 +75,31 @@ Nav chars are the single chars at start of each line.
 
 Jump to item by pressing the nav char directly. Try several uppercase, lowercase, and digit chars from the current page. If a char is not on the current page, nothing happens (no crash).
 
-Chars NOT available for nav (already mapped): h, j, k, l, ., r, x, +, -, T, p
+Chars NOT available for nav (already mapped): h, j, k, q, r, x, p, T, ., +, -, /, *, <, >, Q
 
-## 8. Git Actions
+## 8. Git Actions (\\ prefix — per John Chamberlain spec)
 
+All git actions use `\` prefix to free lowercase a-z for nav chars.
 Navigate to a git-tracked file (file or code mode):
 
-- [ ] `s` — stage/unstage file under cursor (`git add` / `git reset HEAD`)
-- [ ] `d` — open diff preview in vertical split (`q` to close)
-- [ ] `D` — discard file changes (confirmation prompt)
-- [ ] `C` — commit with message prompt
-- [ ] `P` — push to remote
-- [ ] `U` — pull --ff-only from remote
-- [ ] `B` — switch branch (prompt for branch name)
-- [ ] `z` — stash changes (optional message prompt)
-- [ ] `Z` — pop a stash (shows list, select by index)
-- [ ] `a` — blame file under cursor (split with `git annotate`, `q` to close)
+- [ ] `\s` — stage/unstage file under cursor (`git add` / `git reset HEAD`)
+- [ ] `\d` — open diff preview in vertical split (`q` to close)
+- [ ] `\D` — discard file changes (confirmation prompt)
+- [ ] `\c` — commit with message prompt
+- [ ] `\p` — push to remote
+- [ ] `\u` — pull --ff-only from remote
+- [ ] `\b` — switch branch (prompt for branch name)
+- [ ] `\z` — stash changes (optional message prompt)
+- [ ] `\Z` — pop a stash (shows list, select by index)
+- [ ] `\a` — blame file under cursor (split with `git annotate`, `q` to close)
 - [ ] `<C-G>` — toggle showing only git-changed files
 
 Git actions should show error messages when no repo is present (not crash).
 
-## 9. Log Mode
+## 9. Log Mode (REMOVED)
 
-From a git repo directory:
-
-- [ ] `<S-L>` — switch to log mode
-- [ ] `j` / `k` — navigate commits
-- [ ] `<CR>` on a commit — open commit detail in split
-- [ ] `q` in commit detail — close split
-- [ ] The commit hash is shown in the status bar after opening
+Log mode has been removed per design directive. `<S-L>` is no longer mapped.
+Mode menu shows 4 modes: `[F]ile  [B]uf  [C]ode  [Q]fix`.
 
 ## 10. Qfix Mode
 
@@ -160,24 +153,20 @@ From a git repo directory:
 
 These Vim keys should NOT be remapped and should work as usual:
 
-- [ ] `t<char>` — find until character
-- [ ] `w` — word forward
-- [ ] `e` — end of word
 - [ ] `0` / `$` — line start / line end
-- [ ] `G` — go to buffer bottom
-- [ ] `H` / `M` / `L` — screen top / middle / bottom
 - [ ] `%` — jump to matching `( ) { } [ ]`
 - [ ] `{` / `}` — paragraph back / forward
-- [ ] `y` — yank (copies text from pane buffer)
-- [ ] `<C-F>` / `<C-B>` — page down / up
+- [ ] `<C-F>` — page down
 - [ ] `<C-D>` / `<C-U>` — half-page down / up
 - [ ] `<C-W>` keys — window management
 - [ ] `zz` / `zt` / `zb` — scroll cursor to center / top / bottom
+
+Note: `t`, `w`, `e`, `G`, `H`, `M`, `L`, `y` are nav chars (jump to items). `<C-B>` is mapped to SelectLast.
 
 ## 17. Error Handling
 
 - [ ] Press `x` in file mode — shows "x closes buffers in buf mode only"
 - [ ] Press `+`/`-` in file mode — shows "No project -- Enter on status line to create one"
-- [ ] Press `d`/`D`/`s` outside a git repo — shows message, does not crash
+- [ ] Press `\d`/`\D`/`\s` outside a git repo — shows message, does not crash
 - [ ] Press `<CR>` on a directory — navigates in, does not crash
 - [ ] `h` at filesystem root — stays at root, does not crash

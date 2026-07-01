@@ -60,24 +60,26 @@ Each mode has a distinct color on the menu line so you know what you're in:
 | `Shift-F` | File | Yellow | Directory browsing, file sizes |
 | `Shift-B` | Buf | Green | Open buffers with flags + line counts |
 | `Shift-C` | Code | Blue | Project tree from .vproj |
-| `q` | Qfix | Blue | Quickfix list entries (in temp mode; closes pane in permanent mode) |
-| `Shift-L` | Log | Cyan | Git commit log — `Enter` for full diff |
+| `q` | Qfix | Blue | Quickfix list (temp mode) / close pane (perm mode) |
 | `Enter` on menu line | — | — | Cycle to next mode |
 
 ### Git Actions (file and code mode)
 
+All git actions use the `\` prefix (per John Chamberlain spec). Single-letter keys are
+freed for nav character jumping.
+
 | Key | Action |
 |-----|--------|
-| `s` | Stage / unstage file under cursor |
-| `d` | Open diff preview in vertical split |
-| `D` | Discard file changes (with confirmation) |
-| `c` | Commit with message prompt |
-| `P` | Push to remote |
-| `U` | Pull --ff-only from remote |
-| `b` | Switch branch (with prompt) |
-| `z` | Stash changes |
-| `Z` | Pop a stash |
-| `a` | Blame file under cursor |
+| `\s` | Stage / unstage file under cursor |
+| `\d` | Open diff preview in vertical split |
+| `\D` | Discard file changes (with confirmation) |
+| `\c` | Commit with message prompt |
+| `\p` | Push to remote |
+| `\u` | Pull --ff-only from remote |
+| `\b` | Switch branch (with prompt) |
+| `\z` | Stash changes |
+| `\Z` | Pop a stash |
+| `\a` | Blame file under cursor |
 | `Ctrl-G` | Toggle showing only git-changed files (file mode) |
 
 ### Actions
@@ -108,6 +110,7 @@ Each mode has a distinct color on the menu line so you know what you're in:
 | Key | Action |
 |-----|--------|
 | `Q` | Close pane |
+| `Esc` | Close pane (temporary mode only; no-op in permanent mode) |
 | `Tab` | Close pane (or toggle when outside pane) |
 
 ### Standard Vim Keys (passthrough)

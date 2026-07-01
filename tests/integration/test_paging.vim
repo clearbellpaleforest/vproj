@@ -24,6 +24,12 @@ def PaneCursorLine(): number
   return empty(wins) ? -1 : line('.', wins[0])
 enddef
 
+def PaneText(lnum: number): string
+  var pbuf = bufnr('VPROJ')
+  var lines = getbufline(pbuf, lnum)
+  return empty(lines) ? '' : lines[0]
+enddef
+
 echom '=== Paging Integration Tests ==='
 
 # ── Setup: create temp directory with many files ──
@@ -57,12 +63,25 @@ Assert(PaneCursorLine() == 4, 'SelectPrev back to line 4')
 vproj#SelectFirst()
 Assert(PaneCursorLine() == 3, 'SelectFirst to line 3')
 
-# ── NextPage/PrevPage don't crash ──
+# ── NextPage/PrevPage with verification ──
+Assert(vproj#IsPagingActive(), 'paging active with 60 items')
+var total: number = vproj#GetTotalPages()
+Assert(total > 0, 'total pages > 0: ' .. total)
+
+# NextPage: verify first item text changes between pages
+var page0_text = PaneText(PaneCursorLine())
 vproj#NextPage()
-Assert(vproj#IsPaneVisible(), 'NextPage does not crash')
+Assert(vproj#GetCurrentPage() == 1, 'NextPage: on page 1')
+var page1_text = PaneText(PaneCursorLine())
+Assert(page0_text != page1_text, 'NextPage: first item text changed (different page)')
+
+vproj#NextPage()
+Assert(vproj#GetCurrentPage() == 2, 'NextPage again: on page 2')
 
 vproj#PrevPage()
-Assert(vproj#IsPaneVisible(), 'PrevPage does not crash')
+Assert(vproj#GetCurrentPage() == 1, 'PrevPage: back to page 1')
+var page1_back_text = PaneText(PaneCursorLine())
+Assert(page1_back_text == page1_text, 'PrevPage: returned to same page 1 content')
 
 # ── Mode switch with paged items ──
 vproj#SwitchMode('buf')
@@ -93,4 +112,5 @@ else
   echohl None
   cquit!
 endif
+call delete(expand('~/.cache/vproj/session'))
 qa!

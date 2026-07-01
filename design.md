@@ -52,7 +52,8 @@ Vim project manager for software development.
     │   ├── test_git_full.vim
     │   ├── test_git_mode_full.vim
     │   ├── test_paging.vim
-    │   └── test_qfix_mode.vim
+    │   ├── test_qfix_mode.vim
+    │   └── test_special_chars.vim
     └── unit
         └── test_first_selectable.vim
 ```
@@ -85,15 +86,17 @@ Default mappings:
 
 ## Modes
 
-Five modes, switched via single-key presses (or Enter on menu line to cycle):
+Four modes, switched via Shift-F/B/C or `q` (or Enter on menu line to cycle):
 
 | Key | Mode | Color | Shows |
 |-----|------|-------|-------|
 | `Shift-F` | File | Yellow | Directory browsing with file sizes |
 | `Shift-B` | Buf | Green | Open buffers with flags and line counts |
 | `Shift-C` | Code | Blue | Project tree from .vproj (excluded items in parentheses) |
-| `q` | Qfix | Blue | Quickfix list entries (temp mode only; closes pane in permanent) |
-| `Shift-L` | Log | Cyan | Git commit log |
+| `q` | Qfix | Blue | Quickfix list entries (temp mode); closes pane (perm mode) |
+
+Log mode was removed (John Chamberlain directive #5). `<Esc>` closes the pane
+in temporary mode and is a no-op in permanent mode.
 
 ## Keybindings
 
@@ -119,25 +122,29 @@ All buffer-local mappings are set up in `SetupPaneMappings()` within the autoloa
 | `*` | Grep project (git grep -i) and populate quickfix |
 | `x` | Close buffer (buf mode) |
 | `+` / `-` | Include / exclude item (code mode) |
+| `q` | Switch to Qfix (temp mode) / close pane (perm mode) |
 | `Q` | Close pane |
-| `Esc` | Close pane (temporary mode) |
+| `Esc` | Close pane (temporary mode); no-op (permanent mode) |
 | `>` / `<` | Shift nav indicators forward / backward |
 | `<Left>` / `<Right>` | Shrink / grow pane width |
 | `Ctrl-N` / `Ctrl-P` | Next / previous page |
 
-### Git Actions (file mode)
+### Git Actions (file and code mode)
+
+All git actions use `\` prefix. Single-letter keys are freed for nav character jumping.
+
 | Key | Action |
 |-----|--------|
-| `s` | Stage / unstage file |
-| `d` | Open diff preview |
-| `D` | Discard changes (handles untracked, added, modified, deleted) |
-| `c` | Commit |
-| `P` | Push |
-| `U` | Pull --ff-only |
-| `b` | Switch branch |
-| `z` | Stash push |
-| `Z` | Stash pop |
-| `a` | Blame |
+| `\s` | Stage / unstage file |
+| `\d` | Open diff preview |
+| `\D` | Discard changes (handles untracked, added, modified, deleted) |
+| `\c` | Commit |
+| `\p` | Push |
+| `\u` | Pull --ff-only |
+| `\b` | Switch branch |
+| `\z` | Stash push |
+| `\Z` | Stash pop |
+| `\a` | Blame |
 | `Ctrl-G` | Toggle git-changed-only filter |
 
 ### Nav Indicators
@@ -158,4 +165,3 @@ Line-oriented plain text at the project root. Sections: Project Name, Project Ro
 | `g:vproj_pane_width_buf` | 0 | Pane width for Buf mode |
 | `g:vproj_pane_width_code` | 0 | Pane width for Code mode |
 | `g:vproj_pane_width_qfix` | 0 | Pane width for Qfix mode |
-| `g:vproj_pane_width_log` | 0 | Pane width for Log mode |

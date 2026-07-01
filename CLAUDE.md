@@ -116,12 +116,15 @@ tests/
 │   ├── test_git_mode_full.vim
 │   ├── test_buf_mode.vim
 │   ├── test_paging.vim
-│   └── test_qfix_mode.vim
+│   ├── test_qfix_mode.vim
+│   ├── test_git_full.vim
+│   └── test_special_chars.vim
 ├── smoke.vim
 ├── final.vim
 ├── regression.vim
 ├── coverage.vim
 ├── edge_test.vim
+├── gaps.vim
 ├── keybindings.vim
 ├── demo.vim
 ├── hand_test.md
@@ -186,13 +189,15 @@ When adding a feature, follow this sequence:
 
 | Mode | Key | Shows |
 |------|-----|-------|
-| File | f | Directory browsing, file sizes, binary detection |
-| Buf | b | Open buffers with flags + line counts |
-| Git | g | Project tree from .vproj, include/exclude with +/- |
+| File | Shift-F | Directory browsing, file sizes, binary detection |
+| Buf | Shift-B | Open buffers with flags + line counts |
+| Code | Shift-C | Project tree from .vproj, include/exclude with +/- |
 | Qfix | q | Quickfix list — filename:lnum, entry text |
-| Log | L | Git commit log — `git log --oneline`, Enter for diff details |
 
-Enter on the mode menu line cycles between modes.
+Four modes. Log mode was removed (John Chamberlain directive #5). The `q` key
+behavior depends on pane open mode: in temporary mode it switches to Qfix; in
+permanent mode it closes the pane. `<Esc>` closes the pane in temporary mode
+and is a no-op in permanent mode.
 
 ## Exported API
 
@@ -216,6 +221,11 @@ Enter on the mode menu line cycles between modes.
 | `vproj#IsPaneVisible()` | Query visibility |
 | `vproj#GetPaneWidth()` / `vproj#GetCurrentMode()` | Query state |
 | `vproj#GetPaneBufnr()` | Return pane buffer number (for add-ons) |
+| `vproj#IsInfoColumnVisible()` | Query info column visibility |
+| `vproj#IsGitFilterActive()` | Query git filter state |
+| `vproj#IsTreeViewActive()` | Query tree view state |
+| `vproj#IsPagingActive()` | Query paging state |
+| `vproj#GetCurrentPage()` / `vproj#GetTotalPages()` | Query paging state |
 | `vproj#SelectFirst()` / `vproj#SelectLast()` | Jump to first / last item |
 | `vproj#NavigateIntoFirstDir()` | Enter first subdirectory |
 | `vproj#SelectByNavChar(ch)` | Jump to item by nav character |
@@ -238,6 +248,9 @@ Enter on the mode menu line cycles between modes.
 | `vproj#OnDirChanged()` | Handle directory change event |
 | `vproj#HandleBufWipeout()` | Cleanup on buffer wipe |
 | `vproj#HandleF1()` | Toggle info column (pane) or open help (elsewhere) |
+| `vproj#HandleEsc()` | Close pane (temporary mode) or no-op (permanent mode) |
+| `vproj#HandlePaneQ()` | Switch to qfix (temporary) or close pane (permanent) |
+| `vproj#PaneTogglePermanent()` | Toggle permanent mode: temp→perm, perm→close, closed→perm |
 | `vproj#ToggleTreeView()` | Toggle tree view within file mode |
 | `vproj#TogglePreview()` | Toggle file preview split (p key) |
 | `vproj#GrepSearch()` | Grep project and populate quickfix |
@@ -253,7 +266,9 @@ Buffer-local (only active in the pane):
 | h | Parent directory |
 | Left/Right | Shrink/grow width |
 | Enter | Open file, switch buffer, cycle mode, or rename project |
-| Shift-F/Shift-B/Shift-C/q/Shift-L | File / Buf / Code / Qfix / Log mode |
+| Shift-F/Shift-B/Shift-C | File / Buf / Code mode |
+| q | Qfix mode (temp) / close pane (perm) |
+| Esc | Close pane (temp mode only) |
 | r | Refresh pane |
 | x | Close selected buffer (buf mode) |
 | +/- | Include / exclude item (code mode) |
@@ -264,16 +279,16 @@ Buffer-local (only active in the pane):
 | F1 | Toggle info column |
 | Ctrl-N / Ctrl-P | Next / previous page |
 | Ctrl-G | Toggle git-changed-only filter |
-| s | Stage/unstage file (git) |
-| d | Diff preview for file under cursor |
-| D | Discard changes (with confirmation) |
-| c | Git commit (with message prompt) |
-| P | Git push |
-| U | Git pull --ff-only |
-| b | Git branch switch |
-| z | Git stash push (with optional message) |
-| Z | Git stash pop (shows list, select by index) |
-| a | Git blame (annotate) for file under cursor |
+| \\s | Stage/unstage file (git) |
+| \\d | Diff preview for file under cursor |
+| \\D | Discard changes (with confirmation) |
+| \\c | Git commit (with message prompt) |
+| \\p | Git push |
+| \\u | Git pull --ff-only |
+| \\b | Git branch switch |
+| \\z | Git stash push (with optional message) |
+| \\Z | Git stash pop (shows list, select by index) |
+| \\a | Git blame (annotate) for file under cursor |
 | T | Toggle tree view (file mode — indented with expand/collapse) |
 | p | Toggle file preview split (updates on cursor move) |
 | / | Filter by name |
@@ -318,16 +333,19 @@ tests/
 ├── unit/
 │   └── test_first_selectable.vim   # FirstSelectableLine mode-awareness
 ├── integration/
-│   ├── test_git_mode_full.vim     # Git mode layout, mode switching
+│   ├── test_git_mode_full.vim     # Code mode layout, mode switching
 │   ├── test_buf_mode.vim           # Buf mode with real buffers
 │   ├── test_paging.vim             # Paging with 60-item directory
-│   └── test_qfix_mode.vim          # Qfix mode display, jump-to-entry, empty state
+│   ├── test_qfix_mode.vim          # Qfix mode display, jump-to-entry, empty state
+│   ├── test_git_full.vim           # Git features: diff, blame, discard, symlink guards
+│   └── test_special_chars.vim      # Special characters in filenames
 ├── smoke.vim                       # Basic open/close
 ├── final.vim                       # Audit fix verification
 ├── regression.vim                  # Regression checks
 ├── coverage.vim                    # Comprehensive API coverage
 ├── edge_test.vim                   # Edge cases, boundary conditions
-├── keybindings.vim                 # Keybinding dispatch
+├── gaps.vim                        # Gap coverage: session, filter, NavigateUp, empty dirs
+├── keybindings.vim                 # Keybinding dispatch, Esc/q semantics, passthrough
 ├── demo.vim                        # Interactive demo script
 ├── hand_test.md                    # Manual test checklist
 └── test_helpers.vim                # Shared helpers (legacy Vimscript, unused)
