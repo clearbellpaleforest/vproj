@@ -133,8 +133,8 @@ export def PaneToggle(): void
       PaneClose()
     endif
   else
-    pane_open_mode = 'temporary'
     PaneOpen()
+    pane_open_mode = 'temporary'
     silent! doautocmd <nomodeline> User VprojPaneOpenedTemporary
   endif
 enddef
@@ -150,8 +150,8 @@ export def PaneTogglePermanent(): void
       PaneClose()
     endif
   else
-    pane_open_mode = 'permanent'
     PaneOpen()
+    pane_open_mode = 'permanent'
     silent! doautocmd <nomodeline> User VprojPaneOpenedPermanent
   endif
 enddef
