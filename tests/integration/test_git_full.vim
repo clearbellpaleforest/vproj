@@ -94,8 +94,8 @@ Assert(cursor_line == 3, 'log→file: cursor on line 3')
 vproj#SwitchMode('buf')
 Assert(vproj#GetCurrentMode() == 'buf', 'log→buf: mode is buf')
 
-vproj#SwitchMode('git')
-Assert(vproj#GetCurrentMode() == 'git', 'log→git: mode is git')
+vproj#SwitchMode('code')
+Assert(vproj#GetCurrentMode() == 'code', 'log→git: mode is git')
 
 vproj#SwitchMode('qfix')
 Assert(vproj#GetCurrentMode() == 'qfix', 'log→qfix: mode is qfix')
@@ -186,7 +186,7 @@ catch
 endtry
 
 # Discard in git mode should exit early
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 try
   call vproj#DiscardChanges()
   Assert(true, 'DiscardChanges in git mode exits early (no crash)')
@@ -367,7 +367,7 @@ catch
   Assert(false, 'GitBlame in buf mode threw: ' .. v:exception)
 endtry
 
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 try
   call vproj#GitBlame()
   Assert(true, 'GitBlame in git mode: exits without crash')

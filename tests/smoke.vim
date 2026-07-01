@@ -54,13 +54,13 @@ Assert(vproj#GetPaneWidth() == 41, 'PaneGrow increases width')
 vproj#PaneShrink()
 Assert(vproj#GetPaneWidth() == 40, 'PaneShrink decreases width')
 
-# Test 9: Switch to git mode
-vproj#SwitchMode('git')
-Assert(vproj#GetCurrentMode() == 'git', 'Switch to git mode')
+# Test 9: Switch to code mode (backwards-compat: 'git' key still works)
+vproj#SwitchMode('code')
+Assert(vproj#GetCurrentMode() == 'code', 'Switch to code mode')
 
 # Test 10: Switch back to file mode
 vproj#SwitchMode('file')
-Assert(vproj#GetCurrentMode() == 'file', 'Switch back from git mode')
+Assert(vproj#GetCurrentMode() == 'file', 'Switch back from code mode')
 
 # Test 11: Close pane
 vproj#PaneClose()

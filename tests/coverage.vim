@@ -45,7 +45,7 @@ Assert(PaneCursorLine() == 3, 'cursor starts on line 3 in file mode')
 vproj#SwitchMode('buf')
 Assert(PaneCursorLine() == 3, 'cursor starts on line 3 in buf mode')
 
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 Assert(PaneCursorLine() == 4, 'cursor starts on line 4 in git mode (separator at line 3)')
 
 # SelectNext from line 3 → line 4 (not status line)
@@ -90,7 +90,7 @@ catch
 endtry
 
 # In git mode with no project, cursor on first item (line 3), press +
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 execute 'normal +'
 Assert(vproj#IsPaneVisible(), '+ in git mode no-project does not crash')
 
@@ -111,7 +111,7 @@ catch
   Assert(false, 'x in file mode error: ' .. v:exception)
 endtry
 
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 try
   execute 'normal x'
   Assert(vproj#IsPaneVisible(), 'x in git mode shows message, does not crash')
@@ -172,8 +172,8 @@ Setup()
 Assert(vproj#GetCurrentMode() == 'file', 'starts in file mode')
 vproj#SwitchMode('buf')
 Assert(vproj#GetCurrentMode() == 'buf', 'SwitchMode file→buf')
-vproj#SwitchMode('git')
-Assert(vproj#GetCurrentMode() == 'git', 'SwitchMode buf→git')
+vproj#SwitchMode('code')
+Assert(vproj#GetCurrentMode() == 'code', 'SwitchMode buf→git')
 vproj#SwitchMode('file')
 Assert(vproj#GetCurrentMode() == 'file', 'SwitchMode git→file')
 
@@ -209,7 +209,7 @@ vproj#SwitchMode('buf')
 Assert(vproj#GetPaneWidth() == 35, 'buf-mode width config applied')
 
 g:vproj_pane_width_git = 30
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 Assert(vproj#GetPaneWidth() == 30, 'git-mode width config applied')
 
 g:vproj_pane_width_qfix = 38

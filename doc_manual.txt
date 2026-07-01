@@ -12,27 +12,35 @@ at https://github.com/clearbellpaleforest/vproj.
 TABLE OF CONTENTS
 -----------------
 
-  1. Installation
-  2. Quick Start
-  3. The Pane
-  4. Modes
-     4.1  File Mode
-     4.2  Buffer Mode
-     4.3  Git Mode
-     4.4  Quickfix Mode
-     4.5  Log Mode
-  5. Key Reference
-     5.1  Navigation
-     5.2  Mode Switching
-     5.3  Git Actions
-     5.4  Pane Controls
-     5.5  Paging
-     5.6  Quick Nav (Nav Indicators)
-  6. Configuration
-  7. The .vproj File
-  8. Git Integration
-  9. Troubleshooting
-  10. Quick Reference Card
+<ol>
+  <li><a href="#1-installation">Installation</a></li>
+  <li><a href="#2-quick-start">Quick Start</a></li>
+  <li><a href="#3-the-pane">The Pane</a></li>
+  <li><a href="#4-modes">Modes</a>
+    <ul>
+      <li><a href="#41-file-mode-press-shift-f">4.1 File Mode</a></li>
+      <li><a href="#42-buffer-mode-press-shift-b">4.2 Buffer Mode</a></li>
+      <li><a href="#43-code-mode-press-shift-c">4.3 Code Mode</a></li>
+      <li><a href="#44-quickfix-mode-cycle-to-it-via-enter-on-menu-line">4.4 Quickfix Mode</a></li>
+      <li><a href="#45-log-mode-press-shift-l">4.5 Log Mode</a></li>
+    </ul>
+  </li>
+  <li><a href="#5-key-reference">Key Reference</a>
+    <ul>
+      <li><a href="#51-navigation">5.1 Navigation</a></li>
+      <li><a href="#52-mode-switching">5.2 Mode Switching</a></li>
+      <li><a href="#53-git-actions-file-and-code-mode">5.3 Git Actions</a></li>
+      <li><a href="#54-pane-controls">5.4 Pane Controls</a></li>
+      <li><a href="#55-paging">5.5 Paging</a></li>
+      <li><a href="#56-quick-nav-nav-indicators">5.6 Quick Nav</a></li>
+    </ul>
+  </li>
+  <li><a href="#6-configuration">Configuration</a></li>
+  <li><a href="#7-the-vproj-file">The .vproj File</a></li>
+  <li><a href="#8-git-integration">Git Integration</a></li>
+  <li><a href="#9-troubleshooting">Troubleshooting</a></li>
+  <li><a href="#10-quick-reference-card">Quick Reference Card</a></li>
+</ol>
 
 
 1. INSTALLATION
@@ -64,11 +72,11 @@ Press Tab to open the project pane.  You will see a file listing for the
 current directory.  Use j/k to move up and down.  Press Enter on a file
 to open it.  Press Enter on a directory to navigate into it.
 
-The pane closes automatically after you open a file (temporary mode).
-If you want the pane to stay open for an extended session, press
-Shift-Tab instead (permanent mode).
+Press Tab to toggle the pane open and closed. For extended sessions,
+press Shift-Tab for permanent mode where the pane stays open until you
+explicitly close it.
 
-    Tab        — Open pane (temporary mode; closes after you pick a file)
+    Tab        — Toggle pane open/closed
     Shift-Tab  — Open pane (permanent mode; stays open until you close it)
 
     Inside the pane:
@@ -77,9 +85,9 @@ Shift-Tab instead (permanent mode).
     Enter      — Open selected file or enter selected directory
     h          — Go to parent directory
     Q          — Close pane
-    f          — File mode (browse filesystem)
-    b          — Buffer mode (switch between open buffers)
-    g          — Git mode (manage project structure and source control)
+    Shift-F    — File mode (browse filesystem)
+    Shift-B    — Buffer mode (switch between open buffers)
+    Shift-C    — Code mode (manage project structure and source control)
 
 
 3. THE PANE
@@ -96,10 +104,8 @@ The pane has two toggle behaviors:
 
     TEMPORARY MODE (Tab)
     --------------------
-    The pane auto-closes when you:
-      - Open a file from the pane (Enter on a file)
-      - Press ESC while the pane has focus
-      - Press Tab again
+    The pane can be toggled open and closed with Tab. Press Esc while
+    the pane has focus to close it, or press Tab again.
 
     This is for quick file/buffer access — no extra keystroke to dismiss.
 
@@ -121,33 +127,35 @@ mode and stays open.
 4. MODES
 ========
 
-vproj has five modes.  Press the mode key (f, b, g, q, or L) to switch,
+vproj has five modes.  Press the mode key (Shift-F, Shift-B, Shift-C, q, or Shift-L) to switch,
 or press Enter on the mode menu line at the top of the pane to cycle
-through modes in order.
+through modes in order.  Note: in permanent mode, `q` closes the pane
+instead of switching to Qfix mode — use Enter on the menu line to cycle
+to Qfix in permanent mode.
 
 Each mode has a distinct color on the menu line:
     File  — Yellow
     Buf   — Green
-    Git   — Magenta
+    Code  — Blue
     Qfix  — Blue
     Log   — Cyan
 
 
-4.1 FILE MODE  (press f)
+4.1 FILE MODE  (press Shift-F)
 ------------------------
 
 File mode browses the filesystem.  Directories are listed first, then
 files.  File sizes (to the nearest K or M) are shown in an info column
 on the right.
 
-    Enter / l  — Open file or enter directory
+    Enter      — Open file or enter directory
     h / .      — Go to parent directory
     Ctrl-K     — Go to parent directory
     Ctrl-J     — Enter first subdirectory (if any)
     T          — Toggle tree view (indented directory tree)
-    p          — Toggle file preview split (updates as cursor moves)
+    p          — Toggle file preview split (updates as cursor moves; also works in buf mode)
     /          — Filter by name pattern
-    *          — Grep the project and populate quickfix list
+    *          — Grep the project (git grep -i) and auto-switch to quickfix list
     Ctrl-G     — Toggle showing only git-changed files
 
 Tree view shows directories as an indented tree with expand/collapse.
@@ -160,11 +168,11 @@ cursor in the pane, the preview updates.  Press p again to close it.
 Filter (/) prompts for a pattern and narrows the listing to matching
 names.  Press Enter on a blank filter to clear it and show all items.
 
-Grep (*) runs `grep -rn` from the project root and populates the
-quickfix list.  Switch to Qfix mode (press q) to browse results.
+Grep (*) runs `git grep -n -i` from the git root and populates the
+quickfix list, then auto-switches to Qfix mode to browse results.
 
 
-4.2 BUFFER MODE  (press b)
+4.2 BUFFER MODE  (press Shift-B)
 ----------------------------
 
 Buffer mode shows all open Vim buffers.  Modified buffers are marked
@@ -178,10 +186,10 @@ column.
 This is faster than `:ls` and `:b` for switching between many buffers.
 
 
-4.3 GIT MODE  (press g)
+4.3 CODE MODE  (press Shift-C)
 -------------------------
 
-Git mode shows a project-aware file tree based on a .vproj file.
+Code mode shows a project-aware file tree based on a .vproj file.
 Included items are shown normally; excluded items appear in parentheses.
 
 If no .vproj file is found, all items are shown in parentheses and the
@@ -193,16 +201,15 @@ line to create or rename a project.
     Enter on file         — Open file
     Enter on directory    — Navigate into directory
 
-And full git actions (see Section 8):
-    s — Stage/unstage     C — Commit
-    d — Diff preview      P — Push
-    D — Discard changes   U — Pull --ff-only
-    a — Blame             B — Branch switch
+And git actions (see Section 8):
+    c — Commit             P — Push
+    U — Pull --ff-only     b — Branch switch
                            z — Stash push
                            Z — Stash pop
+    Ctrl-G                — Toggle git-changed-only filter
 
 
-4.4 QUICKFIX MODE  (press q)
+4.4 QUICKFIX MODE  (cycle to it via Enter on menu line)
 ------------------------------
 
 Quickfix mode displays the Vim quickfix list — grep results, compiler
@@ -212,25 +219,21 @@ and text.
     Enter  — Jump to selected entry (opens file at line)
 
 Populate the quickfix list with `:grep`, `:make`, `:vimgrep`, or press
-* (grep) from File mode.  Then switch to Qfix mode to browse results
-with nav indicators and keyboard navigation.
+* (grep) from File mode.  The pane auto-switches to Qfix mode after grep
+results are populated.  You can also cycle to Qfix mode by pressing Enter
+on the mode menu line.
 
 
-4.5 LOG MODE  (press L)
+4.5 LOG MODE  (press Shift-L)
 -------------------------
 
 Log mode shows git commit history (`git log --oneline` output).  Nav
 characters let you jump to any commit.
 
     Enter  — Open detailed diff for selected commit in a split
-    s      — Stage/unstage file under cursor
-    d      — Diff preview
-    D      — Discard changes (with confirmation)
-    C      — Commit
-    P      — Push
 
-Use this to review recent changes, inspect individual commits, and
-perform git operations while staying in the editor.
+Use this to review recent changes and inspect individual commits while
+staying in the editor.
 
 
 5. KEY REFERENCE
@@ -246,7 +249,7 @@ They do not affect other Vim buffers.
     j / Down         Move selection down (wraps)
     k / Up           Move selection up (wraps)
     h / .            Go to parent directory
-    l / Enter        Open file or enter directory
+    Enter            Open file or enter directory
     Ctrl-T           Jump to first item
     Ctrl-B           Jump to last item
     Ctrl-K           Go to parent directory (same as h)
@@ -256,27 +259,28 @@ They do not affect other Vim buffers.
 5.2 MODE SWITCHING
 ------------------
 
-    f                File mode
-    b                Buffer mode
-    g                Git mode
-    q                Quickfix mode
-    L                Log mode
+    Shift-F          File mode
+    Shift-B          Buffer mode
+    Shift-C          Code mode
+    q                Quickfix mode (temp mode only; closes pane in permanent mode)
+    Shift-L          Log mode
+    Enter on menu    Cycle to next mode
 
 
-5.3 GIT ACTIONS  (file, git, and log modes)
--------------------------------------------
+5.3 GIT ACTIONS  (file and code mode)
+----------------------------
 
     s                Stage / unstage file under cursor
     d                Open diff preview in vertical split
     D                Discard file changes (with confirmation)
-    C                Commit with message prompt
-    P                Push to remote (prompts for target)
-    U                Pull --ff-only from remote (prompts for source)
-    B                Switch branch (prompts for branch name)
+    c                Commit with message prompt
+    P                Push to remote
+    U                Pull --ff-only from remote
+    b                Switch branch (prompts for branch name)
     z                Stash changes (optional message)
     Z                Pop a stash (shows list, prompts for index)
     a                Blame file under cursor (git annotate in split)
-    Ctrl-G           Toggle showing only git-changed files (file mode)
+    Ctrl-G           Toggle showing only git-changed files (file and code mode)
 
 
 5.4 PANE CONTROLS
@@ -284,14 +288,14 @@ They do not affect other Vim buffers.
 
     r                Refresh listing
     x                Close selected buffer (buf mode only)
-    + / -            Include / exclude item (git mode only)
+    + / -            Include / exclude item (code mode only)
     T                Toggle tree view (file mode only)
     p                Toggle file preview split
     /                Filter files by name pattern (file mode)
     *                Grep project and populate quickfix (file mode)
     Left / Right     Shrink / grow pane width by 1 column
     F1               Toggle info column (file sizes, line counts)
-    Q / F4           Close pane
+    Q / Tab          Close pane
     ESC              Close pane (temporary mode only)
 
 
@@ -309,15 +313,15 @@ the bottom:
 --------------------------------
 
 Each file, directory, or buffer gets a nav indicator — a single character
-displayed in cyan on the left side of the pane.  Press that character to
-jump directly to the item.
+displayed in orange (#FFAF00) on the left side of the pane.  Press that
+character to jump directly to the item.
 
-Nav indicators use: a-z, A-Z, 1-9  (approximately 58 slots)
+Nav indicators use a curated set of characters to avoid conflicts with
+mode-switching and action keys (37 slots).
 
-    a-z, A-Z, 1-9    Jump to item by nav character
+    selected chars    Jump to item by nav character
     >                 Shift nav indicators forward (relabel next block)
     <                 Shift nav indicators backward (relabel previous block)
-    *                 Nav indicator for the project name (git mode)
     .                 Parent directory (no nav indicator)
 
 If there are more items than nav indicator slots, press > to shift the
@@ -343,8 +347,8 @@ the plugin after setting them.
     g:vproj_pane_width_buf
         Pane width for Buf mode (20-80).   Default: 0.
 
-    g:vproj_pane_width_git
-        Pane width for Git mode (20-80).   Default: 0.
+    g:vproj_pane_width_code
+        Pane width for Code mode (20-80).  Default: 0.
 
     g:vproj_pane_width_qfix
         Pane width for Qfix mode (20-80).  Default: 0.
@@ -369,7 +373,7 @@ Example .vimrc:
 7. THE .vproj FILE
 ==================
 
-A .vproj file defines a project for Git Mode.  It lives at the project
+A .vproj file defines a project for Code Mode.  It lives at the project
 root and specifies which files and directories belong to the project.
 
 When you press Tab to open the pane, vproj searches for a .vproj file
@@ -395,7 +399,7 @@ Format:
 
 Lines starting with # are comments.
 
-You never need to edit the .vproj file by hand.  Use + / - in Git mode
+You never need to edit the .vproj file by hand.  Use + / - in Code mode
 to include or exclude items interactively.  The file is saved
 automatically after each change.
 
@@ -403,55 +407,72 @@ automatically after each change.
 8. GIT INTEGRATION
 ==================
 
-vproj provides git actions accessible from File, Git, and Log modes.
+vproj provides git actions accessible from File and Code mode.
 No plugins required.  Operations use the git command-line tool.
 
-STAGE / UNSTAGE  (s)
-    Toggles the staged state of the file under cursor.
-    git add <file>  or  git reset HEAD <file>
+### Stage / Unstage (`s`) — file and code mode
 
-DIFF PREVIEW  (d)
-    Opens a vertical split with git diff for the file under cursor.
-    Press q to close the diff split.
+Toggles the staged state of the file under cursor.
 
-DISCARD  (D)
-    Prompts for confirmation, then discards unstaged changes.
-    git checkout -- <file>
-    (Uses :GIT_CHECKOUT for safety — vproj validates the path first.)
+    git add <file>
+    git reset HEAD <file>
 
-COMMIT  (C)
-    Prompts for a commit message on the command line.
+### Diff Preview (`d`) — file and code mode
+
+Opens a vertical split with git diff for the file under cursor. Press `q` to close.
+
+### Discard (`D`) — file and code mode
+
+Prompts for confirmation, then discards changes. Handles four cases:
+
+| Status | Action |
+|--------|--------|
+| Untracked (`?`) | Deletes the file |
+| Added (`A`) | `git reset HEAD -- <file>` |
+| Modified (`M`/`R`) | `git checkout -- <file>` |
+| Deleted (`D`) | `git checkout HEAD -- <file>` |
+
+### Commit (`c`)
+
+Prompts for a commit message on the command line.
+
     git commit -m "<message>"
 
-PUSH  (P)
-    Prompts for remote and branch.  Defaults to origin and current branch.
-    git push <remote> <branch>
+### Push (`P`)
 
-PULL  (U)
-    Pulls with --ff-only to prevent merge commits.
-    git pull --ff-only <remote> <branch>
+Pushes to the configured remote.
 
-BRANCH SWITCH  (B)
-    Prompts for a branch name.  Switches with git checkout.
-    Also refreshes the pane after switching.
+    git push
 
-STASH PUSH  (z)
-    Stashes current changes.  Prompts for an optional message.
+### Pull (`U`)
+
+Pulls with `--ff-only` to prevent merge commits.
+
+    git pull --ff-only
+
+### Branch Switch (`B`)
+
+Prompts for a branch name. Switches with `git checkout`. Refreshes the pane after switching.
+
+### Stash Push (`z`)
+
+Stashes current changes. Prompts for an optional message.
+
     git stash push -m "<message>"
 
-STASH POP  (Z)
-    Shows a numbered list of all stashes.  Prompts for which to pop.
-    Defaults to the top stash (stash@{0}).
+### Stash Pop (`Z`)
+
+Shows a numbered list of all stashes. Prompts for which to pop. Defaults to `stash@{0}`.
+
     git stash pop stash@{<N>}
 
-BLAME  (a)
-    Opens a vertical split with git annotate for the file under cursor.
-    File must be tracked by git.  Press q to close the blame window.
-    Only available in File mode.
+### Blame (`a`)
 
-GIT-CHANGED FILTER  (Ctrl-G)
-    Toggles a filter that shows only files with git changes (modified,
-    added, or untracked).  Press again to show all files.
+Opens a vertical split with `git annotate` for the file under cursor. File must be tracked by git. Press `q` to close. Available in File and Code mode.
+
+### Git-Changed Filter (`Ctrl-G`)
+
+Toggles a filter that shows only files with git changes (modified, added, or untracked). Press again to show all files.
 
 
 9. TROUBLESHOOTING
@@ -499,7 +520,7 @@ No .vproj found
 If vproj cannot find a .vproj file in or above the current directory,
 it will prompt you to create one.  Press y at the prompt, then enter a
 project name (defaults to the current directory name).  The .vproj file
-is created automatically and Git mode becomes active.
+is created automatically and Code mode becomes active.
 
 
 10. QUICK REFERENCE CARD
@@ -509,7 +530,7 @@ is created automatically and Git mode becomes active.
     ------------
     Tab                 Open pane (temporary — auto-closes on file-open)
     Shift-Tab           Open pane (permanent — stays until you close it)
-    Q / F4              Close pane
+    Q / Tab             Close pane
     ESC                 Close pane (temporary mode only)
 
     MOVE
@@ -517,27 +538,27 @@ is created automatically and Git mode becomes active.
     j / Down            Next item
     k / Up              Previous item
     h / .               Parent directory
-    l / Enter           Open file / enter directory
+    Enter               Open file / enter directory
     Ctrl-T / Ctrl-B     Jump to top / bottom
     Ctrl-J              Enter first subdirectory
 
     MODE
     ----
-    f                   File mode (filesystem browser)
-    b                   Buffer mode (open buffers)
-    g                   Git mode (project tree + source control)
-    q                   Quickfix mode (grep/error results)
-    L                   Log mode (git commit history)
+    Shift-F             File mode (filesystem browser)
+    Shift-B             Buffer mode (open buffers)
+    Shift-C             Code mode (project tree + source control)
+    q                   Quickfix mode (temp mode; closes pane in permanent)
+    Shift-L             Log mode (git commit history)
 
     GIT
     ---
     s                   Stage / unstage file
     d                   Diff preview
     D                   Discard changes
-    C                   Commit
+    c                   Commit
     P                   Push
     U                   Pull --ff-only
-    B                   Branch switch
+    b                   Branch switch
     z                   Stash push
     Z                   Stash pop
     a                   Blame (annotate)
@@ -547,7 +568,7 @@ is created automatically and Git mode becomes active.
     -----
     r                   Refresh
     x                   Close buffer (buf mode)
-    + / -               Include / exclude (git mode)
+    + / -               Include / exclude (code mode)
     T                   Tree view toggle (file mode)
     p                   File preview toggle
     /                   Filter by name
@@ -569,5 +590,4 @@ is created automatically and Git mode becomes active.
 ---
 
 vproj 1.x — Vim project manager
-Author: Aldous Thoreau
 License: MIT

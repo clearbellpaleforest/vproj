@@ -73,7 +73,7 @@ Assert(line2 =~ '^-\+$', 'line 2: separator in file mode')
 Assert(PaneCursorLine() == 3, 'file mode: cursor on line 3 (first item)')
 
 # Git mode structure
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 var cline1 = PaneLine(1)
 Assert(cline1 =~ '\[F\]ile', 'git mode line 1: mode menu')
 var cline2 = PaneLine(2)
@@ -129,9 +129,9 @@ Assert(vproj#IsPaneVisible(), 'OnDirChanged with no CWD change keeps pane open')
 Assert(vproj#GetCurrentMode() == 'file', 'OnDirChanged preserves mode')
 
 # OnDirChanged in git mode is a no-op
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 vproj#OnDirChanged()
-Assert(vproj#GetCurrentMode() == 'git', 'OnDirChanged in git mode is no-op')
+Assert(vproj#GetCurrentMode() == 'code', 'OnDirChanged in git mode is no-op')
 
 # OnDirChanged when pane is closed
 vproj#PaneClose()
@@ -272,10 +272,10 @@ writefile(vproj_content, tmpdir .. '/.vproj')
 	delete(expand('~/.cache/vproj/session'))
 	execute 'cd' tmpdir
 	vproj#PaneOpen()
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 
 # Verify git mode shows the project
-Assert(vproj#GetCurrentMode() == 'git', 'switched to git mode with .vproj')
+Assert(vproj#GetCurrentMode() == 'code', 'switched to git mode with .vproj')
 
 # Status line (line 2) should show the project name
 var status_line = PaneLine(2)
@@ -327,7 +327,7 @@ Assert(vproj#GetPaneWidth() == 55, 'width set to 55')
 vproj#SwitchMode('buf')
 Assert(vproj#GetPaneWidth() == 55, 'width 55 preserved in buf mode')
 
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 Assert(vproj#GetPaneWidth() == 55, 'width 55 preserved in git mode')
 
 vproj#SwitchMode('qfix')
@@ -353,7 +353,7 @@ vproj#SelectFirst()
 Assert(PaneCursorLine() == 3, 'SelectFirst returns to line 3')
 
 # Git mode
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 vproj#SelectLast()
 Assert(vproj#IsPaneVisible(), 'SelectLast in git mode no crash')
 
@@ -378,7 +378,7 @@ vproj#SwitchMode('buf')
 vproj#ToggleInfoColumn()
 Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in buf mode no crash')
 
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 vproj#ToggleInfoColumn()
 Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in git mode no crash')
 
@@ -437,8 +437,8 @@ Assert(vproj#IsPaneVisible(), 'IsPaneVisible returns true')
 
 vproj#SwitchMode('buf')
 Assert(vproj#GetCurrentMode() == 'buf', 'GetCurrentMode returns buf')
-vproj#SwitchMode('git')
-Assert(vproj#GetCurrentMode() == 'git', 'GetCurrentMode returns git')
+vproj#SwitchMode('code')
+Assert(vproj#GetCurrentMode() == 'code', 'GetCurrentMode returns git')
 vproj#SwitchMode('qfix')
 Assert(vproj#GetCurrentMode() == 'qfix', 'GetCurrentMode returns qfix')
 
@@ -571,8 +571,8 @@ Setup()
 # file → buf → git → qfix → file
 vproj#SwitchMode('buf')
 Assert(vproj#GetCurrentMode() == 'buf', 'SwitchMode: file→buf')
-vproj#SwitchMode('git')
-Assert(vproj#GetCurrentMode() == 'git', 'SwitchMode: buf→git')
+vproj#SwitchMode('code')
+Assert(vproj#GetCurrentMode() == 'code', 'SwitchMode: buf→git')
 vproj#SwitchMode('qfix')
 Assert(vproj#GetCurrentMode() == 'qfix', 'SwitchMode: git→qfix')
 vproj#SwitchMode('file')
@@ -759,7 +759,7 @@ catch
   Assert(false, 'GitStageToggle buf-mode error: ' .. v:exception)
 endtry
 
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 try
   vproj#GitStageToggle()
   Assert(vproj#IsPaneVisible(), 'GitStageToggle in git mode exits early')
@@ -801,7 +801,7 @@ vproj#SwitchMode('buf')
 vproj#ToggleInfoColumn()
 Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in buf mode ok')
 
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 vproj#ToggleInfoColumn()
 Assert(vproj#IsPaneVisible(), 'ToggleInfoColumn in git mode ok')
 

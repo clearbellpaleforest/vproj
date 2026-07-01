@@ -45,7 +45,7 @@ vproj#SwitchMode('buf')
 Assert(PaneCursorLine() == 3, 'buf mode: cursor on line 3')
 
 # Git mode: menu at 1, status at 2, separator at 3, first item at 4
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 Assert(PaneCursorLine() == 4, 'git mode: cursor on line 4')
 
 # Back to file mode: first item at line 3

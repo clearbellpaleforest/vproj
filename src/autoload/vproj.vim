@@ -25,12 +25,11 @@ var git_status_map: dict<string> = {}
 var git_branch_cache: string = ''
 var git_root_cache: string = ''
 
-# Project state (git mode)
+# Project state (code mode)
 var project: dict<any> = {}
-var git_root: string = ''
+var code_root: string = ''
 
-# Log mode state
-var log_entries: list<dict<any>> = []
+
 
 # Tree view state (file mode — T toggles)
 var tree_view_active: bool = false
@@ -40,21 +39,21 @@ var expanded_dirs: dict<number> = {}
 var preview_active: bool = false
 var preview_bufnr: number = -1
 
-const MODE_KEYS: list<string> = ['file', 'buf', 'git', 'qfix', 'log']
-const MODE_LABELS: dict<string> = {file: '[F]ile', buf: '[B]uf', git: '[G]it', qfix: '[Q]fix', log: '[L]og'}
+const MODE_KEYS: list<string> = ['file', 'buf', 'code', 'qfix', 'log']
+const MODE_LABELS: dict<string> = {file: '[F]ile', buf: '[B]uf', code: '[C]ode', qfix: '[q]fix', log: '[L]og'}
 const MODE_MENU_LINE: number = 1
 const FILE_STATUS_SEP_LINE: number = 2
-const GIT_STATUS_LINE: number = 2
-const GIT_SEP_LINE: number = 3
+const CODE_STATUS_LINE: number = 2
+const CODE_SEP_LINE: number = 3
 const FIRST_FILE_ITEM_LINE: number = 3
-const FIRST_GIT_ITEM_LINE: number = 4
+const FIRST_CODE_ITEM_LINE: number = 4
 const QFIX_SEP_LINE: number = 2
 const FIRST_QFIX_ITEM_LINE: number = 3
 const LOG_SEP_LINE: number = 2
 const FIRST_LOG_ITEM_LINE: number = 3
 const NAV_CHARS: list<string> = [
-  'c', 'e', 'i', 'l', 'm', 'n', 'o', 't', 'u', 'v', 'w', 'y',
-  'A', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'M', 'N', 'O', 'R', 'S', 'V', 'W', 'X', 'Y',
+  'e', 'f', 'g', 'i', 'l', 'm', 'n', 'o', 't', 'u', 'v', 'w', 'y',
+  'E', 'G', 'H', 'I', 'J', 'K', 'M', 'N', 'O', 'R', 'S', 'V', 'W', 'X', 'Y',
   '1', '2', '3', '4', '5', '6', '7', '8', '9',
 ]
 const MIN_WIDTH: number = 20
@@ -77,6 +76,9 @@ def LowerCmdheight(): void
 enddef
 
 def RestoreCmdheight(): void
+  if CmdheightNest <= 0
+    return
+  endif
   CmdheightNest -= 1
   if CmdheightNest == 0
     &cmdheight = CmdheightSaved
@@ -92,7 +94,12 @@ enddef
 def SortByName(A: dict<any>, B: dict<any>): number
   var a: string = tolower(A.name)
   var b: string = tolower(B.name)
-  return a < b ? -1 : a > b ? 1 : 0
+  if a < b
+    return -1
+  elseif a > b
+    return 1
+  endif
+  return 0
 enddef
 
 def NavChar(item: dict<any>, visible_idx: number): string
@@ -227,6 +234,7 @@ export def PaneOpen(): void
       &winminheight = saved_minheight
       RestoreCmdheight()
     endtry
+    setwinvar(win_getid(), '&winfixwidth', 1)
     silent! execute 'vert resize ' .. pane_width
     selected_line = FirstSelectableLine()
     SetupPaneMappings()
@@ -386,15 +394,17 @@ export def HandleBufWipeout(): void
   current_mode = 'file'
   selected_line = FirstSelectableLine()
   items = []
-  log_entries = []
   current_dir = ''
-  git_root = ''
+  code_root = ''
   project = {}
   show_info_column = true
   nav_offset = 0
   items_per_page = 1
   paging_active = false
   current_page = 0
+  total_pages = 0
+  CmdheightNest = 0
+  CmdheightSaved = 0
   filter_pattern = ''
   git_filter_active = false
   tree_view_active = false
@@ -417,9 +427,9 @@ export def PaneDiagnose(): void
   echom 'Windows: ' .. winnr('$')
   echom 'winminwidth: ' .. &winminwidth .. '  winminheight: ' .. &winminheight
   echom 'winheight: ' .. &winheight .. '  cmdheight: ' .. &cmdheight
-  echom 'laststatus: ' .. &laststatus .. '  equalalways: ' .. &equalalways
-  echom 'splitbelow: ' .. &splitbelow .. '  splitright: ' .. &splitright
-  echom 'pane_bufnr: ' .. pane_bufnr .. ' (exists: ' .. (pane_bufnr > 0 && bufexists(pane_bufnr)) .. ')'
+  echom 'laststatus: ' .. &laststatus .. '  equalalways: ' .. (&equalalways ? '1' : '0')
+  echom 'splitbelow: ' .. (&splitbelow ? '1' : '0') .. '  splitright: ' .. (&splitright ? '1' : '0')
+  echom 'pane_bufnr: ' .. pane_bufnr .. ' (exists: ' .. (pane_bufnr > 0 && bufexists(pane_bufnr) ? '1' : '0') .. ')'
   echom 'current_mode: ' .. current_mode
   echom 'saved_shortmess: "' .. saved_shortmess .. '"'
   echom '&shortmess: ' .. &shortmess
@@ -432,7 +442,7 @@ export def PaneDiagnose(): void
     var wfh: bool = getwinvar(info.winid, '&winfixheight', 0)
     var bt: string = getbufvar(info.bufnr, '&buftype', '')
     var bn: string = bufname(info.bufnr)
-    echom '  win ' .. wnr .. ': wfw=' .. wfw .. ' wfh=' .. wfh .. ' bt=' .. bt .. ' buf=' .. bn
+    echom '  win ' .. wnr .. ': wfw=' .. (wfw ? '1' : '0') .. ' wfh=' .. (wfh ? '1' : '0') .. ' bt=' .. bt .. ' buf=' .. bn
   endfor
   echom ''
 
@@ -449,8 +459,8 @@ export def PaneDiagnose(): void
     endif
   endfor
   echom 'Pane open preflight:'
-  echom '  win clear of winfixheight+winfixwidth: ' .. found_clear
-  echom '  fallback (no winfixheight): ' .. found_no_wfh
+  echom '  win clear of winfixheight+winfixwidth: ' .. (found_clear ? '1' : '0')
+  echom '  fallback (no winfixheight): ' .. (found_no_wfh ? '1' : '0')
   echom ''
 
   # Lower winminwidth, winminheight, AND cmdheight before testing splits — same as PaneOpen
@@ -499,7 +509,8 @@ export def PaneDiagnose(): void
 enddef
 
 export def OnDirChanged(): void
-  if !IsPaneVisible() || current_mode == 'git'
+  InvalidateGitCache()
+  if !IsPaneVisible() || current_mode == 'code'
     return
   endif
   # Only react to global dir changes, not window-local changes from
@@ -536,10 +547,10 @@ def SkipNonSelectable(line: number): bool
   if line == MODE_MENU_LINE
     return true
   endif
-  if current_mode != 'git' && current_mode != 'qfix' && current_mode != 'log' && line == FILE_STATUS_SEP_LINE
+  if current_mode != 'code' && current_mode != 'qfix' && current_mode != 'log' && line == FILE_STATUS_SEP_LINE
     return true
   endif
-  if current_mode == 'git' && line == GIT_SEP_LINE
+  if current_mode == 'code' && line == CODE_SEP_LINE
     return true
   endif
   if current_mode == 'qfix' && line == QFIX_SEP_LINE
@@ -560,8 +571,8 @@ def SkipNonSelectable(line: number): bool
 enddef
 
 def FirstSelectableLine(): number
-  if current_mode == 'git'
-    return FIRST_GIT_ITEM_LINE
+  if current_mode == 'code'
+    return FIRST_CODE_ITEM_LINE
   elseif current_mode == 'qfix'
     return FIRST_QFIX_ITEM_LINE
   elseif current_mode == 'log'
@@ -593,7 +604,7 @@ enddef
 
 def GetSelectedItem(): dict<any>
   var display_items: list<dict<any>> = ApplyFilter(items)
-  if git_filter_active && current_mode == 'file'
+  if git_filter_active && (current_mode == 'file' || current_mode == 'code')
     display_items = ApplyGitFilter(display_items)
   endif
   var idx: number = ItemIndex()
@@ -609,7 +620,9 @@ export def SelectNext(): void
   endif
 
   var binfos: list<dict<any>> = getbufinfo(pane_bufnr)
-  if empty(binfos) | return | endif
+  if empty(binfos)
+    return
+  endif
   var total: number = binfos[0].linecount
   var next_line: number = selected_line + 1
 
@@ -632,7 +645,9 @@ export def SelectPrev(): void
   endif
 
   var binfos: list<dict<any>> = getbufinfo(pane_bufnr)
-  if empty(binfos) | return | endif
+  if empty(binfos)
+    return
+  endif
   var total: number = binfos[0].linecount
   var prev_line: number = selected_line - 1
 
@@ -642,6 +657,9 @@ export def SelectPrev(): void
   if prev_line < 1
     prev_line = total
     while prev_line >= 1 && SkipNonSelectable(prev_line)
+      if prev_line == 1
+        break
+      endif
       prev_line -= 1
     endwhile
   endif
@@ -670,13 +688,18 @@ export def SelectLast(): void
     return
   endif
   var binfos: list<dict<any>> = getbufinfo(pane_bufnr)
-  if empty(binfos) | return | endif
+  if empty(binfos)
+    return
+  endif
   var total: number = binfos[0].linecount
   if total < 1
     return
   endif
   selected_line = total
   while selected_line >= 1 && SkipNonSelectable(selected_line)
+    if selected_line == 1
+      break
+    endif
     selected_line -= 1
   endwhile
   MoveCursor(selected_line)
@@ -757,8 +780,8 @@ export def SelectCurrent(): void
     return
   endif
 
-  # Git mode: status line triggers rename
-  if current_mode == 'git' && selected_line == GIT_STATUS_LINE
+  # Code mode: status line triggers rename
+  if current_mode == 'code' && selected_line == CODE_STATUS_LINE
     RenameProject()
     return
   endif
@@ -793,7 +816,7 @@ export def SelectCurrent(): void
     if has_key(item, 'bufnr')
       OpenBuffer(item.bufnr)
     endif
-  elseif current_mode == 'git'
+  elseif current_mode == 'code'
     if get(item, 'is_parent', false)
       NavigateUp()
     elseif get(item, 'is_dir', false)
@@ -817,18 +840,19 @@ enddef
 # ──────────────────────────────────────────────
 
 export def SwitchMode(key: string): void
-  if index(MODE_KEYS, key) < 0
+  var mode: string = key == 'git' ? 'code' : key
+  if index(MODE_KEYS, mode) < 0
     return
   endif
-  if key != 'file' && key != 'buf'
+  if mode != 'file' && mode != 'buf'
     ClosePreview()
   endif
-  current_mode = key
+  current_mode = mode
   var cwd: string = getcwd()
-  if key != 'git'
+  if mode != 'code'
     current_dir = empty(cwd) ? expand('~') : cwd
   endif
-  if key == 'git'
+  if mode == 'code'
     var vproj_path: string = FindVprojFile(current_dir)
     if empty(vproj_path)
       cwd = getcwd()
@@ -841,24 +865,24 @@ export def SwitchMode(key: string): void
     endif
     if !empty(vproj_path)
       project = ParseVprojFile(vproj_path)
-      git_root = !empty(get(project, 'root', '')) ? get(project, 'root', '') : current_dir
+      code_root = !empty(get(project, 'root', '')) ? get(project, 'root', '') : current_dir
     else
       project = {}
-      git_root = current_dir
+      code_root = current_dir
     endif
   endif
   selected_line = FirstSelectableLine()
   # Apply mode-specific width config if set
   var mode_width: number = 0
-  if key == 'file'
+  if mode == 'file'
     mode_width = get(g:, 'vproj_pane_width_file', 0)
-  elseif key == 'buf'
+  elseif mode == 'buf'
     mode_width = get(g:, 'vproj_pane_width_buf', 0)
-  elseif key == 'git'
-    mode_width = get(g:, 'vproj_pane_width_git', 0)
-  elseif key == 'qfix'
+  elseif mode == 'code'
+    mode_width = get(g:, 'vproj_pane_width_code', 0)
+  elseif mode == 'qfix'
     mode_width = get(g:, 'vproj_pane_width_qfix', 0)
-  elseif key == 'log'
+  elseif mode == 'log'
     mode_width = get(g:, 'vproj_pane_width_log', 0)
   endif
   if type(mode_width) == v:t_number && mode_width >= MIN_WIDTH && mode_width <= MAX_WIDTH
@@ -869,12 +893,11 @@ export def SwitchMode(key: string): void
   nav_offset = 0
   filter_pattern = ''
   git_filter_active = false
-  log_entries = []
   tree_view_active = false
   expanded_dirs = {}
-  if key != 'git'
+  if mode != 'code'
     project = {}
-    git_root = ''
+    code_root = ''
   endif
   InvalidateGitCache()
   Render()
@@ -939,8 +962,8 @@ enddef
 # ──────────────────────────────────────────────
 
 def RefreshItems(): void
-  if current_mode == 'git'
-    items = GitItems()
+  if current_mode == 'code'
+    items = CodeItems()
   elseif current_mode == 'file'
     items = tree_view_active ? TreeItems(current_dir) : ReadDir(current_dir)
   elseif current_mode == 'buf'
@@ -957,14 +980,14 @@ def BuildDisplayLines(visible: list<dict<any>>): list<string>
 
   lines->add(BuildModeMenu())
 
-  if current_mode == 'git'
+  if current_mode == 'code'
     var status: string
     if empty(project) || empty(get(project, 'name', ''))
       status = '* (no project found)'
     else
       status = '* ' .. get(project, 'name', '')
-      if !empty(git_root) && git_root != get(project, 'root', '')
-        status = status .. '  ' .. git_root
+      if !empty(code_root) && code_root != get(project, 'root', '')
+        status = status .. '  ' .. code_root
       endif
     endif
     if strwidth(status) < pane_width
@@ -972,7 +995,7 @@ def BuildDisplayLines(visible: list<dict<any>>): list<string>
     endif
     lines->add(status)
     lines->add(repeat('-', pane_width))
-    lines->extend(BuildGitLines(visible))
+    lines->extend(BuildCodeLines(visible))
   else
     lines->add(repeat('-', pane_width))
     if current_mode == 'file'
@@ -1000,7 +1023,7 @@ def Render(): void
 
   RefreshItems()
   var display_items = empty(filter_pattern) ? items : ApplyFilter(items)
-  if git_filter_active && current_mode == 'file'
+  if git_filter_active && (current_mode == 'file' || current_mode == 'code')
     display_items = ApplyGitFilter(display_items)
   endif
   ComputePaging(display_items)
@@ -1077,8 +1100,8 @@ def BuildStatusline(): string
     mode_letter = 'f'
   elseif current_mode == 'buf'
     mode_letter = 'b'
-  elseif current_mode == 'git'
-    mode_letter = 'g'
+  elseif current_mode == 'code'
+    mode_letter = 'c'
   elseif current_mode == 'qfix'
     mode_letter = 'q'
   elseif current_mode == 'log'
@@ -1088,20 +1111,20 @@ def BuildStatusline(): string
   endif
 
   var counts = CountItems()
-  var count_str: string = current_mode == 'git'
+  var count_str: string = current_mode == 'code'
     ? counts.included .. '/' .. counts.total
     : string(counts.total)
 
   var path: string = ''
   var is_navigated: bool = false
   if current_mode != 'buf'
-    var root: string = current_mode == 'git' ? git_root : current_dir
+    var root: string = current_mode == 'code' ? code_root : current_dir
     if !empty(root)
       path = fnamemodify(root, ':~')
     endif
     if current_mode == 'file' && !empty(original_cwd) && current_dir != original_cwd
       is_navigated = true
-    elseif current_mode == 'git' && !empty(get(project, 'root', '')) && git_root != project.root
+    elseif current_mode == 'code' && !empty(get(project, 'root', '')) && code_root != project.root
       is_navigated = true
     endif
   endif
@@ -1146,7 +1169,7 @@ enddef
 def ComputePaging(all_items: list<dict<any>>): void
   var wnr: number = bufwinnr(pane_bufnr)
   var win_height: number = wnr > 0 ? winheight(wnr) : 0
-  var header_lines: number = current_mode == 'git' ? 3 : 2
+  var header_lines: number = current_mode == 'code' ? 3 : 2
   items_per_page = win_height - header_lines
   if items_per_page < 1
     items_per_page = 1
@@ -1253,7 +1276,11 @@ def GitStatusMap(): dict<string>
     endif
     # Handle quoted filenames
     if fname[0] == '"'
-      fname = fname[1 : -2]->substitute('\\"', '"', 'g')
+      fname = fname[1 : -1]
+      fname = substitute(fname, '\\n', nr2char(10), 'g')
+      fname = substitute(fname, '\\t', nr2char(9), 'g')
+      fname = substitute(fname, '\\\\', '\\', 'g')
+      fname = substitute(fname, '\\"', '"', 'g')
     endif
     # Map porcelain status to single char: M/A/D/?
     var x: string = line[0]
@@ -1276,6 +1303,14 @@ def GitStatusMap(): dict<string>
   endfor
   git_status_map = result
   return result
+enddef
+
+def IsInGitRepo(): bool
+  var root: string = GitRoot()
+  if empty(root)
+    return false
+  endif
+  return current_dir == root || stridx(current_dir, root .. '/') == 0
 enddef
 
 def InvalidateGitCache(): void
@@ -1317,7 +1352,7 @@ export def ToggleGitFilter(): void
 enddef
 
 export def GitStageToggle(): void
-  if !IsPaneVisible() || current_mode != 'file'
+  if !IsPaneVisible() || (current_mode != 'file' && current_mode != 'code')
     return
   endif
   var item: dict<any> = GetSelectedItem()
@@ -1358,7 +1393,7 @@ export def GitStageToggle(): void
   Render()
 enddef
 export def OpenDiffPreview(): void
-  if !IsPaneVisible() || current_mode != "file"
+  if !IsPaneVisible() || (current_mode != 'file' && current_mode != 'code')
     return
   endif
   var item: dict<any> = GetSelectedItem()
@@ -1420,7 +1455,7 @@ export def OpenDiffPreview(): void
 enddef
 
 export def DiscardChanges(): void
-  if !IsPaneVisible() || current_mode != "file"
+  if !IsPaneVisible() || (current_mode != 'file' && current_mode != 'code')
     return
   endif
   var item: dict<any> = GetSelectedItem()
@@ -1476,7 +1511,7 @@ export def DiscardChanges(): void
 enddef
 
 export def GitBlame(): void
-  if !IsPaneVisible() || current_mode != 'file'
+  if !IsPaneVisible() || (current_mode != 'file' && current_mode != 'code')
     return
   endif
   var item: dict<any> = GetSelectedItem()
@@ -1961,8 +1996,8 @@ def BuildFileLines(file_items: list<dict<any>>): list<string>
   var info_width: number = show_info_column ? 5 : 0
   var visible_idx: number = 0
   # Git status: 1-char indicator (space if no status or not in git repo)
-  var status_map: dict<string> = GitStatusMap()
-  var in_git: bool = !empty(status_map)
+  var in_git: bool = IsInGitRepo()
+  var status_map: dict<string> = in_git ? GitStatusMap() : {}
   var git_width: number = in_git ? 1 : 0
   var prefix_width: number = 2 + git_width
 
@@ -2049,8 +2084,8 @@ enddef
 def BuildTreeLines(visible: list<dict<any>>): list<string>
   var result: list<string> = []
   var info_width: number = show_info_column ? 5 : 0
-  var status_map: dict<string> = GitStatusMap()
-  var in_git: bool = !empty(status_map)
+  var in_git: bool = IsInGitRepo()
+  var status_map: dict<string> = in_git ? GitStatusMap() : {}
   var git_width: number = in_git ? 1 : 0
   var prefix_width: number = 2 + git_width
   var visible_idx: number = 0
@@ -2143,7 +2178,7 @@ def FormatSize(bytes: number): string
 enddef
 
 def CurrentRoot(): string
-  return (current_mode == 'git') ? git_root : current_dir
+  return (current_mode == 'code') ? code_root : current_dir
 enddef
 
 export def NavigateUp(): void
@@ -2151,8 +2186,8 @@ export def NavigateUp(): void
   if root == '/' || root == ''
     return
   endif
-  if current_mode == 'git'
-    git_root = fnamemodify(root, ':h')
+  if current_mode == 'code'
+    code_root = fnamemodify(root, ':h')
   else
     current_dir = fnamemodify(root, ':h')
   endif
@@ -2160,6 +2195,7 @@ export def NavigateUp(): void
   current_page = 0
   expanded_dirs = {}
   ClosePreview()
+  InvalidateGitCache()
   Render()
 enddef
 
@@ -2173,14 +2209,15 @@ def NavigateInto(subdir: string): void
   if !isdirectory(new_dir)
     return
   endif
-  if current_mode == 'git'
-    git_root = new_dir
+  if current_mode == 'code'
+    code_root = new_dir
   else
     current_dir = new_dir
   endif
   selected_line = FirstSelectableLine()
   current_page = 0
   ClosePreview()
+  InvalidateGitCache()
   Render()
 enddef
 
@@ -2219,6 +2256,10 @@ def OpenInRightPanel(): number
 enddef
 
 def OpenFile(path: string): void
+  if !IsRegularFile(path)
+    Error('vproj: Cannot open special file: ' .. fnamemodify(path, ':t'))
+    return
+  endif
   if !filereadable(path)
     Error('vproj: Cannot read: ' .. path)
     return
@@ -2379,7 +2420,7 @@ export def GrepSearch(): void
   var qflist: list<dict<any>> = []
   var nul: string = nr2char(0)
   var parts: list<string> = split(output, nul)
-  if len(parts) % 2 != 0
+  if !empty(parts) && parts[-1] == ''
     parts = parts[: -2]
   endif
   var i: number = 0
@@ -2502,7 +2543,9 @@ def FindVprojFile(dir: string): string
       endif
     endfor
     var parent = fnamemodify(d, ':h')
-    if parent == d | break | endif
+    if parent == d
+      break
+    endif
     d = parent
   endwhile
   return ''
@@ -2632,7 +2675,7 @@ def WriteVprojFile(): bool
 enddef
 
 # ──────────────────────────────────────────────
-# Git mode
+# Code mode
 # ──────────────────────────────────────────────
 
 def RelPath(full: string): string
@@ -2645,14 +2688,14 @@ def RelPath(full: string): string
   return rel
 enddef
 
-def GitItems(): list<dict<any>>
+def CodeItems(): list<dict<any>>
   var result: list<dict<any>> = []
 
   # Parent directory entry (unless at project root or filesystem root)
-  if git_root != '/' && git_root != ''
+  if code_root != '/' && code_root != ''
     result->add({
-      name: '.. ' .. fnamemodify(git_root, ':t'),
-      path: fnamemodify(git_root, ':h'),
+      name: '.. ' .. fnamemodify(code_root, ':t'),
+      path: fnamemodify(code_root, ':h'),
       is_parent: true,
       is_dir: true,
       included: false,
@@ -2661,9 +2704,9 @@ def GitItems(): list<dict<any>>
 
   var entries: list<string> = []
   try
-    entries = readdir(git_root)
+    entries = readdir(code_root)
   catch
-    Error('vproj: Cannot read directory: ' .. git_root)
+    Error('vproj: Cannot read directory: ' .. code_root)
     return result
   endtry
   if empty(entries)
@@ -2679,7 +2722,7 @@ def GitItems(): list<dict<any>>
     if entry[0] == '.' && !get(g:, 'vproj_show_dotfiles', false)
       continue
     endif
-    var full: string = git_root .. '/' .. entry
+    var full: string = code_root .. '/' .. entry
     var is_dir: bool = isdirectory(full)
     if !is_dir && !IsRegularFile(full)
       continue
@@ -2726,23 +2769,33 @@ def GitItems(): list<dict<any>>
   return result
 enddef
 
-def BuildGitLines(code_items: list<dict<any>>): list<string>
+def BuildCodeLines(code_items: list<dict<any>>): list<string>
   var result: list<string> = []
   var info_width: number = show_info_column ? 5 : 0
-  var label_width: number = 4  # "X + " or "X - " or "    "
+  var repo_root: string = GitRoot()
+  var check_root: string = current_mode == 'code' ? code_root : current_dir
+  var in_git: bool = !empty(repo_root)
+        && (check_root == repo_root || stridx(check_root, repo_root .. '/') == 0)
+  var status_map: dict<string> = in_git ? GitStatusMap() : {}
+  var git_width: number = in_git ? 1 : 0
+  var label_width: number = 4 + git_width  # "X", git_char, "+/-", " "
   var visible_idx: number = 0
 
   for item in code_items
     var is_parent: bool = get(item, 'is_parent', false)
     var is_dir: bool = get(item, 'is_dir', false)
     var indicator: string = NavChar(item, visible_idx)
+    var git_char: string = ''
+    if in_git && !is_parent && !is_dir
+      git_char = get(status_map, get(item, 'path', ''), ' ')
+    endif
     var prefix: string
     if is_parent
-      prefix = '    '
+      prefix = '    ' .. (in_git ? ' ' : '')
     elseif get(item, 'included', false)
-      prefix = indicator .. '+ '
+      prefix = indicator .. git_char .. '+ '
     else
-      prefix = indicator .. '- '
+      prefix = indicator .. git_char .. '- '
     endif
 
     var name: string = item.name
@@ -2757,14 +2810,13 @@ def BuildGitLines(code_items: list<dict<any>>): list<string>
       info = repeat(' ', info_width - strwidth(info)) .. info
     endif
 
+    # Non-included items in parentheses (wrap before truncation)
+    if !get(item, 'included', false) && !is_parent
+      name = '(' .. name .. ')'
+    endif
     var name_width: number = pane_width - label_width - info_width
     if strwidth(name) > name_width
       name = strcharpart(name, 0, name_width)
-    endif
-
-    # Non-included items in parentheses
-    if !get(item, 'included', false) && !is_parent
-      name = '(' .. name .. ')'
     endif
     var line: string = prefix .. name
     var pad: number = pane_width - strwidth(line) - strwidth(info)
@@ -2787,7 +2839,7 @@ def BuildGitLines(code_items: list<dict<any>>): list<string>
 enddef
 
 def DoToggleInclude(action: string): void
-  if current_mode != 'git' || !IsPaneVisible() || empty(project)
+  if current_mode != 'code' || !IsPaneVisible() || empty(project)
     if empty(project)
       echom 'vproj: No project -- Enter on status line to create one'
     endif
@@ -2869,16 +2921,16 @@ export def ExcludeItem(): void
 enddef
 
 export def RenameProject(): void
-  if current_mode != 'git' || !IsPaneVisible()
+  if current_mode != 'code' || !IsPaneVisible()
     return
   endif
 
   if empty(project)
-    var confirm = tolower(input('No .vproj found. Create one? (y/N): '))
-    if confirm != 'y'
+    var answer = tolower(input('No .vproj found. Create one? (y/N): '))
+    if answer != 'y'
       return
     endif
-    var default_name = fnamemodify(current_dir, ':t')
+    var default_name = fnamemodify(CurrentRoot(), ':t')
     var new_name = input('Project name: ', default_name)
     if empty(new_name)
       return
@@ -2887,18 +2939,18 @@ export def RenameProject(): void
       echom 'vproj: Project name cannot contain path separators'
       return
     endif
-    var target_path: string = current_dir .. '/' .. new_name .. '.vproj'
+    var target_path: string = CurrentRoot() .. '/' .. new_name .. '.vproj'
     if filereadable(target_path)
-      var overwrite: string = tolower(input(target_path .. ' already exists. Overwrite? (y/N): '))
-      if overwrite != 'y'
+      var answer: string = tolower(input(target_path .. ' already exists. Overwrite? (y/N): '))
+      if answer != 'y'
         return
       endif
     endif
-    project = {name: new_name, root: current_dir, vproj_file: target_path, included_dirs: [], included_files: [], excluded_dirs: [], excluded_files: []}
-    git_root = current_dir
+    project = {name: new_name, root: CurrentRoot(), vproj_file: target_path, included_dirs: [], included_files: [], excluded_dirs: [], excluded_files: []}
+    code_root = CurrentRoot()
     if !WriteVprojFile()
       project = {}
-      git_root = current_dir
+      code_root = CurrentRoot()
       Error('vproj: Failed to create project file')
       return
     endif
@@ -3064,7 +3116,6 @@ def LogItems(): list<dict<any>>
     var rest: string = line[8 : ]
     result->add({hash: hash, subject: rest})
   endfor
-  log_entries = result
   return result
 enddef
 
@@ -3188,15 +3239,19 @@ def SetupPaneMappings(): void
   # Activate / open
   nnoremap <buffer> <silent> <CR> <Cmd>call vproj#SelectCurrent()<CR>
 
-  # Mode switching — <nowait> prevents timeout on Vim prefix keys (f, g, q)
-  nnoremap <buffer> <silent> <nowait> f <Cmd>call vproj#SwitchMode('file')<CR>
-  nnoremap <buffer> <silent> T <Cmd>call vproj#ToggleTreeView()<CR>
-  nnoremap <buffer> <silent> b <Cmd>call vproj#SwitchMode('buf')<CR>
-  nnoremap <buffer> <silent> <nowait> g <Cmd>call vproj#SwitchMode('git')<CR>
-  nnoremap <buffer> <silent> <nowait> q <Cmd>call HandlePaneQ()<CR>
-  nnoremap <buffer> <silent> L <Cmd>call vproj#SwitchMode('log')<CR>
+  # Mode switching via Shift keys
+  nnoremap <buffer> <silent> <S-F> <Cmd>call vproj#SwitchMode('file')<CR>
+  nnoremap <buffer> <silent> <S-B> <Cmd>call vproj#SwitchMode('buf')<CR>
+  nnoremap <buffer> <silent> <S-C> <Cmd>call vproj#SwitchMode('code')<CR>
+  nnoremap <buffer> <silent> <S-L> <Cmd>call vproj#SwitchMode('log')<CR>
 
-  # Include / exclude (git mode)
+  # Toggle tree view
+  nnoremap <buffer> <silent> T <Cmd>call vproj#ToggleTreeView()<CR>
+
+  # Qfix / close (q in permanent mode closes pane; in temporary switches to qfix)
+  nnoremap <buffer> <silent> <nowait> q <Cmd>call vproj#HandlePaneQ()<CR>
+
+  # Include / exclude (code mode)
   nnoremap <buffer> <silent> + <Cmd>call vproj#IncludeItem()<CR>
   nnoremap <buffer> <silent> - <Cmd>call vproj#ExcludeItem()<CR>
 
@@ -3214,7 +3269,7 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> x <Cmd>call vproj#CloseBuffer()<CR>
 
   # Nav indicator shift
-  nnoremap <buffer> <silent> > <Cmd>call vproj#ShiftNavForward()<CR>
+  nnoremap <buffer> <silent> <nowait> > <Cmd>call vproj#ShiftNavForward()<CR>
   nnoremap <buffer> <silent> <lt> <Cmd>call vproj#ShiftNavBackward()<CR>
 
   # Filter
@@ -3223,7 +3278,7 @@ def SetupPaneMappings(): void
 
   # Nav indicator direct selection
   for ch in NAV_CHARS
-    execute 'nnoremap <buffer> <silent> ' .. ch .. ' <Cmd>call vproj#SelectByNavChar("' .. ch .. '")<CR>'
+    execute 'nnoremap <buffer> <silent> <nowait> ' .. ch .. ' <Cmd>call vproj#SelectByNavChar("' .. ch .. '")<CR>'
   endfor
 
   # Git: toggle status filter
@@ -3233,18 +3288,18 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> s <Cmd>call vproj#GitStageToggle()<CR>
 
   # Git: diff preview and discard
-  nnoremap <buffer> <silent> d <Cmd>call vproj#OpenDiffPreview()<CR>
+  nnoremap <buffer> <silent> <nowait> d <Cmd>call vproj#OpenDiffPreview()<CR>
   nnoremap <buffer> <silent> D <Cmd>call vproj#DiscardChanges()<CR>
 
   # Git: whole-repo actions
-  nnoremap <buffer> <silent> C <Cmd>call vproj#GitCommit()<CR>
+  nnoremap <buffer> <silent> <nowait> c <Cmd>call vproj#GitCommit()<CR>
   nnoremap <buffer> <silent> P <Cmd>call vproj#GitPush()<CR>
   nnoremap <buffer> <silent> U <Cmd>call vproj#GitPull()<CR>
-  nnoremap <buffer> <silent> B <Cmd>call vproj#GitBranchSwitch()<CR>
+  nnoremap <buffer> <silent> b <Cmd>call vproj#GitBranchSwitch()<CR>
 
   # Git: stash and blame
-  nnoremap <buffer> <silent> z <Cmd>call vproj#GitStashPush()<CR>
-  nnoremap <buffer> <silent> Z <Cmd>call vproj#GitStashPop()<CR>
+  nnoremap <buffer> <silent> <nowait> z <Cmd>call vproj#GitStashPush()<CR>
+  nnoremap <buffer> <silent> <nowait> Z <Cmd>call vproj#GitStashPop()<CR>
   nnoremap <buffer> <silent> a <Cmd>call vproj#GitBlame()<CR>
 
   # Close pane
@@ -3404,8 +3459,15 @@ def LoadSession(): void
     endif
     var key: string = trim(line[ : eq - 1])
     var val: string = trim(line[eq + 1 : ])
-    if key == 'mode' && !empty(val) && index(MODE_KEYS, val) >= 0
-      saved_mode = val
+    if key == 'mode' && !empty(val)
+      if val == 'ind'
+        val = 'log'
+      elseif val == 'git'
+        val = 'code'
+      endif
+      if index(MODE_KEYS, val) >= 0
+        saved_mode = val
+      endif
     elseif key == 'dir' && !empty(val) && isdirectory(val) && val !~ '^//[^/]'
       current_dir = val
     elseif key == 'width'
@@ -3417,35 +3479,75 @@ def LoadSession(): void
       show_info_column = (val == '1')
     endif
   endfor
-  if saved_mode == 'ind'
-    saved_mode = 'log'
-  endif
   if !empty(saved_mode)
     current_mode = saved_mode
-    if current_mode == 'git'
+    if current_mode == 'code'
       var vproj_path: string = FindVprojFile(current_dir)
       if !empty(vproj_path)
         project = ParseVprojFile(vproj_path)
-        git_root = !empty(get(project, 'root', '')) ? get(project, 'root', '') : current_dir
+        code_root = !empty(get(project, 'root', '')) ? get(project, 'root', '') : current_dir
       else
         project = {}
-        git_root = current_dir
+        code_root = current_dir
       endif
     endif
   endif
+  ApplyWidth()
 enddef
 
 export def DefineHighlights(): void
+  # ── Git status — linked to built-in Vim diff groups ──
+  # When these groups change (e.g. on :colorscheme), the linked groups
+  # follow automatically — no ColorScheme handler needed for these.
+  highlight default link VprojGitModified DiffChange
+  highlight default link VprojGitAdded DiffAdd
+  highlight default link VprojGitDeleted DiffDelete
+  highlight default link VprojGitRenamed Title
+  highlight default link VprojGitUntracked Comment
+  highlight default link VprojGitConflict ErrorMsg
+  highlight default link VprojGitIgnored Ignore
+
+  # ── Mode labels — hardcoded backgrounds for visual distinction ──
   highlight default VprojModeFile ctermfg=0   ctermbg=178 cterm=bold guifg=#1A1A1A guibg=#D7AF00 gui=bold
   highlight default VprojModeBuf ctermfg=0   ctermbg=76  cterm=bold guifg=#1A1A1A guibg=#5FD700 gui=bold
-  highlight default VprojModeGit ctermfg=0   ctermbg=198 cterm=bold guifg=#1A1A1A guibg=#FF0087 gui=bold
+  highlight default VprojModeCode ctermfg=0   ctermbg=75  cterm=bold guifg=#1A1A1A guibg=#5FAFFF gui=bold
+
   highlight default VprojModeQfix ctermfg=0   ctermbg=39  cterm=bold guifg=#1A1A1A guibg=#00AFFF gui=bold
   highlight default VprojModeLog ctermfg=0   ctermbg=44  cterm=bold guifg=#1A1A1A guibg=#00D7D7 gui=bold
-  highlight default VprojCursorLine ctermbg=237 cterm=none guibg=#3A3A3A gui=none
-  highlight default VprojNavIndicator ctermfg=214 guifg=#FFAF00
-  highlight default VprojInfoColumn ctermfg=2 guifg=#00AF00
-  highlight default VprojParentDir ctermfg=4 guifg=#005FAF
-  highlight default VprojDirName cterm=bold gui=bold
-  highlight default VprojSeparator ctermfg=8 guifg=#585858
-  highlight default VprojStatusLine cterm=reverse gui=reverse
+
+  # ── Cursor, navigation, info ──
+  highlight default link VprojCursorLine CursorLine
+  if !hlexists('CursorLine')
+    highlight default VprojCursorLine ctermbg=237 cterm=none guibg=#3A3A3A gui=none
+  endif
+
+  highlight default link VprojNavIndicator Special
+  if !hlexists('Special')
+    highlight default VprojNavIndicator ctermfg=214 guifg=#FFAF00
+  endif
+
+  highlight default link VprojInfoColumn Directory
+  if !hlexists('Directory')
+    highlight default VprojInfoColumn ctermfg=2 guifg=#00AF00
+  endif
+
+  highlight default link VprojParentDir String
+  if !hlexists('String')
+    highlight default VprojParentDir ctermfg=4 guifg=#005FAF
+  endif
+
+  highlight default link VprojDirName Directory
+  if !hlexists('Directory')
+    highlight default VprojDirName cterm=bold gui=bold
+  endif
+
+  highlight default link VprojSeparator Comment
+  if !hlexists('Comment')
+    highlight default VprojSeparator ctermfg=8 guifg=#585858
+  endif
+
+  highlight default link VprojStatusLine StatusLine
+  if !hlexists('StatusLine')
+    highlight default VprojStatusLine cterm=reverse gui=reverse
+  endif
 enddef

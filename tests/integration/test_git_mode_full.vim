@@ -31,12 +31,12 @@ if vproj#IsPaneVisible()
   vproj#PaneClose()
 endif
 vproj#PaneOpen()
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 
 # ── Test 1: Git mode starts with correct layout ──
 # Line 1 = mode menu, line 2 = project status, line 3 = separator, line 4 = first item
 Assert(PaneCursorLine() == 4, 'git mode: cursor starts on first item (line 4)')
-Assert(vproj#GetCurrentMode() == 'git', 'git mode: GetCurrentMode returns git')
+Assert(vproj#GetCurrentMode() == 'code', 'code mode: GetCurrentMode returns code')
 
 # ── Test 2: Navigate up/down respects git mode header ──
 vproj#SelectNext()
@@ -53,14 +53,14 @@ vproj#SwitchMode('buf')
 Assert(PaneCursorLine() == 3, 'switch to buf mode: cursor on line 3')
 Assert(vproj#GetCurrentMode() == 'buf', 'GetCurrentMode returns buf')
 
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 Assert(PaneCursorLine() == 4, 'switch back to git mode: cursor on line 4')
 
 # ── Test 4: SelectFirst/SelectLast jump to correct bounds ──
 vproj#SwitchMode('file')
 vproj#SelectFirst()
 Assert(PaneCursorLine() == 3, 'SelectFirst goes to line 3 in file mode')
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 vproj#SelectFirst()
 Assert(PaneCursorLine() == 4, 'SelectFirst goes to line 4 in git mode')
 
@@ -72,7 +72,7 @@ vproj#PaneOpen()
 Assert(PaneCursorLine() == 4, 'reopen: cursor on first item in git mode (session restore)')
 
 # ── Test 6: NavigateUp from git mode works ──
-vproj#SwitchMode('git')
+vproj#SwitchMode('code')
 vproj#NavigateUp()
 Assert(vproj#IsPaneVisible(), 'NavigateUp in git mode keeps pane visible')
 
