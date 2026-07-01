@@ -74,13 +74,13 @@ Assert(vproj#IsPaneVisible() && vproj#GetCurrentMode() == 'file',
 execute 'normal .'
 Assert(vproj#IsPaneVisible(), '. (parent) keeps pane open')
 
-# L — Log mode
+# S-L — Log mode (Shift key, like other mode switches)
 Setup()
 try
-  execute 'normal L'
-  Assert(vproj#GetCurrentMode() == 'log', 'L switches to log mode')
+  execute "normal \<S-L>"
+  Assert(vproj#GetCurrentMode() == 'log', 'S-L switches to log mode')
 catch
-  Assert(false, 'L error: ' .. v:exception)
+  Assert(false, 'S-L error: ' .. v:exception)
 endtry
 
 # ──────────────────────────────────────────────
@@ -105,17 +105,19 @@ Setup()
 echom '--- Mode Switching ---'
 Setup()
 
-execute 'normal f'
-Assert(vproj#GetCurrentMode() == 'file', 'f stays in file mode')
+# Mode switching uses Shift keys: S-F=File, S-B=Buf, S-C=Code
+execute "normal \<S-F>"
+Assert(vproj#GetCurrentMode() == 'file', 'S-F stays in file mode')
+Assert(vproj#IsPaneVisible(), 'S-F keeps pane open')
 
-execute 'normal b'
-Assert(vproj#GetCurrentMode() == 'buf', 'b switches to buf mode')
+execute "normal \<S-B>"
+Assert(vproj#GetCurrentMode() == 'buf', 'S-B switches to buf mode')
 
-execute 'normal g'
-Assert(vproj#GetCurrentMode() == 'code', 'g switches to git mode')
+execute "normal \<S-C>"
+Assert(vproj#GetCurrentMode() == 'code', 'S-C switches to code mode')
 
-execute 'normal f'
-Assert(vproj#GetCurrentMode() == 'file', 'f back to file mode')
+execute "normal \<S-F>"
+Assert(vproj#GetCurrentMode() == 'file', 'S-F back to file mode')
 
 # ──────────────────────────────────────────────
 # SECTION 5: Action keys (r, x, +, -)
@@ -190,9 +192,9 @@ echom '--- Passthrough ---'
 Setup()
 
 # Build list of passthrough keys and expected behavior
-  # Note: f, b, g are mapped with <nowait> so f+char, gg, b, etc.
-  # are NOT passthrough — they trigger mode switches or nav char jumps.
-  # Test only truly unmapped Vim motion keys.
+  # Mode switching uses Shift keys (S-F, S-B, S-C, S-L).
+  # Nav chars (f, g, etc.) are mapped with <nowait> to SelectByNavChar.
+  # These Vim motion keys should still work as passthrough.
 var passthrough_tests: list<list<string>> = [
   ['t' .. 'e',         't (find until)'],
   ['w',                'w (word forward)'],
