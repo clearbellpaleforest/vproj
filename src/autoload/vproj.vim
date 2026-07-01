@@ -1524,7 +1524,9 @@ export def DiscardChanges(): void
     endif
   elseif st == "A"
     system("git reset HEAD -- " .. shellescape(path) .. " 2>/dev/null")
-    echom "Unstaged: " .. name
+    if v:shell_error == 0
+      echom "Unstaged: " .. name
+    endif
   elseif st == "M" || st == "R"
     system("git checkout -- " .. shellescape(path) .. " 2>/dev/null")
     if v:shell_error == 0
@@ -1652,13 +1654,14 @@ def OpenPreview(): void
   silent! keepalt file [Preview]
   silent! vert resize 40
   win_gotoid(pane_wid)
-  preview_active = true
   try
     UpdatePreview()
+    preview_active = true
   catch
     echohl ErrorMsg
     echom 'vproj preview: ' .. v:exception
     echohl None
+    preview_active = false
   endtry
 enddef
 
@@ -2630,7 +2633,12 @@ export def ParseVprojFile(path: string): dict<any>
 
   for line in file_lines
     var t: string = trim(line)
-    if empty(t) || t[0] == '#'
+    if empty(t)
+      continue
+    endif
+    # Only skip # comments at top level (before any section), not inside
+    # list sections where filenames may legitimately start with #
+    if empty(section) && t[0] == '#'
       continue
     endif
 
@@ -3381,7 +3389,7 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> <nowait> c <Cmd>call vproj#GitCommit()<CR>
   nnoremap <buffer> <silent> P <Cmd>call vproj#GitPush()<CR>
   nnoremap <buffer> <silent> U <Cmd>call vproj#GitPull()<CR>
-  nnoremap <buffer> <silent> b <Cmd>call vproj#GitBranchSwitch()<CR>
+  nnoremap <buffer> <silent> <nowait> b <Cmd>call vproj#GitBranchSwitch()<CR>
 
   # Git: stash and blame
   nnoremap <buffer> <silent> <nowait> z <Cmd>call vproj#GitStashPush()<CR>
