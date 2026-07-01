@@ -6,6 +6,7 @@ vim9script
 set rtp+=src
 runtime! plugin/vproj.vim
 set nomore
+set shortmess+=A
 
 var failures: number = 0
 
@@ -26,10 +27,26 @@ enddef
 
 echom '=== Buf Mode Integration Tests ==='
 
+# Clean up stale swap files from previous runs
+var test_files = ['/tmp/vproj_test_a.txt', '/tmp/vproj_test_b.txt', '/tmp/vproj_test_c.txt']
+for tf in test_files
+  var swap = '/tmp/.' .. fnamemodify(tf, ':t') .. '.swp'
+  try
+    if filereadable(swap)
+      delete(swap)
+    endif
+  catch
+  endtry
+endfor
+
 # ── Setup: open some buffers first ──
-edit! /tmp/vproj_test_a.txt
-edit! /tmp/vproj_test_b.txt
-edit! /tmp/vproj_test_c.txt
+for tf in test_files
+  try
+    execute 'silent! edit! ' .. fnameescape(tf)
+    write!
+  catch
+  endtry
+endfor
 
 # ── Open pane in buf mode ──
 vproj#PaneOpen()
@@ -60,9 +77,12 @@ Assert(vproj#IsPaneVisible(), 'NavigateUp in buf mode does not crash')
 
 # ── Cleanup ──
 vproj#PaneClose()
-bwipeout! /tmp/vproj_test_a.txt
-bwipeout! /tmp/vproj_test_b.txt
-bwipeout! /tmp/vproj_test_c.txt
+for tf in test_files
+  try
+    execute 'bwipeout! ' .. fnameescape(tf)
+  catch
+  endtry
+endfor
 
 echom ''
 if failures == 0
