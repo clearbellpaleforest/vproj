@@ -58,12 +58,12 @@ enddef
 echom '--- BuildDisplayLines structure ---'
 Setup()
 
-# Line 1 must be mode menu (contains [F]ile, [B]uf, [G]it, [Q]fix)
+# Line 1 must be mode menu (contains [F]ile, [B]uf, [C]ode, [q]fix)
 var line1 = PaneLine(1)
 Assert(line1 =~ '\[F\]ile', 'line 1: mode menu has [F]ile')
 Assert(line1 =~ '\[B\]uf', 'line 1: mode menu has [B]uf')
-Assert(line1 =~ '\[G\]it', 'line 1: mode menu has [G]it')
-Assert(line1 =~ '\[Q\]fix', 'line 1: mode menu has [Q]fix')
+Assert(line1 =~ '\[C\]ode', 'line 1: mode menu has [C]ode')
+Assert(line1 =~ '\[q\]fix', 'line 1: mode menu has [q]fix')
 
 # Line 2 must be separator in file mode
 var line2 = PaneLine(2)
@@ -72,7 +72,7 @@ Assert(line2 =~ '^-\+$', 'line 2: separator in file mode')
 # Cursor starts on line 3 (first selectable item)
 Assert(PaneCursorLine() == 3, 'file mode: cursor on line 3 (first item)')
 
-# Git mode structure
+# Code mode structure
 vproj#SwitchMode('code')
 var cline1 = PaneLine(1)
 Assert(cline1 =~ '\[F\]ile', 'git mode line 1: mode menu')
@@ -94,7 +94,7 @@ Assert(PaneCursorLine() == 3, 'buf mode: cursor on line 3 (first buf line)')
 vproj#SwitchMode('qfix')
 var qline1 = PaneLine(1)
 Assert(qline1 =~ '\[F\]ile', 'qfix mode line 1: mode menu')
-Assert(qline1 =~ '\[Q\]fix', 'qfix mode line 1: qfix label present')
+Assert(qline1 =~ '\[q\]fix', 'qfix mode line 1: qfix label present')
 var qline2 = PaneLine(2)
 Assert(qline2 =~ '^-\+$', 'qfix mode line 2: separator')
 # Empty qflist should show placeholder
@@ -128,7 +128,7 @@ vproj#OnDirChanged()
 Assert(vproj#IsPaneVisible(), 'OnDirChanged with no CWD change keeps pane open')
 Assert(vproj#GetCurrentMode() == 'file', 'OnDirChanged preserves mode')
 
-# OnDirChanged in git mode is a no-op
+# OnDirChanged in code mode is a no-op
 vproj#SwitchMode('code')
 vproj#OnDirChanged()
 Assert(vproj#GetCurrentMode() == 'code', 'OnDirChanged in git mode is no-op')
@@ -237,9 +237,9 @@ Assert(vproj#IsPaneVisible(), 'PaneOpen after HandleBufWipeout works')
 Assert(PaneCursorLine() == 3, 'cursor on line 3 after HandleBufWipeout + PaneOpen')
 
 # ══════════════════════════════════════════════════
-# 8. Git mode with .vproj project file
+# 8. Code mode with .vproj project file
 # ══════════════════════════════════════════════════
-echom '--- Git mode with .vproj file ---'
+echom '--- Code mode with .vproj file ---'
 vproj#PaneClose()
 
 # Write a test .vproj file in a temp directory
@@ -274,7 +274,7 @@ writefile(vproj_content, tmpdir .. '/.vproj')
 	vproj#PaneOpen()
 vproj#SwitchMode('code')
 
-# Verify git mode shows the project
+# Verify code mode shows the project
 Assert(vproj#GetCurrentMode() == 'code', 'switched to git mode with .vproj')
 
 # Status line (line 2) should show the project name
@@ -282,7 +282,7 @@ var status_line = PaneLine(2)
 Assert(status_line =~ 'test-project', 'status line shows project name')
 
 # RenameProject requires interactive input() — can't test in headless mode.
-# Guard coverage (non-git mode early return) is tested in coverage.vim.
+# Guard coverage (non-code mode early return) is tested in coverage.vim.
 
 # Clean up test project
 vproj#PaneClose()
@@ -352,7 +352,7 @@ Assert(last_pos > 3, 'SelectLast moves to last selectable line')
 vproj#SelectFirst()
 Assert(PaneCursorLine() == 3, 'SelectFirst returns to line 3')
 
-# Git mode
+# Code mode
 vproj#SwitchMode('code')
 vproj#SelectLast()
 Assert(vproj#IsPaneVisible(), 'SelectLast in git mode no crash')
@@ -448,15 +448,15 @@ Assert(vproj#GetCurrentMode() == 'qfix', 'GetCurrentMode returns qfix')
 echom '--- ToggleGitFilter ---'
 Setup()
 
-# Indicator absent by default — check that [G] doesn't appear AFTER [Q]fix
+# Indicator absent by default — check that [G] doesn't appear AFTER [q]fix
 var ml1 = PaneLine(1)
-Assert(ml1 !~ 'Q\]fix.*\[G\]', 'git filter indicator absent by default')
+Assert(ml1 !~ 'q\]fix.*\[G\]', 'git filter indicator absent by default')
 
 try
   vproj#ToggleGitFilter()
   Assert(vproj#IsPaneVisible(), 'ToggleGitFilter keeps pane visible')
   var ml2 = PaneLine(1)
-  Assert(ml2 =~ 'Q\]fix.*\[G\]', 'git filter indicator appears after toggle')
+  Assert(ml2 =~ 'q\]fix.*\[G\]', 'git filter indicator appears after toggle')
 catch
   Assert(false, 'ToggleGitFilter error: ' .. v:exception)
 endtry
@@ -464,7 +464,7 @@ endtry
 # Toggle back to off
 vproj#ToggleGitFilter()
 var ml3 = PaneLine(1)
-Assert(ml3 !~ 'Q\]fix.*\[G\]', 'git filter indicator cleared on second toggle')
+Assert(ml3 !~ 'q\]fix.*\[G\]', 'git filter indicator cleared on second toggle')
 
 # Refresh clears git filter
 vproj#ToggleGitFilter()
@@ -476,7 +476,7 @@ Assert(ml4 !~ 'Q\]fix.*\[G\]', 'Refresh clears git filter')
 vproj#ToggleGitFilter()
 vproj#SwitchMode('buf')
 var ml5 = PaneLine(1)
-Assert(ml5 !~ 'Q\]fix.*\[G\]', 'SwitchMode clears git filter')
+Assert(ml5 !~ 'q\]fix.*\[C\]', 'SwitchMode clears git filter')
 
 # ══════════════════════════════════════════════════
 # 17. HandleF1 — pane vs. non-pane paths

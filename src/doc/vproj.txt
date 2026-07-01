@@ -238,7 +238,7 @@ Pane Modes:                                      *vproj-pane-modes*
 Highlight groups:
     VprojModeFile       File mode label (yellow, bold, underline)
     VprojModeBuf        Buf mode label (green, bold, underline)
-    VprojModeGit        Git mode label (magenta, bold, underline)
+    VprojModeCode       Code mode label (blue, bold, underline)
     VprojModeQfix       Qfix mode label (blue, bold, underline)
     VprojModeLog        Log mode label (cyan, bold, underline)
     VprojCursorLine     Selected line highlight (reverse video)
@@ -247,7 +247,7 @@ Highlight groups:
     VprojParentDir      Parent directory entry (blue)
     VprojDirName        Directory name (bold)
     VprojSeparator      Separator line (dark grey)
-    VprojStatusLine     Git mode status line (reverse video)
+    VprojStatusLine     Code mode status line (reverse video)
 
                                                *vproj-troubleshooting*
 Troubleshooting ~

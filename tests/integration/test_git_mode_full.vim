@@ -1,6 +1,6 @@
 vim9script
 
-# Integration test: Git mode — project creation, include/exclude, .vproj write
+# Integration test: Code mode — project creation, include/exclude, .vproj write
 # Run: vim -N -u NONE -S tests/integration/test_git_mode_full.vim
 
 set rtp+=src
@@ -24,21 +24,21 @@ def PaneCursorLine(): number
   return empty(wins) ? -1 : line('.', wins[0])
 enddef
 
-echom '=== Git Mode Integration Tests ==='
+echom '=== Code Mode Integration Tests ==='
 
-# ── Setup: open pane in git mode ──
+# ── Setup: open pane in code mode ──
 if vproj#IsPaneVisible()
   vproj#PaneClose()
 endif
 vproj#PaneOpen()
 vproj#SwitchMode('code')
 
-# ── Test 1: Git mode starts with correct layout ──
+# ── Test 1: Code mode starts with correct layout ──
 # Line 1 = mode menu, line 2 = project status, line 3 = separator, line 4 = first item
 Assert(PaneCursorLine() == 4, 'git mode: cursor starts on first item (line 4)')
 Assert(vproj#GetCurrentMode() == 'code', 'code mode: GetCurrentMode returns code')
 
-# ── Test 2: Navigate up/down respects git mode header ──
+# ── Test 2: Navigate up/down respects code mode header ──
 vproj#SelectNext()
 Assert(PaneCursorLine() == 5, 'git mode: SelectNext moves to line 5')
 vproj#SelectPrev()
@@ -71,7 +71,7 @@ vproj#PaneOpen()
 # Session persistence restores last mode (git) after close/reopen
 Assert(PaneCursorLine() == 4, 'reopen: cursor on first item in git mode (session restore)')
 
-# ── Test 6: NavigateUp from git mode works ──
+# ── Test 6: NavigateUp from code mode works ──
 vproj#SwitchMode('code')
 vproj#NavigateUp()
 Assert(vproj#IsPaneVisible(), 'NavigateUp in git mode keeps pane visible')
@@ -82,10 +82,10 @@ Assert(!vproj#IsPaneVisible(), 'pane closes cleanly')
 
 echom ''
 if failures == 0
-  echom 'ALL GIT MODE INTEGRATION TESTS PASSED.'
+  echom 'ALL CODE MODE INTEGRATION TESTS PASSED.'
 else
   echohl ErrorMsg
-  echom failures .. ' GIT MODE TEST(S) FAILED.'
+  echom failures .. ' CODE MODE TEST(S) FAILED.'
   echohl None
   cquit!
 endif

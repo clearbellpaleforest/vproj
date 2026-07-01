@@ -75,7 +75,7 @@ catch
 endtry
 
 # ──────────────────────────────────────────────
-# ToggleInclude guards (status line, non-git mode)
+# ToggleInclude guards (status line, non-code mode)
 # ──────────────────────────────────────────────
 echom '--- ToggleInclude guards ---'
 
@@ -89,7 +89,7 @@ catch
   Assert(false, '+ in file mode error: ' .. v:exception)
 endtry
 
-# In git mode with no project, cursor on first item (line 3), press +
+# In code mode with no project, cursor on first item (line 3), press +
 vproj#SwitchMode('code')
 execute 'normal +'
 Assert(vproj#IsPaneVisible(), '+ in git mode no-project does not crash')
@@ -208,9 +208,9 @@ g:vproj_pane_width_buf = 35
 vproj#SwitchMode('buf')
 Assert(vproj#GetPaneWidth() == 35, 'buf-mode width config applied')
 
-g:vproj_pane_width_git = 30
+g:vproj_pane_width_code = 30
 vproj#SwitchMode('code')
-Assert(vproj#GetPaneWidth() == 30, 'git-mode width config applied')
+Assert(vproj#GetPaneWidth() == 30, 'code-mode width config applied')
 
 g:vproj_pane_width_qfix = 38
 vproj#SwitchMode('qfix')
@@ -218,7 +218,7 @@ Assert(vproj#GetPaneWidth() == 38, 'qfix-mode width config applied')
 
 unlet g:vproj_pane_width_file
 unlet g:vproj_pane_width_buf
-unlet g:vproj_pane_width_git
+unlet g:vproj_pane_width_code
 unlet g:vproj_pane_width_qfix
 vproj#SwitchMode('file')
 
@@ -313,7 +313,7 @@ catch
 endtry
 
 # ──────────────────────────────────────────────
-# RenameProject in non-git mode
+# RenameProject in non-code mode
 # ──────────────────────────────────────────────
 echom '--- RenameProject guard ---'
 Setup()

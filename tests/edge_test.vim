@@ -70,7 +70,7 @@ vproj#SwitchMode('file')
 vproj#CloseBuffer()
 Assert(vproj#IsPaneVisible(), 'CloseBuffer file mode does not crash')
 
-# ── Git mode: ToggleInclude on parent entry ──
+# ── Code mode: ToggleInclude on parent entry ──
 vproj#SwitchMode('code')
 # Navigate past line 1 (menu) and 2 (status), land on first item
 vproj#SelectNext()

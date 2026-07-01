@@ -29,7 +29,7 @@ Press these while the pane is focused:
 
 - [ ] `f` — file mode (browse directories)
 - [ ] `b` — buf mode (open buffers)
-- [ ] `g` — git mode (project tree)
+- [ ] `g` — code mode (project tree)
 - [ ] `q` — qfix mode (quickfix list)
 - [ ] `Enter` on the `[F]ile  [B]uf  [G]it  [Q]fix` menu line (line 1) — cycles to next mode
 
@@ -43,8 +43,8 @@ Press these while the pane is focused:
 
 - [ ] `r` — refresh pane contents
 - [ ] `x` — close selected buffer (buf mode only; shows message in other modes)
-- [ ] `+` — include item (git mode, on a parenthesized item)
-- [ ] `-` — exclude item (git mode, on an included item)
+- [ ] `+` — include item (code mode, on a parenthesized item)
+- [ ] `-` — exclude item (code mode, on an included item)
 - [ ] `<F1>` — toggle info column (file sizes / line counts)
 
 ## Paging

@@ -71,7 +71,7 @@ vproj#PaneClose()
 vproj#PaneOpen()
 Assert(vproj#IsPaneVisible(), 'reopen works after NavigateUp')
 
-# ── FIX 7: Git mode after file mode directory change ──
+# ── FIX 7: Code mode after file mode directory change ──
 echom '--- Mode switch refreshes current_dir ---'
 vproj#SwitchMode('code')
 Assert(vproj#GetCurrentMode() == 'code', 'switched to git mode')
