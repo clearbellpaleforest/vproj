@@ -53,7 +53,7 @@ manually to ~/.vim/pack/bundle/start/vproj/.
 
 File Mode  ([F]ile)                                 *vproj-mode-file*
     Browse the filesystem. Directories listed first, then files.
-    File sizes shown for regular files. Press |l| or Enter on a
+    File sizes shown for regular files. Press Enter on a
     directory to navigate into it, on a file to open it. Press |h|
     or . to go to the parent directory.
 
@@ -81,22 +81,21 @@ Buf Mode  ([B]uf)                                   *vproj-mode-buf*
     current buffer marked with %. Press |x| to close a buffer.
     Line counts shown.
 
-Git Mode  ([G]it)                                   *vproj-mode-git*
+Code Mode  ([C]ode)                                 *vproj-mode-code*
     Project-aware file tree from a .vproj file. Included items
     shown normally; excluded items shown in parentheses.
     Press |+| or |-| to toggle inclusion. Press Enter on the
     status line to rename or create the project.
 
-    Git actions: |s| to stage/unstage, |d| for diff preview,
-    |D| to discard changes, |C| to commit, |P| to push,
-    |U| to pull --ff-only, |B| to switch branches.
+    Git actions (|s|, |d|, |D|, |c|, |P|, |U|, |b|, |z|, |Z|,
+    |a|, |Ctrl-G|) work in both File and Code modes.
 
                                                *vproj-git-actions*
-    Git actions work in file, git, and log modes. Stage (|s|)
+    Git actions work in file and code modes. Stage (|s|)
     uses `git add` / `git reset HEAD`. Diff preview (|d|) opens
     a vertical split with `git diff`. Discard (|D|) prompts for
-    confirmation before `git checkout`. Commit (|C|) prompts for
-    a message. Push (|P|), pull (|U|), and branch switch (|B|)
+    confirmation before `git checkout`. Commit (|c|) prompts for
+    a message. Push (|P|), pull (|U|), and branch switch (|b|)
     use prompts for target/confirmation.
 
                                                *vproj-git-stash*
@@ -108,7 +107,7 @@ Git Mode  ([G]it)                                   *vproj-mode-git*
                                                *vproj-git-blame*
     Blame (|a|) opens a vertical split showing `git annotate` output
     for the file under cursor. Requires the file be tracked by git.
-    Press |q| in the blame window to close it. Only in file mode.
+    Press |q| in the blame window to close it.
 
 Qfix Mode  ([Q]fix)                                 *vproj-mode-qfix*
     Displays the Vim quickfix list. Press Enter to open the
@@ -117,10 +116,11 @@ Qfix Mode  ([Q]fix)                                 *vproj-mode-qfix*
 Log Mode  ([L]og)                                   *vproj-mode-log*
     Git commit history. Shows `git log --oneline` output with
     nav characters. Press Enter on a commit to open a detailed
-    diff in a split. Press |L| to switch to Log mode.
+    diff in a split. Press |Shift-L| to switch to Log mode.
 
 Press Enter on the mode menu line (line 1) to cycle through modes.
-Press |f|, |b|, |g|, |q|, or |L| inside the pane to switch directly.
+Press |Shift-F|, |Shift-B|, |Shift-C|, or |Shift-L| inside the pane
+to switch directly.
 
 ==============================================================================
 4. KEY MAPPINGS                                    *vproj-mappings*
@@ -132,8 +132,7 @@ Navigation:
     |j| / |k|           Move selection down / up
     <Down> / <Up>       Same as j / k
     |h|                 Go to parent directory
-    |l|                 Open file or enter directory
-    Enter               Same as l
+    Enter               Open file or enter directory
     |.|                  Go to parent directory (same as h)
     <C-T>               Jump to first item
     <C-B>               Jump to last item
@@ -141,20 +140,19 @@ Navigation:
     <C-J>               Enter first subdirectory
 
 Mode switching:
-    |f|                 File mode
-    |b|                 Buf mode
-    |g|                 Git mode
-    |q|                 Qfix mode
-    |L|                 Log mode
+    |Shift-F|            File mode
+    |Shift-B|            Buf mode
+    |Shift-C|            Code mode
+    |Shift-L|            Log mode
 
-Git actions (file and log modes):
+Git actions (file and code modes):
     |s|                 Stage / unstage file under cursor
     |d|                 Open diff preview in vertical split
     |D|                 Discard file changes (with confirmation)
-    |C|                 Commit with message prompt
+    |c|                 Commit with message prompt
     |P|                 Push to remote
     |U|                 Pull --ff-only from remote
-    |B|                 Switch branch (with prompt)
+    |b|                 Switch branch (with prompt)
     |z|                 Stash changes (optional message)
     |Z|                 Pop a stash (shows list, select by index)
     |a|                 Blame file under cursor (git annotate)
@@ -163,7 +161,7 @@ Git actions (file and log modes):
 Actions:
     |r|                 Refresh listing
     |x|                 Close selected buffer (buf mode)
-    |+| / |-|           Include / exclude item (git mode)
+    |+| / |-|           Include / exclude item (code mode)
     |T|                 Toggle tree view (file mode)
     |p|                 Toggle file preview split
     |/|                 Filter files by name pattern
@@ -222,9 +220,9 @@ Pane Modes:                                      *vproj-pane-modes*
     g:vproj_pane_width_buf
         Pane width for Buf mode (20-80). 0 = use default. Default: 0.
 
-                                               *g:vproj_pane_width_git*
-    g:vproj_pane_width_git
-        Pane width for Git mode (20-80). 0 = use default. Default: 0.
+                                               *g:vproj_pane_width_code*
+    g:vproj_pane_width_code
+        Pane width for Code mode (20-80). 0 = use default. Default: 0.
 
                                                *g:vproj_pane_width_qfix*
     g:vproj_pane_width_qfix
@@ -294,7 +292,7 @@ Example vimrc:
 ==============================================================================
 6. .vproj FILE FORMAT                             *vproj-file-format*
 
-The .vproj file defines a project for Git Mode. It lives at the
+The .vproj file defines a project for Code mode. It lives at the
 project root.
 
 Format: >
