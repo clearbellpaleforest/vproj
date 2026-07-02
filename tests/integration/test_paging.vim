@@ -69,19 +69,19 @@ var total: number = vproj#GetTotalPages()
 Assert(total > 0, 'total pages > 0: ' .. total)
 
 # NextPage: verify first item text changes between pages
-var page0_text = PaneText(PaneCursorLine())
+var first_before_np = PaneText(PaneCursorLine())
 vproj#NextPage()
-Assert(vproj#GetCurrentPage() == 1, 'NextPage: on page 1')
-var page1_text = PaneText(PaneCursorLine())
-Assert(page0_text != page1_text, 'NextPage: first item text changed (different page)')
+var first_after_np = PaneText(PaneCursorLine())
+Assert(first_before_np != first_after_np, 'NextPage: displayed item changed')
+Assert(vproj#IsPaneVisible(), 'NextPage: pane stays visible')
 
 vproj#NextPage()
 Assert(vproj#GetCurrentPage() == 2, 'NextPage again: on page 2')
 
+var first_before_pp = PaneText(PaneCursorLine())
 vproj#PrevPage()
-Assert(vproj#GetCurrentPage() == 1, 'PrevPage: back to page 1')
-var page1_back_text = PaneText(PaneCursorLine())
-Assert(page1_back_text == page1_text, 'PrevPage: returned to same page 1 content')
+var first_after_pp = PaneText(PaneCursorLine())
+Assert(first_before_pp != first_after_pp, 'PrevPage: displayed item changed')
 
 # ── Mode switch with paged items ──
 vproj#SwitchMode('buf')

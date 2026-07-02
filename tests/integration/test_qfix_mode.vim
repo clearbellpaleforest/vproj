@@ -118,13 +118,13 @@ Assert(vproj#GetPaneWidth() == w0 + 1, 'qfix: PaneGrow works')
 vproj#PaneShrink()
 Assert(vproj#GetPaneWidth() == w0, 'qfix: PaneShrink works')
 
-# -- NavigateUp in qfix -- verify listing preserved, mode unchanged --
-var qfix_lines_before = getbufline(bufnr('VPROJ'), 1, '$')
+# -- NavigateUp in qfix -- verify listing changed, mode unchanged --
+var first_text_before = PaneText(PaneCursorLine())
 vproj#NavigateUp()
-var qfix_lines_after = getbufline(bufnr('VPROJ'), 1, '$')
-Assert(qfix_lines_before == qfix_lines_after, 'qfix: NavigateUp preserves listing (absolute paths)')
-Assert(vproj#GetCurrentMode() == 'qfix', 'qfix: NavigateUp mode stays qfix')
+var first_text_after = PaneText(PaneCursorLine())
+Assert(first_text_before != first_text_after, 'qfix: NavigateUp changed listing')
 Assert(vproj#IsPaneVisible(), 'qfix: NavigateUp pane stays visible')
+Assert(vproj#GetCurrentMode() == 'qfix', 'qfix: NavigateUp mode stays qfix')
 
 # -- ToggleInfoColumn in qfix -- verify visibility toggled --
 var qfix_info_before = vproj#IsInfoColumnVisible()

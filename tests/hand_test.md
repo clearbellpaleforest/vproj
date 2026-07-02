@@ -10,148 +10,128 @@ Press `Tab` to open the pane, then work through each section.
 
 ## 1. Pane Open/Close
 
-- [ ] `Tab` — opens pane (temporary mode)
-- [ ] Inside pane, press `Tab` — closes pane (temporary mode)
-- [ ] Outside pane, `Tab` — re-opens pane
-- [ ] `Shift-Tab` — opens pane (permanent mode, Esc won't close it)
+- [ ] `Tab` — opens pane (temporary mode, closes on file open)
+- [ ] `Tab` again — closes pane
+- [ ] `Shift-Tab` — opens pane (permanent mode, stays open)
+- [ ] `Shift-Q` — closes pane in both temp and permanent mode
 - [ ] `Esc` in pane — closes only in temporary mode; no-op in permanent
-- [ ] `Q` in pane — always closes pane
 - [ ] `:call vproj#PaneClose()` — close via function
 
 ## 2. Navigation
 
-- [ ] `j` / `k` — move cursor down / up
-- [ ] `<Down>` / `<Up>` — same as j / k
-- [ ] `h` — go to parent directory
-- [ ] `.` — same as h (parent directory)
-- [ ] `<CR>` (Enter) on a file — open file in right split
-- [ ] `<CR>` on a directory — navigate into it
-- [ ] `<CR>` on the mode menu line (line 1) — cycles to next mode
+- [ ] `<Down>` / `<Up>` — move cursor down / up
 - [ ] `<C-T>` — jump to first item
 - [ ] `<C-B>` — jump to last item
-- [ ] `<C-K>` — go to parent directory (same as h)
+- [ ] `<C-K>` — go to parent directory
 - [ ] `<C-J>` — enter first subdirectory
 
-## 3. Mode Switching (Shift keys)
+## 3. Parent Directory
 
-Pressing these while pane is focused:
+- [ ] `.` — navigate to parent directory (the nav indicator dot)
 
-- [ ] `<S-F>` (Shift-F) — File mode (browse filesystem)
-- [ ] `<S-B>` (Shift-B) — Buf mode (open buffers)
-- [ ] `<S-C>` (Shift-C) — Code mode (project tree from .vproj)
-Verify each mode label appears on line 1 with colored background.
-Mode menu: `[F]ile  [B]uf  [C]ode  [Q]fix`
+## 4. Mode Switching (Shift keys)
 
-## 4. Width
+- [ ] `B` (Shift-B) — Buf mode
+- [ ] `C` (Shift-C) — Code mode
+- [ ] `F` (Shift-F) — File mode
+Mode menu shows: `[F]ile  [B]uf  [C]ode  [Q]fix`
+
+## 5. Width
 
 - [ ] `<Right>` — grow pane by 1 column (max 80)
 - [ ] `<Left>` — shrink pane by 1 column (min 20)
 - [ ] `:call vproj#SetPaneWidth(50)` — set exact width (20-80)
 
-## 5. Actions
+## 6. Actions (Shift keys)
 
-- [ ] `r` — refresh pane contents (preserves mode)
-- [ ] `x` — close selected buffer (buf mode only; shows message in other modes)
-- [ ] `+` / `-` — include / exclude item (code mode only, on project items)
-- [ ] `<F1>` — toggle info column (file sizes / line counts)
-- [ ] `T` — toggle tree view (file mode only, indented with expand/collapse)
-- [ ] `p` — toggle file preview split (updates on cursor move; file mode)
-- [ ] `/` — filter files by name pattern (prompt appears)
+- [ ] `R` (Shift-R) — refresh pane contents
+- [ ] `X` (Shift-X) — close selected buffer (buf mode only; shows message in other modes)
+- [ ] `+` / `-` — include / exclude item (code mode only)
+- [ ] `T` — toggle tree view (file mode only)
+- [ ] `P` (Shift-P) — toggle file preview split
+- [ ] `/` — filter files by name pattern
 - [ ] `*` — grep project, populate quickfix list
 
-## 6. Paging
+## 7. Nav Indicators (Quick File Open)
 
-Navigate to a directory with many items:
+Every file/directory gets a single-letter nav indicator in blue (`VprojNavIndicator` highlight).
+
+- [ ] Indicators start at `a` and go up to `z` with no gaps
+- [ ] The first file gets `a`, second gets `b`, etc.
+- [ ] `.` is reserved for parent directory (not assigned to first file)
+- [ ] Press a letter to open its file (temporary mode: pane closes; permanent mode: pane stays)
+- [ ] `>` — shift indicators forward (next batch)
+- [ ] `<` — shift indicators backward (previous batch)
+- [ ] If a letter has no file on this page, nothing happens (no crash)
+- [ ] All 26 letters a-z are nav chars. No letters are stolen for cursor movement or actions.
+
+## 8. Paging
 
 - [ ] `<C-N>` — next page
 - [ ] `<C-P>` — previous page
 
-## 7. Quick Nav (nav indicators)
+## 9. Enter
 
-Nav chars are the single chars at start of each line.
+- [ ] `<CR>` on a file — opens file
+- [ ] `<CR>` on a directory — navigates into it
+- [ ] `<CR>` on mode menu line (line 1) — cycles to next mode
 
-- [ ] `>` — shift nav indicators forward (next batch)
-- [ ] `<` — shift nav indicators backward (previous batch)
+## 10. Git Actions (`\` prefix)
 
-Jump to item by pressing the nav char directly. Try several uppercase, lowercase, and digit chars from the current page. If a char is not on the current page, nothing happens (no crash).
+All git actions use `\` prefix to keep a-z free for nav chars.
 
-Chars NOT available for nav (already mapped): h, j, k, q, r, x, p, T, ., +, -, /, *, <, >, Q
-
-## 8. Git Actions (\\ prefix — per John Chamberlain spec)
-
-All git actions use `\` prefix to free lowercase a-z for nav chars.
-Navigate to a git-tracked file (file or code mode):
-
-- [ ] `\s` — stage/unstage file under cursor (`git add` / `git reset HEAD`)
-- [ ] `\d` — open diff preview in vertical split (`q` to close)
+- [ ] `\s` — stage/unstage file under cursor
+- [ ] `\d` — open diff preview
 - [ ] `\D` — discard file changes (confirmation prompt)
 - [ ] `\c` — commit with message prompt
 - [ ] `\p` — push to remote
 - [ ] `\u` — pull --ff-only from remote
-- [ ] `\b` — switch branch (prompt for branch name)
-- [ ] `\z` — stash changes (optional message prompt)
-- [ ] `\Z` — pop a stash (shows list, select by index)
-- [ ] `\a` — blame file under cursor (split with `git annotate`, `q` to close)
+- [ ] `\b` — switch branch
+- [ ] `\z` — stash changes
+- [ ] `\Z` — pop a stash
+- [ ] `\a` — blame file under cursor
 - [ ] `<C-G>` — toggle showing only git-changed files
 
-Git actions should show error messages when no repo is present (not crash).
-
-## 9. Log Mode (REMOVED)
-
-Log mode has been removed per design directive. `<S-L>` is no longer mapped.
-Mode menu shows 4 modes: `[F]ile  [B]uf  [C]ode  [Q]fix`.
-
-## 10. Qfix Mode
+## 11. Qfix Mode
 
 - [ ] Run `:vimgrep /TODO/j **/*.vim` to populate quickfix
-- [ ] `<S-C>` then `<S-F>` to enter qfix mode (or press Enter on [Q]fix in menu)
-- [ ] `j` / `k` — navigate entries
+- [ ] Press Enter on `[Q]fix` in mode menu to enter qfix mode
+- [ ] `<Down>` / `<Up>` — navigate entries
 - [ ] `<CR>` on entry — open file at line/column
 - [ ] Empty qfix list shows "(no quickfix items)"
 
-## 11. Buf Mode
+## 12. Buf Mode
 
-- [ ] `<S-B>` — switch to buf mode
+- [ ] `B` (Shift-B) — switch to buf mode
 - [ ] Open buffers listed with `%` (current) and `+` (modified) markers
-- [ ] `j` / `k` — navigate buffers
+- [ ] `<Down>` / `<Up>` — navigate buffers
 - [ ] `<CR>` — switch to selected buffer
-- [ ] `x` on a buffer — close it (modified buffers prompt to save)
-- [ ] Navigation wraps: `k` at top goes to bottom, `j` at bottom goes to top
+- [ ] `X` (Shift-X) on a buffer — close it (modified buffers prompt to save)
 
-## 12. Code Mode (.vproj project)
+## 13. Code Mode (.vproj project)
 
-- [ ] `<S-C>` — switch to code mode
+- [ ] `C` (Shift-C) — switch to code mode
 - [ ] Status line shows project name, root directory, git branch
 - [ ] `<CR>` on status line — prompts to create or rename project
-- [ ] Included items listed normally; excluded items in parentheses
 - [ ] `+` on excluded item — include it
 - [ ] `-` on included item — exclude it
-- [ ] Changes are saved to .vproj file immediately
 
-## 13. Tree View (file mode)
+## 14. Tree View (file mode)
 
 - [ ] `T` in file mode — toggles tree view
-- [ ] Indented directories with `▶` / `▼` expand/collapse indicators
 - [ ] `<CR>` on collapsed dir — expands
 - [ ] `<CR>` on expanded dir — collapses
 - [ ] `T` again — returns to flat view
 
-## 14. File Preview
+## 15. File Preview
 
-- [ ] `p` in file mode — opens preview split
+- [ ] `P` (Shift-P) in file mode — opens preview split
 - [ ] Moving cursor updates preview content
-- [ ] `p` again — closes preview
-- [ ] Preview shows file contents in a split to the right
-
-## 15. Session Persistence
-
-- [ ] Open pane, set width to 55, switch to buf mode
-- [ ] Close vim and reopen with same command
-- [ ] Press `Tab` — pane opens at width 55 in buf mode
+- [ ] `P` again — closes preview
 
 ## 16. Passthrough — Standard Vim Keys
 
-These Vim keys should NOT be remapped and should work as usual:
+These standard Vim keys should NOT be remapped in the pane:
 
 - [ ] `0` / `$` — line start / line end
 - [ ] `%` — jump to matching `( ) { } [ ]`
@@ -161,12 +141,10 @@ These Vim keys should NOT be remapped and should work as usual:
 - [ ] `<C-W>` keys — window management
 - [ ] `zz` / `zt` / `zb` — scroll cursor to center / top / bottom
 
-Note: `t`, `w`, `e`, `G`, `H`, `M`, `L`, `y` are nav chars (jump to items). `<C-B>` is mapped to SelectLast.
-
 ## 17. Error Handling
 
-- [ ] Press `x` in file mode — shows "x closes buffers in buf mode only"
-- [ ] Press `+`/`-` in file mode — shows "No project -- Enter on status line to create one"
+- [ ] Press `X` in file mode — shows "X closes buffers in buf mode only (press B for buf mode)"
+- [ ] Press `+`/`-` in file mode — shows appropriate message
 - [ ] Press `\d`/`\D`/`\s` outside a git repo — shows message, does not crash
 - [ ] Press `<CR>` on a directory — navigates in, does not crash
-- [ ] `h` at filesystem root — stays at root, does not crash
+- [ ] `.` at filesystem root — stays at root, does not crash

@@ -19,6 +19,7 @@ var original_cwd: string = ''
 var saved_shortmess: string = ''
 var filter_pattern: string = ''
 var git_filter_active: bool = false
+var saved_origin_wid: number = -1
 
 # Git integration cache
 var git_status_map: dict<string> = {}
@@ -54,14 +55,12 @@ const FIRST_FILE_ITEM_LINE: number = 3
 const FIRST_CODE_ITEM_LINE: number = 4
 const QFIX_SEP_LINE: number = 2
 const FIRST_QFIX_ITEM_LINE: number = 3
-# Nav chars for direct item selection. Excluded lowercase: h, j, k (nav keys),
-# p (preview), q (qfix/close), r (refresh), x (close buffer). Excluded uppercase:
-# B, C, F (mode keys), Q (close pane), T (tree toggle). All others available.
-const NAV_CHARS: list<string> = [
-  'a', 'b', 'c', 'd', 'e', 'f', 'g', 'i', 'l', 'm', 'n', 'o', 's', 't', 'u', 'v', 'w', 'y', 'z',
-  'A', 'D', 'E', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'R', 'S', 'U', 'V', 'W', 'X', 'Y', 'Z',
-  '1', '2', '3', '4', '5', '6', '7', '8', '9',
-]
+# Nav chars are built dynamically at script load. Parent dir gets '.', then
+# lowercase a-z for files. No static gaps — every letter is available.
+var NAV_CHARS: list<string> = []
+for ch in range(char2nr('a'), char2nr('z'))
+  NAV_CHARS->add(nr2char(ch))
+endfor
 const MIN_WIDTH: number = 20
 const MAX_WIDTH: number = 80
 const AUTOGROUP: string = 'VprojPane'
@@ -110,7 +109,7 @@ enddef
 
 def NavChar(item: dict<any>, visible_idx: number): string
   if get(item, 'is_parent', false)
-    return '  '
+    return '. '
   endif
   var nav_idx = visible_idx + nav_offset
   if nav_idx >= 0 && nav_idx < len(NAV_CHARS)
@@ -161,6 +160,9 @@ export def PaneOpen(): void
   if IsPaneVisible()
     return
   endif
+
+  # Remember which window the user was in — files will open there
+  saved_origin_wid = win_getid()
 
   if saved_shortmess == ''
     saved_shortmess = &shortmess
@@ -429,6 +431,7 @@ export def HandleBufWipeout(): void
     &shortmess = saved_shortmess
     saved_shortmess = ''
   endif
+  saved_origin_wid = -1
 enddef
 
 export def PaneDiagnose(): void
@@ -732,6 +735,13 @@ export def SelectByNavChar(ch: string): void
   if !IsPaneVisible()
     return
   endif
+  # '.' is the nav key for parent — navigate up
+  if ch == '.'
+    if current_mode == 'file' || current_mode == 'code'
+      NavigateUp()
+    endif
+    return
+  endif
   var display_items = empty(filter_pattern) ? items : ApplyFilter(items)
   if git_filter_active && (current_mode == 'file' || current_mode == 'code')
     display_items = ApplyGitFilter(display_items)
@@ -747,6 +757,15 @@ export def SelectByNavChar(ch: string): void
         MoveCursor(selected_line)
         UpdateCursorHighlight()
         UpdatePreview()
+        var pane_wid: number = win_getid()
+        # Open the file (same dispatch as Enter)
+        SelectCurrent()
+        if pane_open_mode == 'temporary'
+          PaneClose()
+        else
+          # Permanent mode: return focus to pane so user can open more files
+          win_gotoid(pane_wid)
+        endif
         return
       endif
       visible_idx += 1
@@ -2344,18 +2363,35 @@ def OpenFile(path: string): void
     Error('vproj: Binary file: ' .. fnamemodify(path, ':t'))
     return
   endif
-  var pane_wid: number = win_getid()
-  if OpenInRightPanel() < 0
-    return
+  # Navigate to the window the user was in before the pane opened
+  var target_wid: number = 0
+  if saved_origin_wid > 0 && win_id2win(saved_origin_wid) > 0
+    target_wid = saved_origin_wid
+  else
+    # Fallback: find any non-pane window
+    var pane_wid: number = win_getid()
+    for wnr in range(1, winnr('$'))
+      var wid: number = win_getid(wnr)
+      if wid != pane_wid
+        target_wid = wid
+        break
+      endif
+    endfor
+    # Only pane exists — create a split for the file
+    if target_wid == 0
+      botright new
+      target_wid = win_getid()
+      saved_origin_wid = target_wid
+    endif
   endif
+  win_gotoid(target_wid)
   var saved_shm: string = &shortmess
   set shortmess+=A
   try
-    execute 'edit ' .. fnameescape(path)
+    execute 'edit! ' .. fnameescape(path)
   finally
     &shortmess = saved_shm
   endtry
-  win_gotoid(pane_wid)
 enddef
 
 def IsBinary(path: string): bool
@@ -2582,7 +2618,7 @@ enddef
 
 export def CloseBuffer(): void
   if current_mode != 'buf' || !IsPaneVisible()
-    echom 'vproj: x closes buffers in buf mode only (press b for buf mode)'
+    echom 'vproj: X closes buffers in buf mode only (press B for buf mode)'
     return
   endif
   var item: dict<any> = GetSelectedItem()
@@ -3240,9 +3276,6 @@ def SetupPaneMappings(): void
   # Navigation
   nnoremap <buffer> <silent> <Down> <Cmd>call vproj#SelectNext()<CR>
   nnoremap <buffer> <silent> <Up> <Cmd>call vproj#SelectPrev()<CR>
-  nnoremap <buffer> <silent> <nowait> j <Cmd>call vproj#SelectNext()<CR>
-  nnoremap <buffer> <silent> <nowait> k <Cmd>call vproj#SelectPrev()<CR>
-  nnoremap <buffer> <silent> <nowait> h <Cmd>call vproj#NavigateUp()<CR>
   nnoremap <buffer> <silent> <C-T> <Cmd>call vproj#SelectFirst()<CR>
   nnoremap <buffer> <silent> <C-B> <Cmd>call vproj#SelectLast()<CR>
   nnoremap <buffer> <silent> <C-K> <Cmd>call vproj#NavigateUp()<CR>
@@ -3262,25 +3295,25 @@ def SetupPaneMappings(): void
   # Toggle tree view
   nnoremap <buffer> <silent> <nowait> T <Cmd>call vproj#ToggleTreeView()<CR>
 
-  # Qfix / close (q in permanent mode closes pane; in temporary switches to qfix)
-  nnoremap <buffer> <silent> <nowait> q <Cmd>call vproj#HandlePaneQ()<CR>
+  # Close pane (capital Q — does not conflict with nav keys)
+  nnoremap <buffer> <silent> <S-Q> <Cmd>call vproj#HandlePaneQ()<CR>
 
   # Include / exclude (code mode)
   nnoremap <buffer> <silent> <nowait> + <Cmd>call vproj#IncludeItem()<CR>
   nnoremap <buffer> <silent> <nowait> - <Cmd>call vproj#ExcludeItem()<CR>
 
-  # Refresh
-  nnoremap <buffer> <silent> <nowait> r <Cmd>call vproj#Refresh()<CR>
+  # Refresh (Shift-R so lowercase r stays a nav key)
+  nnoremap <buffer> <silent> R <Cmd>call vproj#Refresh()<CR>
 
-  # Preview toggle
-  nnoremap <buffer> <silent> <nowait> p <Cmd>call vproj#TogglePreview()<CR>
+  # Preview toggle (Shift-P so lowercase p stays a nav key)
+  nnoremap <buffer> <silent> P <Cmd>call vproj#TogglePreview()<CR>
 
   # Paging
   nnoremap <buffer> <silent> <C-N> <Cmd>call vproj#NextPage()<CR>
   nnoremap <buffer> <silent> <C-P> <Cmd>call vproj#PrevPage()<CR>
 
-  # Close buffer (buf mode)
-  nnoremap <buffer> <silent> <nowait> x <Cmd>call vproj#CloseBuffer()<CR>
+  # Close buffer (buf mode — Shift-X so lowercase x stays a nav key)
+  nnoremap <buffer> <silent> X <Cmd>call vproj#CloseBuffer()<CR>
 
   # Nav indicator shift
   nnoremap <buffer> <silent> <nowait> > <Cmd>call vproj#ShiftNavForward()<CR>
@@ -3313,9 +3346,6 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> \z <Cmd>call vproj#GitStashPush()<CR>
   nnoremap <buffer> <silent> \Z <Cmd>call vproj#GitStashPop()<CR>
   nnoremap <buffer> <silent> \a <Cmd>call vproj#GitBlame()<CR>
-
-  # Close pane
-  nnoremap <buffer> <silent> <nowait> Q <Cmd>call vproj#PaneClose()<CR>
 
   # ESC closes pane in temporary mode
   nnoremap <buffer> <silent> <Esc> <Cmd>call vproj#HandleEsc()<CR>
@@ -3359,8 +3389,8 @@ def ApplyStaticHighlights(): void
   var group: string = get(MODE_HIGHLIGHT_GROUPS, current_mode, 'VprojModeFile')
   match_ids = []
   silent! match_ids->add(matchadd(group, pattern, 10, MATCH_AUTO_ID))
-  # Highlight nav indicator characters in cyan (priority 11 = above cursorline)
-  silent! match_ids->add(matchadd('VprojNavIndicator', '^[a-zA-Z0-9]', 11, MATCH_AUTO_ID))
+  # Highlight nav indicator characters in blue (priority 11 = above cursorline)
+  silent! match_ids->add(matchadd('VprojNavIndicator', '^[.a-z]', 11, MATCH_AUTO_ID))
   win_gotoid(orig_wid)
 enddef
 
@@ -3535,7 +3565,7 @@ export def DefineHighlights(): void
 
   # ── Cursor, navigation, info ──
   highlight default link VprojCursorLine CursorLine
-  highlight default link VprojNavIndicator Special
+  highlight default VprojNavIndicator guifg=#569CD6 ctermfg=75
   highlight default link VprojInfoColumn Directory
   highlight default link VprojParentDir String
   highlight default link VprojDirName Directory

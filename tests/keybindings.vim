@@ -363,6 +363,10 @@ else
   try
     execute "normal \<CR>"
     Assert(winnr('$') == 2, 'Enter on file: exactly 2 windows (pane + file)')
+    wincmd l
+    var right_buf = bufname('%')
+    Assert(right_buf != 'VPROJ', 'Single-window: right panel shows opened file, not pane')
+    FocusPane()
     Assert(vproj#IsPaneVisible(), 'Pane stays open after file open')
     # Cursor should be back in the pane after file open
     Assert(bufname('%') == 'VPROJ', 'Cursor returned to pane')
@@ -403,6 +407,10 @@ endif
 	    execute "normal \<CR>"
 	    # Must stay at exactly 2 windows — pane + file (not 3)
 	    Assert(winnr('$') == wins_before_9a, 'Two-panel Enter on file: window count unchanged')
+	    wincmd l
+	    var right_buf = bufname('%')
+	    Assert(right_buf != 'VPROJ', 'Two-panel Enter: right panel shows opened file, not pane')
+	    FocusPane()
 	    Assert(vproj#IsPaneVisible(), 'Two-panel Enter: pane stays visible')
 	    Assert(bufname('%') == 'VPROJ', 'Two-panel Enter: cursor returns to pane')
 	  catch
