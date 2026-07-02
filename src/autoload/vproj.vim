@@ -758,7 +758,30 @@ export def SelectByNavChar(ch: string): void
         UpdateCursorHighlight()
         UpdatePreview()
         var pane_wid: number = win_getid()
-        # Open the file (same dispatch as Enter)
+        var is_dir: bool = get(item, 'is_dir', false)
+        var is_parent: bool = get(item, 'is_parent', false)
+        if is_parent
+          NavigateUp()
+          return
+        endif
+        if is_dir
+          if tree_view_active
+            var item_path: string = get(item, 'path', '')
+            if !empty(item_path)
+              if has_key(expanded_dirs, item_path)
+                remove(expanded_dirs, item_path)
+              else
+                expanded_dirs[item_path] = 1
+              endif
+            endif
+            Render()
+          else
+            NavigateInto(get(item, 'name', ''))
+          endif
+          # Directory navigation via nav key: keep pane open in temp mode too
+          return
+        endif
+        # File — open it
         SelectCurrent()
         if pane_open_mode == 'temporary'
           PaneClose()
