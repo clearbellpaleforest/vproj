@@ -731,6 +731,40 @@ export def GetNavOffset(): number
   return nav_offset
 enddef
 
+# Dispatcher — all nav char keystrokes route through here so mode-specific
+# behaviour lives in one place instead of being scattered across handler functions.
+# Mappings are buffer-local and static (never remapped on mode switch), so mode
+# changes are instantaneous regardless of how many mappings exist.
+export def VprojKey(key: string): void
+  if current_mode == 'file'
+    FileModeKey(key)
+  elseif current_mode == 'buf'
+    BufModeKey(key)
+  elseif current_mode == 'code'
+    CodeModeKey(key)
+  elseif current_mode == 'qfix'
+    QfixModeKey(key)
+  endif
+enddef
+
+def FileModeKey(key: string): void
+  SelectByNavChar(key)
+enddef
+
+def BufModeKey(key: string): void
+  # Nav chars are not displayed in buf mode — no-op for now.
+  # Future: buffer-specific quick actions (close, save, etc.) can be wired here.
+enddef
+
+def CodeModeKey(key: string): void
+  SelectByNavChar(key)
+enddef
+
+def QfixModeKey(key: string): void
+  # Nav chars are not displayed in qfix mode — no-op for now.
+  # Future: qfix-specific actions can be wired here.
+enddef
+
 export def SelectByNavChar(ch: string): void
   if !IsPaneVisible()
     return
@@ -3351,7 +3385,7 @@ def SetupPaneMappings(): void
     if ch !~ '^[[:alnum:]]$'
       continue
     endif
-    execute 'nnoremap <buffer> <silent> <nowait> ' .. ch .. ' <Cmd>call vproj#SelectByNavChar("' .. ch .. '")<CR>'
+    execute 'nnoremap <buffer> <silent> <nowait> ' .. ch .. ' <Cmd>call vproj#VprojKey("' .. ch .. '")<CR>'
   endfor
 
   # Git: toggle status filter
