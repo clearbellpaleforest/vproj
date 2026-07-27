@@ -745,7 +745,7 @@ export def VprojKey(key: string): void
   elseif current_mode == 'qfix'
     QfixModeKey(key)
   else
-    echom 'vproj: unknown mode "' .. current_mode .. '" — key ignored'
+    Error('vproj: unknown mode "' .. current_mode .. '" — key ignored')
   endif
 enddef
 
@@ -3384,7 +3384,6 @@ export def ShowHelp(): void
     setlocal modifiable
     setline(1, lines)
     setlocal nomodifiable
-    setbufvar(help_bufnr, '&modifiable', 0)
     nnoremap <buffer> <silent> q <Cmd>close<CR>
     execute 'vert resize ' .. min([80, &columns - vproj#GetPaneWidth() - 4])
     redraw
