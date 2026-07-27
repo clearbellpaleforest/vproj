@@ -1,0 +1,22 @@
+Project Name: vproj
+Project Root: 
+Included Directories:
+src/
+doc/
+tests/
+doc
+/home/aldous/Desktop/work/vproj/vproj/doc
+/home/aldous/Desktop/work/vproj/vproj/src
+Included Files:
+design.md
+Excluded Directories:
+.git/
+.github/
+.claude/
+Excluded Files:
+*.swp
+*.swo
+*~
+install.sh
+LICENSE
+README.md

@@ -95,7 +95,7 @@ Four modes, switched via Shift-F/B/C or `q` (or Enter on menu line to cycle):
 | `Shift-C` | Code | Blue | Project tree from .vproj (excluded items in parentheses) |
 | `q` | Qfix | Blue | Quickfix list entries (temp mode); closes pane (perm mode) |
 
-Log mode was removed (John Chamberlain directive #5). `<Esc>` closes the pane
+Log mode was removed. `<Esc>` closes the pane
 in temporary mode and is a no-op in permanent mode.
 
 ## Keybindings

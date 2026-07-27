@@ -118,11 +118,11 @@ Assert(vproj#GetPaneWidth() == w0 + 1, 'qfix: PaneGrow works')
 vproj#PaneShrink()
 Assert(vproj#GetPaneWidth() == w0, 'qfix: PaneShrink works')
 
-# -- NavigateUp in qfix -- verify listing changed, mode unchanged --
-var first_text_before = PaneText(PaneCursorLine())
+# -- NavigateUp in qfix -- qfix listing is independent of directory --
+# Pressing '.' in qfix mode is a no-op (routed through VprojKey mode guard).
+# Calling NavigateUp() directly changes current_dir but qfix items come
+# from getqflist(), which is independent of the filesystem directory.
 vproj#NavigateUp()
-var first_text_after = PaneText(PaneCursorLine())
-Assert(first_text_before != first_text_after, 'qfix: NavigateUp changed listing')
 Assert(vproj#IsPaneVisible(), 'qfix: NavigateUp pane stays visible')
 Assert(vproj#GetCurrentMode() == 'qfix', 'qfix: NavigateUp mode stays qfix')
 

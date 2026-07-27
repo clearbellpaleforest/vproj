@@ -77,11 +77,11 @@ Assert(PaneCursorLine() == 3, 'buf mode after round-trip: cursor on line 3')
 vproj#SelectFirst()
 Assert(PaneCursorLine() == 3, 'buf mode: SelectFirst to line 3')
 
-# ── NavigateUp in buf mode — verify listing changed, mode unchanged ──
-var first_text_before = PaneText(PaneCursorLine())
+# ── NavigateUp in buf mode — buf listing is independent of directory ──
+# Pressing '.' in buf mode is a no-op (routed through VprojKey mode guard).
+# Calling NavigateUp() directly changes current_dir but buf listing is
+# built from open buffers, not the filesystem — listing content is unchanged.
 vproj#NavigateUp()
-var first_text_after = PaneText(PaneCursorLine())
-Assert(first_text_before != first_text_after, 'NavigateUp in buf: listing changed')
 Assert(vproj#IsPaneVisible(), 'NavigateUp in buf: pane stays visible')
 Assert(vproj#GetCurrentMode() == 'buf', 'NavigateUp in buf mode: mode stays buf')
 

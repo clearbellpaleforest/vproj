@@ -192,12 +192,11 @@ When adding a feature, follow this sequence:
 | File | Shift-F | Directory browsing, file sizes, binary detection |
 | Buf | Shift-B | Open buffers with flags + line counts |
 | Code | Shift-C | Project tree from .vproj, include/exclude with +/- |
-| Qfix | q | Quickfix list — filename:lnum, entry text |
+| Qfix | Enter on `[Q]fix` in mode menu | Quickfix list — filename:lnum, entry text |
 
-Four modes. Log mode was removed (John Chamberlain directive #5). The `q` key
-behavior depends on pane open mode: in temporary mode it switches to Qfix; in
-permanent mode it closes the pane. `<Esc>` closes the pane in temporary mode
-and is a no-op in permanent mode.
+Four modes. Log mode was removed. Mode switching
+is via Shift keys (B/C/F) or by pressing Enter on the mode menu line. `<Esc>`
+closes the pane in temporary mode and is a no-op in permanent mode.
 
 ## Exported API
 
@@ -251,33 +250,58 @@ and is a no-op in permanent mode.
 | `vproj#HandleEsc()` | Close pane (temporary mode) or no-op (permanent mode) |
 | `vproj#HandlePaneQ()` | Switch to qfix (temporary) or close pane (permanent) |
 | `vproj#PaneTogglePermanent()` | Toggle permanent mode: temp→perm, perm→close, closed→perm |
-| `vproj#ToggleTreeView()` | Toggle tree view within file mode |
-| `vproj#TogglePreview()` | Toggle file preview split (p key) |
+| `vproj#ToggleTreeView()` | Toggle tree view within file mode (Shift-T) |
+| `vproj#TogglePreview()` | Toggle file preview split (Shift-P) |
 | `vproj#GrepSearch()` | Grep project and populate quickfix |
 | `vproj#DefineHighlights()` | Define highlight groups |
 
 ## Pane Keybindings
 
-Buffer-local (only active in the pane):
+Buffer-local (only active in the pane). All lowercase a-z are nav characters
+that open the corresponding file directly. Actions are on Shift keys, Ctrl keys,
+and backslash-prefixed git commands.
+
+### Navigation
 
 | Key | Action |
 |-----|--------|
-| j/k, Up/Down | Move selection |
-| h | Parent directory |
+| Up/Down | Move selection up/down |
+| a-z | Open file at nav indicator (direct file open) |
+| . | Navigate to parent directory |
+| Enter | Open file/dir, switch buffer, or cycle mode on menu line |
+| Ctrl-T | Jump to first item |
+| Ctrl-B | Jump to last item |
+| Ctrl-K | Navigate to parent directory |
+| Ctrl-J | Enter first subdirectory |
+| Ctrl-N | Next page |
+| Ctrl-P | Previous page |
+| < / > | Shift nav indicators backward/forward |
+| 0, $, %, {, } | Standard Vim passthrough |
+
+### Actions (Shift keys)
+
+| Key | Action |
+|-----|--------|
+| Shift-F | File mode |
+| Shift-B | Buf mode |
+| Shift-C | Code mode |
+| Shift-R | Refresh pane |
+| Shift-P | Toggle file preview split |
+| Shift-X | Close selected buffer (buf mode only) |
+| Shift-Q | Close pane |
+| Shift-T | Toggle tree view (file mode) |
+| Tab | Toggle pane (temporary mode) |
+| Shift-Tab | Toggle pane (permanent mode) |
+
+### Other
+
+| Key | Action |
+|-----|--------|
 | Left/Right | Shrink/grow width |
-| Enter | Open file, switch buffer, cycle mode, or rename project |
-| Shift-F/Shift-B/Shift-C | File / Buf / Code mode |
-| q | Qfix mode (temp) / close pane (perm) |
 | Esc | Close pane (temp mode only) |
-| r | Refresh pane |
-| x | Close selected buffer (buf mode) |
-| +/- | Include / exclude item (code mode) |
-| Q | Close pane |
-| . | Parent directory |
-| Ctrl-T / Ctrl-B | Jump to first / last item |
-| Ctrl-K / Ctrl-J | Parent dir / enter first subdir |
-| F1 | Toggle info column |
-| Ctrl-N / Ctrl-P | Next / previous page |
+| +/- | Include/exclude item (code mode) |
+| / | Filter by name |
+| * | Grep search (populates quickfix) |
 | Ctrl-G | Toggle git-changed-only filter |
 | \\s | Stage/unstage file (git) |
 | \\d | Diff preview for file under cursor |
@@ -286,15 +310,9 @@ Buffer-local (only active in the pane):
 | \\p | Git push |
 | \\u | Git pull --ff-only |
 | \\b | Git branch switch |
-| \\z | Git stash push (with optional message) |
-| \\Z | Git stash pop (shows list, select by index) |
-| \\a | Git blame (annotate) for file under cursor |
-| T | Toggle tree view (file mode — indented with expand/collapse) |
-| p | Toggle file preview split (updates on cursor move) |
-| / | Filter by name |
-| * | Grep search (populates quickfix) |
-| Tab / Shift-Tab | Shift nav indicators |
-| a-z, A-Z, 1-9 | Jump by nav character |
+| \\z | Git stash push |
+| \\Z | Git stash pop |
+| \\a | Git blame for file under cursor |
 
 ## Commands
 

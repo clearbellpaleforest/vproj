@@ -54,13 +54,13 @@ manually to ~/.vim/pack/bundle/start/vproj/.
 File Mode  ([F]ile)                                 *vproj-mode-file*
     Browse the filesystem. Directories listed first, then files.
     File sizes shown for regular files. Press Enter on a
-    directory to navigate into it, on a file to open it. Press |h|
-    or . to go to the parent directory.
+    directory to navigate into it, on a file to open it. Press
+    |.| or |<C-K>| to go to the parent directory.
 
     Press |T| to toggle tree view (indented with expand/collapse).
-    Press |p| to toggle a file preview split that updates on cursor move.
+    Press |P| to toggle a file preview split that updates on cursor move.
     Press |/| to filter by name pattern. Press |*| to grep the project
-    and populate quickfix. Press |Ctrl-G| to toggle showing only
+    and populate quickfix. Press |<C-G>| to toggle showing only
     git-changed files.
 
                                                *vproj-tree-view*
@@ -69,7 +69,7 @@ File Mode  ([F]ile)                                 *vproj-mode-file*
 
                                                *vproj-preview*
     File preview shows file contents in a split that updates as the
-    cursor moves. Press |p| again to close.
+    cursor moves. Press |P| again to close.
 
                                                *vproj-filter*
                                                *vproj-grep*
@@ -78,7 +78,7 @@ File Mode  ([F]ile)                                 *vproj-mode-file*
 
 Buf Mode  ([B]uf)                                   *vproj-mode-buf*
     Switch between open buffers. Modified buffers marked with +,
-    current buffer marked with %. Press |x| to close a buffer.
+    current buffer marked with %. Press |X| to close a buffer.
     Line counts shown.
 
 Code Mode  ([C]ode)                                 *vproj-mode-code*
@@ -88,7 +88,7 @@ Code Mode  ([C]ode)                                 *vproj-mode-code*
     status line to rename or create the project.
 
     Git actions (|\s|, |\d|, |\D|, |\c|, |\p|, |\u|, |\b|, |\z|,
-    |\Z|, |\a|, |Ctrl-G|) use a backslash prefix in both File and Code modes.
+    |\Z|, |\a|, |<C-G>|) use a backslash prefix in both File and Code modes.
 
                                                *vproj-git-actions*
     Git actions work in file and code modes via \(bslash) prefix.
@@ -115,7 +115,8 @@ Qfix Mode  ([Q]fix)                                 *vproj-mode-qfix*
 
 Press Enter on the mode menu line (line 1) to cycle through modes.
 Press |Shift-F|, |Shift-B|, or |Shift-C| inside the pane to switch
-directly.
+directly. Press |Q| in temporary mode to switch to qfix; in permanent
+mode to close the pane.
 
 ==============================================================================
 4. KEY MAPPINGS                                    *vproj-mappings*
@@ -124,20 +125,19 @@ All mappings are buffer-local to the VPROJ pane. They do not affect
 other buffers.
 
 Navigation:
-    |j| / |k|           Move selection down / up
-    <Down> / <Up>       Same as j / k
-    |h|                 Go to parent directory
+    <Down> / <Up>       Move selection down / up
     Enter               Open file or enter directory
-    |.|                  Go to parent directory (same as h)
+    |.|                  Go to parent directory (file and code mode)
+    <C-K>               Go to parent directory
+    <C-J>               Enter first subdirectory
     <C-T>               Jump to first item
     <C-B>               Jump to last item
-    <C-K>               Go to parent directory (same as h)
-    <C-J>               Enter first subdirectory
 
 Mode switching:
     |Shift-F|            File mode
     |Shift-B|            Buf mode
     |Shift-C|            Code mode
+    |Q|                  Qfix mode (temporary) / Close pane (permanent)
 
 Git actions — backslash prefix (file and code modes):
     |\s|                Stage / unstage file under cursor
@@ -153,11 +153,11 @@ Git actions — backslash prefix (file and code modes):
     <C-G>               Toggle showing only git-changed files
 
 Actions:
-    |r|                 Refresh listing
-    |x|                 Close selected buffer (buf mode)
+    |Shift-R|            Refresh listing
+    |Shift-X|            Close selected buffer (buf mode)
     |+| / |-|           Include / exclude item (code mode)
-    |T|                 Toggle tree view (file mode)
-    |p|                 Toggle file preview split
+    |Shift-T|            Toggle tree view (file mode)
+    |Shift-P|            Toggle file preview split
     |/|                 Filter files by name pattern
     |*|                 Grep project and populate quickfix
     <Left> / <Right>    Shrink / grow pane width
@@ -166,7 +166,13 @@ Actions:
 Quick Nav:                                       *vproj-nav-char*
     >                   Shift nav indicators forward
     <                   Shift nav indicators backward
-    |a|-|z|, |A|-|Z|, |1|-|9|  Jump to item by nav character
+    |a|–|z|             Jump to item by nav character
+
+    Nav characters are the colored single letters on each line.
+    Press the matching letter to jump directly to that item. In
+    file and code mode, nav characters open files or enter
+    directories. In buf and qfix mode, they move the cursor
+    without opening files.
 
                                                *vproj-paging*
 Paging:
@@ -174,7 +180,7 @@ Paging:
     <C-P>               Previous page
 
 Close:
-    |Q|                 Close pane
+    |Q| (perm mode)      Close pane
     |Esc|               Close pane (temporary mode only)
 
 Global (outside pane):
@@ -187,7 +193,7 @@ Pane Modes:                                      *vproj-pane-modes*
     quick file/buffer access — no extra keystroke to dismiss.
 
     Permanent mode (Shift-Tab): The pane stays open until you press
-    |Shift-Tab| again, press |q| (with the pane focused), or close
+    |Shift-Tab| again, press |Q| (with the pane focused), or close
     the pane buffer via |:bdelete|. This mode is for extended project
     management sessions.
 
@@ -222,17 +228,12 @@ Pane Modes:                                      *vproj-pane-modes*
     g:vproj_pane_width_qfix
         Pane width for Qfix mode (20-80). 0 = use default. Default: 0.
 
-                                               *g:vproj_pane_width_log*
-    g:vproj_pane_width_log
-        Pane width for Log mode (20-80). 0 = use default. Default: 0.
-
                                                *vproj-highlights*
 Highlight groups:
     VprojModeFile       File mode label (yellow, bold, underline)
     VprojModeBuf        Buf mode label (green, bold, underline)
     VprojModeCode       Code mode label (blue, bold, underline)
     VprojModeQfix       Qfix mode label (blue, bold, underline)
-    VprojModeLog        Log mode label (cyan, bold, underline)
     VprojCursorLine     Selected line highlight (reverse video)
     VprojNavIndicator   Nav character indicator (cyan)
     VprojInfoColumn     File size / buffer info column (green)
@@ -271,9 +272,6 @@ Troubleshooting ~
 
 Example vimrc:
 >
-    " Show hidden files
-    let g:vproj_show_dotfiles = 1
-
     " Remap temporary toggle to F2
     nmap <F2> <Plug>VprojToggle
     nunmap <Tab>

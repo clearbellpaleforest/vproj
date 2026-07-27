@@ -1,7 +1,7 @@
 vim9script
 
-# Chamberlain Fix Verification — tests all 8 items from the bug report
-# Run: vim -N -u NONE -S tests/chamberlain_fixes.vim
+# Audit Fix Verification — tests all 8 items from the bug report
+# Run: vim -N -u NONE -S tests/audit_fixes.vim
 
 set rtp+=src
 runtime! plugin/vproj.vim
@@ -48,15 +48,15 @@ echom '=== Fix 1: Dynamic NAV_CHARS (a-z all available) ==='
 Setup()
 FocusPane()
 
-# Every lowercase letter a-z must map to SelectByNavChar
+# Every lowercase letter a-z must route through VprojKey (which dispatches
+# to SelectByNavChar for file/code mode, or the mode-specific handler)
 for ch in range(char2nr('a'), char2nr('z'))
   var m = maparg(nr2char(ch), 'n', 0, 1)
   if !empty(m)
-    Assert(m.rhs =~ 'SelectByNavChar',
-          'Letter ' .. nr2char(ch) .. ' maps to SelectByNavChar')
+    Assert(m.rhs =~ 'VprojKey\|SelectByNavChar',
+          'Letter ' .. nr2char(ch) .. ' maps to VprojKey or SelectByNavChar')
   else
     # Some letters may be unmapped if test environment is minimal
-    # Check: it must NOT be mapped to something else (like old j/k navigation)
     Assert(true, 'Letter ' .. nr2char(ch) .. ' has no conflicting mapping')
   endif
 endfor
@@ -68,10 +68,10 @@ echom '=== Fix 2: Parent dir gets "." indicator ==='
 Setup()
 FocusPane()
 
-# '.' must map to SelectByNavChar (for parent navigation)
+# '.' must route through VprojKey (which dispatches to SelectByNavChar)
 var dot_map = maparg('.', 'n', 0, 1)
 Assert(!empty(dot_map), 'dot key "." is mapped')
-Assert(dot_map.rhs =~ 'SelectByNavChar', 'dot "." maps to SelectByNavChar')
+Assert(dot_map.rhs =~ 'VprojKey\|SelectByNavChar', 'dot "." maps to VprojKey or SelectByNavChar')
 
 # ──────────────────────────────────────────────
 # FIX 3: SelectByNavChar opens files immediately
@@ -290,10 +290,10 @@ vproj#PaneClose()
 
 echom ''
 if failures == 0
-  echom 'ALL CHAMBERLAIN FIXES VERIFIED.'
+  echom 'ALL AUDIT FIXES VERIFIED.'
 else
   echohl ErrorMsg
-  echom failures .. ' CHAMBERLAIN FIX TEST(S) FAILED.'
+  echom failures .. ' AUDIT FIX TEST(S) FAILED.'
   echohl None
   cquit!
 endif

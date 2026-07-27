@@ -761,8 +761,8 @@ def CodeModeKey(key: string): void
 enddef
 
 def QfixModeKey(key: string): void
-  # Nav chars are not displayed in qfix mode — no-op for now.
-  # Future: qfix-specific actions can be wired here.
+  # Nav chars move cursor to corresponding entry without opening files
+  SelectByNavChar(key)
 enddef
 
 export def SelectByNavChar(ch: string): void
@@ -813,6 +813,10 @@ export def SelectByNavChar(ch: string): void
             NavigateInto(get(item, 'name', ''))
           endif
           # Directory navigation via nav key: keep pane open in temp mode too
+          return
+        endif
+        # In buf and qfix modes, nav chars only move cursor — don't open files
+        if current_mode == 'buf' || current_mode == 'qfix'
           return
         endif
         # File — open it
@@ -1232,7 +1236,7 @@ def BuildStatusline(): string
     endif
   endif
 
-  # 3. Git overlay (code mode only per John Chamberlain directive #3)
+  # 3. Git overlay (code mode only)
   if current_mode == 'code'
     var branch: string = GitBranch()
     if !empty(branch)
@@ -3321,6 +3325,85 @@ export def HandlePaneQ(): void
   endif
 enddef
 
+export def ShowHelp(): void
+  var lines: list<string> = [
+    'vproj — key reference',
+    '══════════════════════',
+    'Navigation',
+    '  <Down>/<Up>   move selection',
+    '  Enter         open file/dir',
+    '  . / Ctrl-K    parent directory',
+    '  Ctrl-J        enter first subdir',
+    '  Ctrl-T / B    first / last item',
+    '  Ctrl-N / P    next / prev page',
+    '  </>           shift nav chars',
+    '',
+    'Nav Chars  (a–z)',
+    '  Jump to item. File/code: opens.',
+    '  Buf/qfix: moves cursor only.',
+    '',
+    'Modes',
+    '  Shift-F       file mode',
+    '  Shift-B       buf mode',
+    '  Shift-C       code mode',
+    '  Q (temp)      qfix / (perm) close',
+    '',
+    'Actions',
+    '  Shift-R       refresh',
+    '  Shift-X       close buffer (buf)',
+    '  Shift-T       toggle tree view',
+    '  Shift-P       toggle preview',
+    '  +/-           include/exclude (code)',
+    '  /             filter by name',
+    '  *             grep → quickfix',
+    '  Left/Right    shrink/grow width',
+    '  F1            toggle info column',
+    '',
+    'Git  (\\ prefix)',
+    '  \\s\\d\\D\\c\\p\\u\\b\\z\\Z\\a',
+    '  Ctrl-G        toggle git filter',
+    '',
+    'Close',
+    '  Esc (temp) / Q (perm) / Tab',
+    '',
+    'Commands',
+    '  :VprojToggle  :VprojOpen',
+    '  :VprojClose   :VprojRefresh',
+    '  :VprojDiag    :help vproj',
+    '',
+    'Press q to close this help.',
+  ]
+
+  var help_bufnr: number = bufadd('')
+  var help_wid: number = 0
+  var saved_winminwidth: number = &winminwidth
+  var saved_winminheight: number = &winminheight
+  set winminwidth=1 winminheight=1
+  try
+    leftabove vertical new
+    help_wid = win_getid()
+    setlocal bufhidden=wipe buftype=nofile nobuflisted noswapfile
+    setlocal nomodifiable nonumber norelativenumber
+    silent file [vproj-help]
+    setbufvar(help_bufnr, '&buftype', 'nofile')
+    setbufvar(help_bufnr, '&bufhidden', 'wipe')
+    setbufvar(help_bufnr, '&buflisted', 0)
+    setbufvar(help_bufnr, '&swapfile', 0)
+    setbufvar(help_bufnr, '&modifiable', 1)
+    setbufvar(help_bufnr, '&readonly', 0)
+    setline(1, lines)
+    setbufvar(help_bufnr, '&modifiable', 0)
+    nnoremap <buffer> <silent> q <Cmd>close<CR>
+    execute 'vert resize ' .. min([80, &columns - vproj#GetPaneWidth() - 4])
+    redraw
+  catch
+    Error('vproj: Cannot open help — ' .. v:exception)
+  finally
+    &winminwidth = saved_winminwidth
+    &winminheight = saved_winminheight
+  endtry
+enddef
+
 # ──────────────────────────────────────────────
 # Pane setup
 # ──────────────────────────────────────────────
@@ -3377,6 +3460,7 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> <nowait> <lt> <Cmd>call vproj#ShiftNavBackward()<CR>
 
   # Filter
+  nnoremap <buffer> <silent> <nowait> ? <Cmd>call vproj#ShowHelp()<CR>
   nnoremap <buffer> <silent> <nowait> / <Cmd>call vproj#PromptFilter()<CR>
   nnoremap <buffer> <silent> <nowait> * <Cmd>call vproj#GrepSearch()<CR>
 
@@ -3391,7 +3475,7 @@ def SetupPaneMappings(): void
   # Git: toggle status filter
   nnoremap <buffer> <silent> <C-G> <Cmd>call vproj#ToggleGitFilter()<CR>
 
-  # Git actions use \ prefix (per John Chamberlain spec)
+  # Git actions use \ prefix
   # All lowercase a-z are reserved for nav chars
   nnoremap <buffer> <silent> \s <Cmd>call vproj#GitStageToggle()<CR>
   nnoremap <buffer> <silent> \d <Cmd>call vproj#OpenDiffPreview()<CR>
@@ -3407,8 +3491,8 @@ def SetupPaneMappings(): void
   # ESC closes pane in temporary mode
   nnoremap <buffer> <silent> <Esc> <Cmd>call vproj#HandleEsc()<CR>
 
-  # Parent directory shortcut
-  nnoremap <buffer> <silent> <nowait> . <Cmd>call vproj#NavigateUp()<CR>
+  # Parent directory shortcut — routes through VprojKey for mode guard
+  nnoremap <buffer> <silent> <nowait> . <Cmd>call vproj#VprojKey(".")<CR>
 enddef
 
 def SetupAutocommands(): void

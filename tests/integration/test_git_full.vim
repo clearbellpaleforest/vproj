@@ -31,7 +31,7 @@ vproj#PaneClose()
 call delete(expand('~/.cache/vproj/session'))
 
 # ──────────────────────────────────────────────
-# SECTION 1: Log mode removed (John Chamberlain directive #5)
+# SECTION 1: Log mode removed
 # ──────────────────────────────────────────────
 echom '--- Log Mode Removed ---'
 vproj#PaneOpen()
@@ -254,7 +254,7 @@ Assert(b_map.lhs == 'B', 'B map exists')
 # ──────────────────────────────────────────────
 echom '--- NAV_CHARS Exclusion ---'
 
-# Verify git action keys use \ prefix (per John Chamberlain spec)
+# Verify git action keys use \ prefix
 # d, D, c, P, U, b, a, z, Z are now nav chars — git actions use \ prefix
 vproj#SwitchMode('file')
 

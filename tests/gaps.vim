@@ -294,6 +294,8 @@ delete(tmpdir, 'rf')
 echom '--- SelectByNavChar paged ---'
 Setup()
 vproj#SwitchMode('file')
+# Switch to permanent mode so pane stays open after file opens
+vproj#PaneTogglePermanent()
 
 # Navigate to /usr/bin to get lots of items → guaranteed paging
 execute 'cd /usr/bin'

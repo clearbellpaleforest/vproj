@@ -13,7 +13,8 @@ cd ~/dev/vproj
 bash install.sh
 ```
 
-The script creates `~/.vim/pack/bundle/start/vproj/` with symlinks to `plugin/`, `autoload/`, and `doc/`. Vim's native package system will load the plugin automatically.
+The script creates `~/.vim/pack/bundle/start/vproj/` with symlinks to `plugin/`,
+`autoload/`, and `doc/`. Vim's native package system loads the plugin automatically.
 
 **Option 2 — Manual symlinks:**
 
@@ -35,38 +36,49 @@ Plug 'clearbellpaleforest/vproj'
 
 ## Key Map
 
-`Tab` toggles the pane. `Shift-Tab` toggles in permanent mode (stays open until you close it). Inside the pane:
+`Tab` toggles the pane. `Shift-Tab` toggles in permanent mode (stays open until
+you close it). Inside the pane:
 
 ### Navigation
 
 | Key | Action |
 |-----|--------|
-| `j` / `<Down>` | Move selection down |
-| `k` / `<Up>` | Move selection up |
-| `h` | Parent directory |
-| `Enter` | Open file or enter directory |
-| `.` | Parent directory |
-| `Ctrl-T` | Jump to first item |
-| `Ctrl-B` | Jump to last item |
+| `<Down>` / `<Up>` | Move selection down / up |
+| `Enter` | Open file, enter directory, or cycle mode (on menu line) |
+| `.` | Parent directory (file and code mode) |
 | `Ctrl-K` | Parent directory |
 | `Ctrl-J` | Enter first subdirectory |
+| `Ctrl-T` | Jump to first item |
+| `Ctrl-B` | Jump to last item |
+| `Ctrl-N` / `Ctrl-P` | Next / previous page |
+| `<` / `>` | Shift nav indicators backward / forward |
+
+### Nav Characters
+
+Each line shows a colored character (`a` through `z`). Press that letter to
+jump directly to the item. In file and code mode, opens the file or enters the
+directory. In buf and qfix mode, moves the cursor without opening files.
+
+All lowercase `a`–`z` are nav characters. Additional navigation uses arrow keys
+and Ctrl-combinations.
 
 ### Mode Switching
 
-Each mode has a distinct color on the menu line so you know what you're in:
+Each mode has a distinct color on the menu line.
 
 | Key | Mode | Color | Shows |
 |-----|------|-------|-------|
 | `Shift-F` | File | Yellow | Directory browsing, file sizes |
 | `Shift-B` | Buf | Green | Open buffers with flags + line counts |
 | `Shift-C` | Code | Blue | Project tree from .vproj |
-| `q` | Qfix | Blue | Quickfix list (temp mode) / close pane (perm mode) |
+| `Q` (temp mode) | Qfix | Blue | Quickfix list |
 | `Enter` on menu line | — | — | Cycle to next mode |
 
-### Git Actions (file and code mode)
+`Q` in temporary mode switches to qfix. `Q` in permanent mode closes the pane.
 
-All git actions use the `\` prefix (per John Chamberlain spec). Single-letter keys are
-freed for nav character jumping.
+### Git Actions
+
+All git actions use the `\` prefix (file and code mode).
 
 | Key | Action |
 |-----|--------|
@@ -77,64 +89,74 @@ freed for nav character jumping.
 | `\p` | Push to remote |
 | `\u` | Pull --ff-only from remote |
 | `\b` | Switch branch (with prompt) |
-| `\z` | Stash changes |
-| `\Z` | Pop a stash |
+| `\z` | Stash changes (optional message) |
+| `\Z` | Pop a stash (shows list, select by index) |
 | `\a` | Blame file under cursor |
-| `Ctrl-G` | Toggle showing only git-changed files (file mode) |
+| `Ctrl-G` | Toggle showing only git-changed files |
 
 ### Actions
 
 | Key | Action |
 |-----|--------|
-| `r` | Refresh listing |
-| `x` | Close selected buffer (buf mode only) |
+| `Shift-R` | Refresh listing |
+| `Shift-X` | Close selected buffer (buf mode only) |
+| `Shift-T` | Toggle tree view (file mode) |
+| `Shift-P` | Toggle file preview split |
 | `+` / `-` | Include / exclude item (code mode) |
-| `T` | Toggle tree view (file mode — indented with expand/collapse) |
-| `p` | Toggle file preview split (updates on cursor move) |
 | `/` | Filter files by name pattern |
 | `*` | Grep project and populate quickfix |
 | `<Left>` / `<Right>` | Shrink / grow pane width |
 | `F1` | Toggle info column (inside pane) |
-| `>` / `<` | Shift nav indicators forward / backward |
-| Nav characters | Jump to item by nav character (orange) |
-
-### Paging
-
-| Key | Action |
-|-----|--------|
-| `Ctrl-N` | Next page |
-| `Ctrl-P` | Previous page |
 
 ### Close
 
 | Key | Action |
 |-----|--------|
-| `Q` | Close pane |
-| `Esc` | Close pane (temporary mode only; no-op in permanent mode) |
+| `Q` (perm mode) | Close pane |
+| `Esc` | Close pane (temporary mode only) |
 | `Tab` | Close pane (or toggle when outside pane) |
 
-### Standard Vim Keys (passthrough)
+### Passthrough
 
-These work as usual inside the pane — we don't override them:
+These standard Vim keys work as usual inside the pane:
 
-| Key(s) | Behavior |
-|--------|----------|
-| `0` `^` `$` | Line start / end |
-| `?` | Search backward |
-| `Ctrl-F` | Page down |
-| `Ctrl-D` `Ctrl-U` | Half-page down / up |
-| `Ctrl-W` keys | Window management |
-| `%` `{` `}` `(` `)` | Jump / matching pair |
+`0` `$` `^` `gg` `G` `H` `L` `Ctrl-F` `Ctrl-B` `Ctrl-D`
+`Ctrl-U` `Ctrl-W` `%` `{` `}` `(` `)`
 
-Or use commands: `:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`, `:VprojDiag`.
+## Commands
 
-Use `let g:vproj_show_dotfiles = 1` to show hidden files.
+`:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`, `:VprojDiag`
 
-See `:help vproj` for full documentation.
+## Configuration
+
+```vim
+" Show hidden files (starting with .). Default: hidden.
+let g:vproj_show_dotfiles = 1
+
+" Initial pane width in columns (20–80). Default: 40.
+let g:vproj_pane_width_default = 40
+
+" Per-mode width overrides. 0 = use default.
+let g:vproj_pane_width_file = 0
+let g:vproj_pane_width_buf = 0
+let g:vproj_pane_width_code = 0
+let g:vproj_pane_width_qfix = 0
+```
+
+## Remap
+
+```vim
+" Change the toggle key
+nmap <F2> <Plug>VprojToggle
+
+" Disable default Tab
+nunmap <Tab>
+```
 
 ## .vproj File Format
 
-Code Mode reads a `.vproj` file at the project root to determine which files and directories to include. Example:
+Code Mode reads a `.vproj` file at the project root to determine which files
+and directories to include. Example:
 
 ```
 Project Name: my-project
@@ -151,16 +173,6 @@ Excluded Files:
 ```
 
 Lines starting with `#` are comments. See `:help vproj-file-format` for details.
-
-## Remap
-
-```vim
-" Change the toggle key
-nmap <F2> <Plug>VprojToggle
-
-" Disable default Tab
-nunmap <Tab>
-```
 
 ## Requirements
 

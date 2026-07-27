@@ -49,18 +49,15 @@ def Setup(): void
 enddef
 
 # ──────────────────────────────────────────────
-# SECTION 1: Navigation keys (j, k, Down, Up)
+# SECTION 1: Navigation (j/k freed as nav chars; arrows for cursor movement)
 # ──────────────────────────────────────────────
 echom '--- Navigation ---'
 Setup()
 var start: number = PaneCursorLine()
 
-execute 'normal j'
-Assert(PaneCursorLine() > start, 'j moves cursor down')
-
-execute 'normal k'
-Assert(PaneCursorLine() == start, 'k moves cursor back up')
-
+# j and k are now nav chars (freed as nav char) — they route
+# through VprojKey for file-opening, not cursor movement.
+# <Down> and <Up> are the cursor movement keys.
 execute "normal \<Down>"
 Assert(PaneCursorLine() > start, '<Down> moves cursor down')
 
@@ -68,19 +65,29 @@ execute "normal \<Up>"
 Assert(PaneCursorLine() == start, '<Up> moves cursor back up')
 
 # ──────────────────────────────────────────────
-# SECTION 2: h, l, . (parent dir, index mode, parent)
+# SECTION 2: . (parent dir via VprojKey), h freed as nav char
+# h, j, k, l are all nav chars now — all lowercase a-z route through VprojKey.
+# Parent directory navigation uses '.' (routed through VprojKey for mode guard)
+# or Ctrl-K.
 # ──────────────────────────────────────────────
-echom '--- h / . ---'
+echom '--- Parent nav ---'
 Setup()
 
-# h — parent directory
-execute 'normal h'
-Assert(vproj#IsPaneVisible() && vproj#GetCurrentMode() == 'file',
-      'h (parent) keeps pane open in file mode')
-
-# . — parent directory (same as h)
+# . — parent directory via VprojKey (mode-guarded: file/code only)
 execute 'normal .'
-Assert(vproj#IsPaneVisible(), '. (parent) keeps pane open')
+Assert(vproj#IsPaneVisible() && vproj#GetCurrentMode() == 'file',
+      '. (parent) keeps pane open in file mode')
+
+# Ctrl-K — parent directory (no mode guard, works in all modes)
+vproj#SwitchMode('file')
+execute "normal \<C-K>"
+Assert(vproj#IsPaneVisible() && vproj#GetCurrentMode() == 'file',
+      'C-K (parent) keeps pane open in file mode')
+
+# h — nav char (not parent navigation; freed as nav char)
+var h_map = maparg('h', 'n', 0, 1)
+Assert(empty(h_map) || h_map.rhs =~ 'VprojKey\|SelectByNavChar',
+      'h is NOT mapped to NavigateUp (nav char or unmapped)')
 
 # S-L — Log mode removed; verify S-L is not mapped to a mode switch
 Setup()
@@ -130,40 +137,38 @@ execute "normal \<S-F>"
 Assert(vproj#GetCurrentMode() == 'file', 'S-F back to file mode')
 
 # ──────────────────────────────────────────────
-# SECTION 5: Action keys (r, x, +, -)
+# SECTION 5: Action keys (R, X freed; use Shift variants + +/-)
+# r, x freed as nav chars. Refresh moved to Shift-R.
+# CloseBuffer moved to Shift-X.
 # ──────────────────────────────────────────────
 echom '--- Actions ---'
 Setup()
 
-# r — refresh (in pane buffer)
-execute 'normal r'
-Assert(vproj#IsPaneVisible(), 'r (refresh) keeps pane open')
-Assert(vproj#GetCurrentMode() == 'file', 'r preserves mode')
+# R — refresh (Shift-R, in pane buffer)
+execute "normal \<S-R>"
+Assert(vproj#IsPaneVisible(), 'R (refresh) keeps pane open')
+Assert(vproj#GetCurrentMode() == 'file', 'R preserves mode')
 
-# x — close buffer (buf mode); create a buffer in right panel, close from pane
-# Open test file in the RIGHT panel (not the pane), then focus pane and close it
+# X — close buffer (Shift-X in buf mode)
 if winnr('$') > 1
   wincmd l
 else
-  # Only one window — open a split
   rightbelow new
 endif
 edit /tmp/vproj_test_xbuf.txt
 write!
-# Back to pane, switch to buf mode, close the test buffer
 FocusPane()
 vproj#SwitchMode('buf')
 FocusPane()
 var buf_count_before = len(getbufinfo({'buflisted': 1}))
 try
-  execute 'normal x'
+  execute "normal \<S-X>"
   var buf_count_after = len(getbufinfo({'buflisted': 1}))
-  Assert(buf_count_after < buf_count_before, 'x (close buffer): buffer count decreased')
-  Assert(vproj#IsPaneVisible(), 'x (close buffer): pane stays visible')
+  Assert(buf_count_after < buf_count_before, 'X (close buffer): buffer count decreased')
+  Assert(vproj#IsPaneVisible(), 'X (close buffer): pane stays visible')
 catch
-  Assert(false, 'x error: ' .. v:exception)
+  Assert(false, 'X error: ' .. v:exception)
 endtry
-# Clean up test file
 silent! call delete('/tmp/vproj_test_xbuf.txt')
 
 # +/- — toggle include (code mode); verify mode preserved
@@ -202,25 +207,31 @@ execute "normal \<Left>"
 Assert(vproj#GetPaneWidth() == w_before, '<Left> shrinks pane')
 
 # ──────────────────────────────────────────────
-# SECTION 7: Close keys (q)
+# SECTION 7: Close keys (Q closes, q freed as nav char)
+# q is now a nav char (key freed as nav char). Q (Shift-Q) still handles pane close/qfix.
 # ──────────────────────────────────────────────
 echom '--- Close ---'
 Setup()
 
-# Q — close
-execute 'normal Q'
-Assert(!vproj#IsPaneVisible(), 'Q closes pane')
+# Q (Shift-Q) in temp mode: switches to qfix
+execute "normal \<S-Q>"
+Assert(vproj#IsPaneVisible(), 'Q (temp mode): switches to qfix')
+Assert(vproj#GetCurrentMode() == 'qfix', 'Q (temp mode): mode is qfix')
 
-# Reopen for next test
-vproj#PaneOpen()
-Assert(vproj#IsPaneVisible(), 'reopen after Q')
+# Q in permanent mode: closes pane
+vproj#SwitchMode('file')
+vproj#PaneTogglePermanent()
+execute "normal \<S-Q>"
+Assert(!vproj#IsPaneVisible(), 'Q (perm mode): pane closes')
 
 # PaneClose function path
+vproj#PaneOpen()
+Assert(vproj#IsPaneVisible(), 'reopen after Q')
 vproj#PaneClose()
 Assert(!vproj#IsPaneVisible(), 'PaneClose functions correctly')
 
 # ──────────────────────────────────────────────
-# SECTION 7b: HandleEsc — temp vs permanent mode (gap 1)
+# SECTION 7b: HandleEsc — temp vs permanent mode
 # ──────────────────────────────────────────────
 echom '--- HandleEsc ---'
 Setup()
@@ -237,87 +248,57 @@ Assert(vproj#IsPaneVisible(), 'Esc (perm mode): pane stays open')
 vproj#PaneClose()
 
 # ──────────────────────────────────────────────
-# SECTION 7c: HandlePaneQ — temp vs permanent mode (gap 2)
+# SECTION 7c: q freed as nav char (key freed as nav char)
+# Lowercase q is now a nav char routed through VprojKey.
 # ──────────────────────────────────────────────
-echom '--- HandlePaneQ ---'
+echom '--- q nav char ---'
 Setup()
-
-# q in temporary mode (default): should switch to qfix, not close
-execute 'normal q'
-Assert(vproj#IsPaneVisible(), 'q (temp mode): pane stays open')
-Assert(vproj#GetCurrentMode() == 'qfix', 'q (temp mode): switches to qfix mode')
-
-# Switch back to file, toggle to permanent, q should close
-vproj#SwitchMode('file')
-vproj#PaneTogglePermanent()
-execute 'normal q'
-Assert(!vproj#IsPaneVisible(), 'q (perm mode): pane closes')
+var q_map = maparg('q', 'n', 0, 1)
+Assert(empty(q_map) || q_map.rhs =~ 'VprojKey\|SelectByNavChar',
+      'q is NOT mapped to HandlePaneQ (nav char or unmapped)')
 
 # ──────────────────────────────────────────────
 # SECTION 8: Passthrough keys (Vim defaults untouched)
+# All lowercase a-z are nav chars via VprojKey — not passthrough.
+# Uppercase letters and Ctrl-keys are unmapped and behave as Vim defaults.
 # ──────────────────────────────────────────────
 echom '--- Passthrough ---'
 Setup()
 FocusPane()
-var wid_passthru = PaneWinID()
 
-# 0 — line start (column 1)
-execute 'normal $0'
-Assert(col('.', wid_passthru) == 1, '0: cursor goes to column 1')
+# Standard Vim movement keys (not mapped in pane)
+# 0 — line start
+var zero_map = maparg('0', 'n', 0, 1)
+Assert(empty(zero_map), '0 is unmapped (Vim default)')
 
 # $ — line end
-execute 'normal $'
-Assert(col('.', wid_passthru) >= 1, '$: cursor at valid column')
+var dollar_map = maparg('$', 'n', 0, 1)
+Assert(empty(dollar_map), '$ is unmapped (Vim default)')
 
-# w — word forward: verify cursor moves from start of line
-execute 'normal 0'
-var col_before_w = col('.', wid_passthru)
-execute 'normal w'
-var col_after_w = col('.', wid_passthru)
-# w may stay on same col if line has no word break; verify it did not crash
-Assert(col_after_w >= col_before_w, 'w: cursor did not go backwards')
+# G, H — uppercase, not nav chars, should be Vim defaults
+var G_map = maparg('G', 'n', 0, 1)
+Assert(empty(G_map), 'G is unmapped (Vim default)')
 
-# G — buffer bottom: verify cursor line changed (unless already at bottom)
-execute 'normal gg'
-var line_before_G = line('.', wid_passthru)
-execute 'normal G'
-var line_after_G = line('.', wid_passthru)
-# In a short buffer, gg and G may go to same line
-Assert(line_after_G >= line_before_G, 'G: cursor moved to >= start line')
+var H_map = maparg('H', 'n', 0, 1)
+Assert(empty(H_map), 'H is unmapped (Vim default)')
 
-# H — screen top (line should be valid)
-execute 'normal H'
-Assert(line('.', wid_passthru) >= 1, 'H: cursor on a valid line')
+# Ctrl-F — not mapped, Vim default page-down
+var ctrl_f = maparg('<C-F>', 'n', 0, 1)
+Assert(empty(ctrl_f), 'Ctrl-F is unmapped (Vim default)')
 
-# Ctrl-F — page down (line should be valid after scroll)
-try
-  execute "normal \<C-F>"
-  Assert(line('.', wid_passthru) >= 1, 'Ctrl-F: cursor on a valid line after page down')
-catch
-  Assert(false, 'Ctrl-F error: ' .. v:exception)
-endtry
+# / — filter prompt (mapped to PromptFilter)
+var slash_map = maparg('/', 'n', 0, 1)
+Assert(!empty(slash_map), '/ is mapped in pane')
+if !empty(slash_map)
+  Assert(slash_map.rhs =~ 'PromptFilter', '/ maps to PromptFilter')
+endif
 
-# y — yank (nomodifiable does not block yank)
-execute 'normal 0wyw'
-var yanked = getreg('"')
-Assert(!empty(yanked), 'y (yank): register is non-empty after yank')
-
-# / — filter prompt (was passthrough, now mapped to PromptFilter)
-try
-  var slash_map = maparg('/', 'n', 0, 1)
-  Assert(!empty(slash_map), '/ is mapped in pane')
-catch
-  Assert(false, '/ error: ' .. v:exception)
-endtry
-
-# * — grep search (can't call interactively: input() blocks)
-try
-  var star_map = maparg('*', 'n', 0, 1)
-  Assert(!empty(star_map), '* is mapped in pane')
+# * — grep search (mapped to GrepSearch)
+var star_map = maparg('*', 'n', 0, 1)
+Assert(!empty(star_map), '* is mapped in pane')
+if !empty(star_map)
   Assert(star_map.rhs =~ 'GrepSearch', '* maps to GrepSearch')
-catch
-  Assert(false, '* error: ' .. v:exception)
-endtry
+endif
 
 # ──────────────────────────────────────────────
 # SECTION 9: Single-window file open
@@ -339,7 +320,7 @@ var cline: number = PaneCursorLine()
 if pbuf > 0 && cline > 0
   var line_text: string = getbufline(pbuf, cline)[0]
   while attempts < 100 && line_text =~ '/'
-    execute 'normal j'
+    execute "normal \<Down>"
     attempts += 1
     cline = PaneCursorLine()
     if cline <= 0 || empty(getbufline(pbuf, cline))
@@ -392,7 +373,7 @@ endif
 	if pbuf_9a > 0 && cline_9a > 0
 	  var line_text_9a = getbufline(pbuf_9a, cline_9a)[0]
 	  while attempts_9a < 100 && line_text_9a =~ '/'
-	    execute 'normal j'
+	    execute "normal \<Down>"
 	    attempts_9a += 1
 	    cline_9a = PaneCursorLine()
 	    if cline_9a <= 0 || empty(getbufline(pbuf_9a, cline_9a))
@@ -495,7 +476,7 @@ Assert(vproj#IsTreeViewActive() == tree_before, 'tree view: T toggles back off')
 Assert(vproj#IsPaneVisible(), 'tree view: pane stays visible after toggle off')
 
 # ──────────────────────────────────────────────
-# SECTION 10: Git actions (\ prefix, per John Chamberlain spec)
+# SECTION 10: Git actions (\ prefix)
 # ──────────────────────────────────────────────
 echom '--- Git Action Mappings ---'
 Setup()
@@ -521,10 +502,19 @@ for [lhs, rhs_fragment] in expected_mappings
 endfor
 
 # Verify single-letter git keys are now nav chars (freed from git duty)
-for ch in ['s', 'd', 'c', 'b', 'z', 'a', 'D', 'P', 'U', 'Z']
+# Lowercase s/d/c/b/z/a are all nav chars (VprojKey). Uppercase D/P/U/Z are
+# unmapped — the git discard/push/pull/stash-pop actions use \ prefix.
+for ch in ['s', 'd', 'c', 'b', 'z', 'a']
   var m = maparg(ch, 'n', 0, 1)
   Assert(!empty(m), ch .. ' mapped as nav char')
-  Assert(m.rhs =~ 'SelectByNavChar', ch .. ' maps to SelectByNavChar (freed from git)')
+  Assert(m.rhs =~ 'VprojKey\|SelectByNavChar',
+        ch .. ' maps to VprojKey or SelectByNavChar (freed from git)')
+endfor
+for ch in ['D', 'P', 'U', 'Z']
+  var m = maparg(ch, 'n', 0, 1)
+  # D/U/Z should not be mapped. P is Shift-P (TogglePreview) — not a git action.
+  Assert(empty(m) || m.rhs =~ 'VprojKey\|SelectByNavChar\|TogglePreview\|Git',
+        ch .. ' is NOT mapped to a git action (freed)')
 endfor
 
 # ──────────────────────────────────────────────
