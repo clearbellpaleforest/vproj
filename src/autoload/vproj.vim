@@ -744,6 +744,8 @@ export def VprojKey(key: string): void
     CodeModeKey(key)
   elseif current_mode == 'qfix'
     QfixModeKey(key)
+  else
+    echom 'vproj: unknown mode "' .. current_mode .. '" — key ignored'
   endif
 enddef
 
@@ -752,8 +754,8 @@ def FileModeKey(key: string): void
 enddef
 
 def BufModeKey(key: string): void
-  # Nav chars are not displayed in buf mode — no-op for now.
-  # Future: buffer-specific quick actions (close, save, etc.) can be wired here.
+  # Nav chars move cursor to corresponding entry without opening files
+  SelectByNavChar(key)
 enddef
 
 def CodeModeKey(key: string): void
@@ -791,13 +793,12 @@ export def SelectByNavChar(ch: string): void
         MoveCursor(selected_line)
         UpdateCursorHighlight()
         UpdatePreview()
-        var pane_wid: number = win_getid()
-        var is_dir: bool = get(item, 'is_dir', false)
-        var is_parent: bool = get(item, 'is_parent', false)
-        if is_parent
-          NavigateUp()
+        # In buf and qfix modes, nav chars only move cursor — don't open files
+        if current_mode == 'buf' || current_mode == 'qfix'
           return
         endif
+        var pane_wid: number = win_getid()
+        var is_dir: bool = get(item, 'is_dir', false)
         if is_dir
           if tree_view_active
             var item_path: string = get(item, 'path', '')
@@ -813,10 +814,6 @@ export def SelectByNavChar(ch: string): void
             NavigateInto(get(item, 'name', ''))
           endif
           # Directory navigation via nav key: keep pane open in temp mode too
-          return
-        endif
-        # In buf and qfix modes, nav chars only move cursor — don't open files
-        if current_mode == 'buf' || current_mode == 'qfix'
           return
         endif
         # File — open it
@@ -3374,7 +3371,6 @@ export def ShowHelp(): void
     'Press q to close this help.',
   ]
 
-  var help_bufnr: number = bufadd('')
   var help_wid: number = 0
   var saved_winminwidth: number = &winminwidth
   var saved_winminheight: number = &winminheight
@@ -3383,15 +3379,11 @@ export def ShowHelp(): void
     leftabove vertical new
     help_wid = win_getid()
     setlocal bufhidden=wipe buftype=nofile nobuflisted noswapfile
-    setlocal nomodifiable nonumber norelativenumber
+    setlocal nonumber norelativenumber
     silent file [vproj-help]
-    setbufvar(help_bufnr, '&buftype', 'nofile')
-    setbufvar(help_bufnr, '&bufhidden', 'wipe')
-    setbufvar(help_bufnr, '&buflisted', 0)
-    setbufvar(help_bufnr, '&swapfile', 0)
-    setbufvar(help_bufnr, '&modifiable', 1)
-    setbufvar(help_bufnr, '&readonly', 0)
+    setlocal modifiable
     setline(1, lines)
+    setlocal nomodifiable
     setbufvar(help_bufnr, '&modifiable', 0)
     nnoremap <buffer> <silent> q <Cmd>close<CR>
     execute 'vert resize ' .. min([80, &columns - vproj#GetPaneWidth() - 4])
