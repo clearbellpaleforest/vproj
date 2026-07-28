@@ -304,4 +304,44 @@ Format: >
 Lines starting with # are comments.
 
 ==============================================================================
+AI ASSISTANT                                  *vproj-ai* *vproj-ai-setup*
+
+Press A in the vproj pane to open an AI chat terminal. The AI can answer
+questions about your code or apply code directly to your file.
+
+                                                 *g:vproj_ai_api_key*
+API Key ~
+
+Set your API key via one of:
+  let g:vproj_ai_api_key = 'sk-...'          in your vimrc
+  $DEEPSEEK_API_KEY                           environment variable
+  $OPENAI_API_KEY                             environment variable
+
+The default API endpoint is api.deepseek.com. To use a different provider:
+  let g:vproj_ai_api_url = 'https://...'
+
+                                                 *g:vproj_ai_model*
+Model ~
+
+The model is auto-selected based on the endpoint. Override if needed:
+  let g:vproj_ai_model = 'deepseek-chat'
+
+                                                 *:VprojAiPrompt*
+Commands ~
+
+  :VprojAiPrompt [prompt]      One-shot AI prompt (streams to code or popup)
+  <Plug>VprojAiPrompt          Mapping indirection for custom keybindings
+
+Usage ~
+
+- Press A in the vproj pane → opens a terminal chat
+- Type your prompt and press Enter
+- The AI streams its response in real time
+- Code mode (default) applies the response to your file at the cursor
+- Question mode (what, how, why, etc.) shows the response in a popup
+- Ctrl-D or /exit to quit the chat
+- Ctrl-C to cancel a streaming response
+
+
+==============================================================================
 vim:tw=78:ts=8:ft=help:norl:
