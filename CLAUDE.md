@@ -38,10 +38,12 @@ write legacy `function!` or `let`/`const` in these files.
    quote characters. `getenv()` returns `v:null` for missing vars. `sort()`
    takes a Funcref, not a string name.
 
-7. **Two source files.** `plugin/vproj.vim` is the public surface — commands,
+7. **Two source files + one add-on.** `plugin/vproj.vim` is the public surface — commands,
    mappings, `<Plug>` indirections. `autoload/vproj.vim` is the implementation
-   — all logic, all state. Plugin calls autoload. Never the reverse. Do not add
-   a third file without approval.
+   — all logic, all state. `autoload/vproj/ai.vim` is an approved third file
+   for AI integration, loaded on demand via `vproj#ai#` autoload namespacing.
+   Plugin calls autoload. Never the reverse. Do not add additional files
+   without approval.
 
 ## Development Process
 

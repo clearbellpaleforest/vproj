@@ -1784,6 +1784,7 @@ def OpenPreview(): void
     echom 'vproj preview: ' .. v:exception
     echohl None
     preview_active = false
+    preview_bufnr = -1
   endtry
 enddef
 
@@ -3590,7 +3591,17 @@ enddef
 # Session persistence
 def SessionFilePath(): string
   var cache_val: any = getenv('XDG_CACHE_HOME')
-  var cache: string = (type(cache_val) == v:t_string && !empty(cache_val)) ? cache_val : expand('~/.cache')
+  if type(cache_val) == v:t_string && !empty(cache_val)
+    return cache_val .. '/vproj/session'
+  endif
+  var cache: string = expand('~/.cache')
+  if cache =~ '^~'
+    cache = substitute(cache, '\~', $HOME, '')
+  endif
+  # macOS: XDG spec uses ~/Library/Caches
+  if !isdirectory(cache) && isdirectory(expand('~/Library/Caches'))
+    cache = expand('~/Library/Caches')
+  endif
   return cache .. '/vproj/session'
 enddef
 
@@ -3615,6 +3626,9 @@ def SaveSession(): void
   lines->add('git_filter=' .. (git_filter_active ? '1' : '0'))
   var tmp: string = path .. '.tmp'
   try
+    if filereadable(path)
+      silent! rename(path, path .. '.bak')
+    endif
     writefile(lines, tmp)
     rename(tmp, path)
   catch

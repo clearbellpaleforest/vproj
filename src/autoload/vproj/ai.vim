@@ -107,7 +107,7 @@ def UrlValid(url: string): bool
   return url =~# '^https://'
 enddef
 
-def AiConfigure(): void
+export def AiConfigure(): void
   var g_key: any = get(g:, 'vproj_ai_api_key', '')
   var g_url: any = get(g:, 'vproj_ai_api_url', '')
 
@@ -188,7 +188,7 @@ def GatherContext(target_bufnr: number = -1): dict<any>
   return ctx
 enddef
 
-def BuildRequestBody(prompt: string, ctx: dict<any>, stream: bool): string
+export def BuildRequestBody(prompt: string, ctx: dict<any>, stream: bool): string
   var system_msg: string = 'You are a coding assistant embedded in Vim. '
   var ctx_file: string = get(ctx, 'file', '')
   system_msg ..= 'The user is editing ' .. (empty(ctx_file) ? 'unknown' : fnamemodify(ctx_file, ':t'))
@@ -276,13 +276,13 @@ export def AiCall(prompt: string, ctx: dict<any>): string
   return result
 enddef
 
-def JsonEscape(s: string): string
+export def JsonEscape(s: string): string
   var result: string = ''
   var ch: string
   for pos in range(len(s))
     ch = s[pos]
-    if ch == '\\'
-      result ..= '\\\\'
+    if ch == "\\"
+      result ..= "\\\\"
     elseif ch == '"'
       result ..= '\\"'
     elseif ch == "\n"
@@ -398,7 +398,7 @@ def ParseJsonScalar(s: string): string
   endif
 enddef
 
-def ExtractJsonField(json: string, field: string): string
+export def ExtractJsonField(json: string, field: string): string
   var target: string = '"' .. field .. '"'
   var i: number = 0
   var in_string: bool = false
@@ -547,7 +547,12 @@ def BuildStreamCommand(prompt: string, ctx: dict<any>): list<string>
     ai_api_url]
 enddef
 
-def AiCallStream(prompt: string, ctx: dict<any>): bool
+export def AiCallStream(prompt: string, ctx: dict<any>): bool
+  # Guard: reject if a stream is already running
+  if stream_job != v:null && job_status(stream_job) == 'run'
+    echohl ErrorMsg | echom 'vproj-ai: a request is already in progress — wait or press Ctrl-C to cancel' | echohl None
+    return false
+  endif
 
   AiConfigure()
   if empty(ai_api_key)
@@ -639,7 +644,7 @@ enddef
 # Code Extraction & Application
 # ══════════════════════════════════════════════════════════════════════════════
 
-def ExtractCodeBlocks(text: string): list<dict<any>>
+export def ExtractCodeBlocks(text: string): list<dict<any>>
   var blocks: list<dict<any>> = []
   var lines: list<string> = split(text, "\n")
   var i: number = 0
