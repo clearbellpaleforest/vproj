@@ -736,6 +736,12 @@ enddef
 # Mappings are buffer-local and static (never remapped on mode switch), so mode
 # changes are instantaneous regardless of how many mappings exist.
 export def VprojKey(key: string): void
+  # AI prompt — mode-independent, always available
+  if key == 'A'
+    vproj#ai#AiTerminalChat()
+    return
+  endif
+
   if current_mode == 'file'
     FileModeKey(key)
   elseif current_mode == 'buf'
@@ -3478,6 +3484,9 @@ def SetupPaneMappings(): void
   nnoremap <buffer> <silent> \z <Cmd>call vproj#GitStashPush()<CR>
   nnoremap <buffer> <silent> \Z <Cmd>call vproj#GitStashPop()<CR>
   nnoremap <buffer> <silent> \a <Cmd>call vproj#GitBlame()<CR>
+
+  # AI prompt — same in every mode
+  nnoremap <buffer> <silent> <nowait> A <Cmd>call vproj#VprojKey("A")<CR>
 
   # ESC closes pane in temporary mode
   nnoremap <buffer> <silent> <Esc> <Cmd>call vproj#HandleEsc()<CR>

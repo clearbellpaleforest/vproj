@@ -46,6 +46,9 @@ if !hasmapto('<Plug>VprojTogglePermanent', 'n')
   nmap <S-Tab> <Plug>VprojTogglePermanent
 endif
 
+command! -bar -nargs=? VprojAiPrompt call vproj#ai#AiPrompt(<q-args>)
+nnoremap <silent> <Plug>VprojAiPrompt :VprojAiPrompt<CR>
+
 nnoremap <silent> <Plug>VprojF1 :call vproj#HandleF1()<CR>
 
 if !hasmapto('<Plug>VprojF1', 'n')
