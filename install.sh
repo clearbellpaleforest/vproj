@@ -24,6 +24,7 @@ mkdir -p "$TARGET_DIR"
 ln -sf "$SRC_DIR/src/plugin" "$TARGET_DIR/plugin"
 ln -sf "$SRC_DIR/src/autoload" "$TARGET_DIR/autoload"
 ln -sf "$SRC_DIR/src/doc" "$TARGET_DIR/doc"
+ln -sf "$SRC_DIR/bin" "$TARGET_DIR/bin"
 vim --cmd "helptags $TARGET_DIR/doc" --cmd "q" 2>/dev/null || true
 
 echo "vproj installed. Start Vim and press Tab to open the project pane."

@@ -37,37 +37,9 @@ var stream_full_response: string = ''
 # Called via BufEnter + User VprojPaneReady autocmds.
 # VprojPaneReady is the guaranteed injection point — BufEnter fires
 # during :new before pane_bufnr is assigned, so OnBufEnter returns
-# early on first open. VprojPaneReady catches the race.
-export def OnBufEnter(): void
-  var pane: number = vproj#GetPaneBufnr()
-  var is_pane: bool = (pane > 0 && bufnr('%') == pane)
-  # Timing gap: during PaneOpen(), BufEnter fires on :new before
-  # pane_bufnr is assigned. Fall back to buffer name (always "VPROJ").
-  if !is_pane
-    if bufname('%') != 'VPROJ'
-      return
-    endif
-  endif
-  nnoremap <buffer> <silent> A <Cmd>call vproj#ai#AiTerminalChat()<CR>
-enddef
-
-# Open terminal-based AI chat. Gathers context, writes temp request file,
-# launches :terminal running bin/vproj-ai-chat for multi-turn conversation.
 export def AiTerminalChat(): void
-  # Self-defense: ensure A mapping exists so next press doesn't fall
-  # through to default Vim A (append) which fails with E21 in the
-  # nomodifiable pane buffer (BufEnter fires during :new before
-  # pane_bufnr is assigned — VprojPaneReady is the guaranteed fix,
-  # this is the safety net).
-  if exists('g:loaded_vproj')
-    var pane: number = vproj#GetPaneBufnr()
-    if pane > 0 && bufexists(pane) && bufnr('%') == pane
-      sil! nnoremap <buffer> <silent> A <Cmd>call vproj#ai#AiTerminalChat()<CR>
-    endif
-  endif
-
-  if !has('terminal')
-    echohl ErrorMsg | echom 'vproj_ai: terminal support required (Vim 8.0+)' | echohl None
+# early on first open. VprojPaneReady catches the race.
+    echohl ErrorMsg | echom 'vproj-ai: terminal support required (Vim 8.0+)' | echohl None
     return
   endif
 
@@ -76,9 +48,13 @@ export def AiTerminalChat(): void
     StreamCancel()
   endif
 
+  if !executable('curl')
+    return
+  endif
+
   AiConfigure()
   if empty(ai_api_key)
-    echohl ErrorMsg | echom 'vproj_ai: no API key. Set g:vproj_ai_api_key or $DEEPSEEK_API_KEY.' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: no API key. Set g:vproj_ai_api_key or $DEEPSEEK_API_KEY.' | echohl None
     return
   endif
 
@@ -87,13 +63,13 @@ export def AiTerminalChat(): void
   var tmpfile: string = tempname()
   var ctx_json: string = json_encode(ctx)
   if writefile([ctx_json], tmpfile) != 0
-    echohl ErrorMsg | echom 'vproj_ai: failed to write request (disk full?)' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: failed to write request (disk full?)' | echohl None
     return
   endif
 
   # chat_script_path computed at script level (<sfile> not available in def functions)
   if !filereadable(chat_script_path)
-    echohl ErrorMsg | echom 'vproj_ai: chat script not found at ' .. chat_script_path | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: chat script not found at ' .. chat_script_path | echohl None
     return
   endif
 
@@ -113,7 +89,7 @@ export def AiTerminalChat(): void
   execute 'resize 15'
   var termbuf: number = term_start(['bash', chat_script_path], opts)
   if termbuf == 0
-    echohl ErrorMsg | echom 'vproj_ai: failed to start terminal' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: failed to start terminal' | echohl None
     LogError('failed to start terminal')
     close
     return
@@ -127,6 +103,11 @@ export def AiTerminalChat(): void
   writefile([json_encode(entry)], diag_log, 'a')
 enddef
 
+  if !executable('curl')
+    echohl ErrorMsg | echom 'vproj-ai: curl is required but not found' | echohl None
+    return
+  endif
+
 def AiConfigure(): void
   var g_key: any = get(g:, 'vproj_ai_api_key', '')
   var g_url: any = get(g:, 'vproj_ai_api_url', '')
@@ -137,7 +118,7 @@ def AiConfigure(): void
   enddef
 
   if type(g_url) == v:t_string && !empty(g_url) && !UrlValid(g_url)
-    echohl ErrorMsg | echom 'vproj_ai: only HTTPS URLs allowed for API endpoint' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: only HTTPS URLs allowed for API endpoint' | echohl None
     return
   endif
   if type(g_key) == v:t_string && !empty(g_key)
@@ -156,7 +137,7 @@ def AiConfigure(): void
         if type(base) == v:t_string && !empty(base)
           var base_str: string = base
           if !UrlValid(base_str)
-            echohl ErrorMsg | echom 'vproj_ai: only HTTPS URLs allowed for OPENAI_API_BASE' | echohl None
+            echohl ErrorMsg | echom 'vproj-ai: only HTTPS URLs allowed for OPENAI_API_BASE' | echohl None
             return
           endif
           if base_str !~ '/chat/completions$'
@@ -233,13 +214,18 @@ enddef
 
 # ── Synchronous API call (fallback, used by tests) ──
 export def AiCall(prompt: string, ctx: dict<any>): string
+  if !executable('curl')
+    echohl ErrorMsg | echom 'vproj-ai: curl is required but not found' | echohl None
+    return
+  endif
+
   AiConfigure()
   if empty(ai_api_key)
-    echohl ErrorMsg | echom 'vproj_ai: no API key. Set g:vproj_ai_api_key or $DEEPSEEK_API_KEY.' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: no API key. Set g:vproj_ai_api_key or $DEEPSEEK_API_KEY.' | echohl None
     return ''
   endif
   if !executable('curl')
-    echohl ErrorMsg | echom 'vproj_ai: curl is required but not found' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: curl is required but not found' | echohl None
     return ''
   endif
 
@@ -250,11 +236,11 @@ export def AiCall(prompt: string, ctx: dict<any>): string
   var hdrfile: string = tempname()
   try
     if writefile([body], tmpfile) != 0
-      echohl ErrorMsg | echom 'vproj_ai: failed to write request body (disk full? permissions?)' | echohl None
+      echohl ErrorMsg | echom 'vproj-ai: failed to write request body (disk full? permissions?)' | echohl None
       return ''
     endif
     if writefile(['Authorization: Bearer ' .. ai_api_key], hdrfile) != 0
-      echohl ErrorMsg | echom 'vproj_ai: failed to write header file' | echohl None
+      echohl ErrorMsg | echom 'vproj-ai: failed to write header file' | echohl None
       return ''
     endif
     var cmd: string = 'curl -s -f --connect-timeout 10 -m 60 -X POST ' .. shellescape(ai_api_url)
@@ -270,7 +256,7 @@ export def AiCall(prompt: string, ctx: dict<any>): string
       if len(truncated) > 200
         truncated = truncated[ : 199] .. '...'
       endif
-      echohl ErrorMsg | echom 'vproj_ai: curl error ' .. shell_err .. ' — ' .. truncated | echohl None
+      echohl ErrorMsg | echom 'vproj-ai: curl error ' .. shell_err .. ' — ' .. truncated | echohl None
       return ''
     endif
 
@@ -286,12 +272,12 @@ export def AiCall(prompt: string, ctx: dict<any>): string
       if len(err_truncated) > 200
         err_truncated = err_truncated[ : 199] .. '...'
       endif
-      echohl ErrorMsg | echom 'vproj_ai: API error — ' .. err_truncated | echohl None
+      echohl ErrorMsg | echom 'vproj-ai: API error — ' .. err_truncated | echohl None
       return ''
     endif
     result = content
   catch
-    echohl ErrorMsg | echom 'vproj_ai: request failed — ' .. v:exception | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: request failed — ' .. v:exception | echohl None
   finally
     delete(tmpfile)
     delete(hdrfile)
@@ -530,9 +516,9 @@ def StreamJobExit(job: job, status: number): void
   endif
 
   if stream_cancelled
-    echom 'vproj_ai: cancelled'
+    echom 'vproj-ai: cancelled'
   elseif status != 0
-    echohl ErrorMsg | echom 'vproj_ai: API call failed — status ' .. status | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: API call failed — status ' .. status | echohl None
   else
     if ai_mode == 'question' || ai_target_bufnr <= 0 || !bufexists(ai_target_bufnr)
       ShowPopup(stream_full_response)
@@ -546,28 +532,39 @@ def StreamJobExit(job: job, status: number): void
   stream_accumulated = ''
   stream_full_response = ''
   stream_cancelled = false
+  # Clean up auth header temp file.
+  if !empty(stream_hdrfile)
+    delete(stream_hdrfile)
+    stream_hdrfile = ''
+  endif
 enddef
+
+# Temp file for auth header (cleaned up in StreamJobExit).
+var stream_hdrfile: string = ''
 
 def BuildStreamCommand(prompt: string, ctx: dict<any>): list<string>
   var body: string = BuildRequestBody(prompt, ctx, true)
-  var hdr: string = 'Authorization: Bearer ' .. ai_api_key
+  # Write auth header to temp file so key is not visible in /proc/<pid>/cmdline.
+  stream_hdrfile = tempname()
+  writefile(['Authorization: Bearer ' .. ai_api_key], stream_hdrfile)
   return ['curl', '--no-buffer', '-s', '-f',
     '--connect-timeout', '10', '-m', '120',
     '-X', 'POST',
     '-H', 'Content-Type: application/json',
-    '-H', hdr,
+    '-H', '@' .. stream_hdrfile,
     '-d', body,
     ai_api_url]
 enddef
 
 def AiCallStream(prompt: string, ctx: dict<any>): bool
+
   AiConfigure()
   if empty(ai_api_key)
-    echohl ErrorMsg | echom 'vproj_ai: no API key' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: no API key' | echohl None
     return false
   endif
   if !executable('curl')
-    echohl ErrorMsg | echom 'vproj_ai: curl required' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: curl required' | echohl None
     return false
   endif
 
@@ -586,7 +583,7 @@ def AiCallStream(prompt: string, ctx: dict<any>): bool
   stream_job = job_start(cmd, opts)
   if job_status(stream_job) == 'fail'
     stream_job = v:null
-    echohl ErrorMsg | echom 'vproj_ai: failed to start API request' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: failed to start API request' | echohl None
     return false
   endif
 
@@ -604,7 +601,7 @@ enddef
 export def StreamCancelCmd(): void
   if stream_job != v:null
     StreamCancel()
-    echom 'vproj_ai: stream cancelled'
+    echom 'vproj-ai: stream cancelled'
   endif
 enddef
 
@@ -689,17 +686,17 @@ def ApplyCode(target_bufnr: number, blocks: list<dict<any>>, cursor_line: number
   endif
 
   if empty(code)
-    echom 'vproj_ai: no code in response'
+    echom 'vproj-ai: no code in response'
     return
   endif
 
   if !bufexists(target_bufnr)
-    echohl ErrorMsg | echom 'vproj_ai: target buffer no longer exists' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: target buffer no longer exists' | echohl None
     return
   endif
 
   if !getbufvar(target_bufnr, '&modifiable')
-    echohl ErrorMsg | echom 'vproj_ai: target buffer not modifiable' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: target buffer not modifiable' | echohl None
     return
   endif
 
@@ -712,7 +709,7 @@ def ApplyCode(target_bufnr: number, blocks: list<dict<any>>, cursor_line: number
 
   var fname: string = fnamemodify(bufname(target_bufnr), ':t')
   var label: string = empty(lang) || lang == 'code' ? '' : ' (' .. lang .. ')'
-  echom 'vproj_ai: applied ' .. len(code_lines) .. ' lines to ' .. fname .. label .. ' (u to undo)'
+  echom 'vproj-ai: applied ' .. len(code_lines) .. ' lines to ' .. fname .. label .. ' (u to undo)'
 enddef
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -760,7 +757,7 @@ def ShowPopup(text: string): void
   }
 
   popup_create(lines, opts)
-  echom 'vproj_ai: response in popup (q or Esc to close)'
+  echom 'vproj-ai: response in popup (q or Esc to close)'
 enddef
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -770,7 +767,7 @@ enddef
 # Entry point from A key mapping. Uses input() to get the prompt.
 # Safe because <Cmd> mappings don't consume typeahead.
 export def AiPromptFromKey(): void
-  var prompt: string = input('vproj_ai: ')
+  var prompt: string = input('vproj-ai: ')
   redraw
   if empty(prompt)
     return
@@ -821,9 +818,9 @@ export def AiPrompt(prompt_from_cmdline: string = ''): void
   var ctx_file: string = get(ctx, 'file', '')
   var display_file: string = empty(ctx_file) ? 'unknown' : fnamemodify(ctx_file, ':t')
   var mode_label: string = ai_mode == 'question' ? ' (question)' : ''
-  echom 'vproj_ai: streaming' .. mode_label .. ' for ' .. display_file .. '...'
+  echom 'vproj-ai: streaming' .. mode_label .. ' for ' .. display_file .. '...'
 
   if !AiCallStream(prompt, ctx)
-    echohl ErrorMsg | echom 'vproj_ai: failed to start stream' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: failed to start stream' | echohl None
   endif
 enddef

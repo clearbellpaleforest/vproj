@@ -12,8 +12,13 @@ API_KEY="${VPROJ_AI_API_KEY:-}"
 API_URL="${VPROJ_AI_API_URL:-https://api.deepseek.com/v1/chat/completions}"
 MODEL="${VPROJ_AI_MODEL:-deepseek-chat}"
 
+if ! command -v curl >/dev/null 2>&1; then
+  echo "vproj-ai: curl is required but not found in PATH"
+  exit 1
+fi
+
 if [ -z "$API_KEY" ]; then
-  echo "vproj_ai: No API key. Set g:vproj_ai_api_key or \$VPROJ_AI_API_KEY."
+  echo "vproj-ai: No API key. Set g:vproj_ai_api_key or \$VPROJ_AI_API_KEY."
   exit 1
 fi
 
@@ -44,7 +49,7 @@ if [ -n "${VPROJ_AI_TEST_FAIL:-}" ]; then
       exit 1
       ;;
     *)
-      echo "vproj_ai: Unknown VPROJ_AI_TEST_FAIL value: $VPROJ_AI_TEST_FAIL" >&2
+      echo "vproj-ai: Unknown VPROJ_AI_TEST_FAIL value: $VPROJ_AI_TEST_FAIL" >&2
       exit 1
       ;;
   esac
