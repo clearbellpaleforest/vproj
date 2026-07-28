@@ -38,7 +38,7 @@ var stream_full_response: string = ''
 # VprojPaneReady is the guaranteed injection point — BufEnter fires
 # during :new before pane_bufnr is assigned, so OnBufEnter returns
 export def AiTerminalChat(): void
-# early on first open. VprojPaneReady catches the race.
+  if !has('terminal')
     echohl ErrorMsg | echom 'vproj-ai: terminal support required (Vim 8.0+)' | echohl None
     return
   endif
@@ -103,20 +103,15 @@ export def AiTerminalChat(): void
   writefile([json_encode(entry)], diag_log, 'a')
 enddef
 
-  if !executable('curl')
-    echohl ErrorMsg | echom 'vproj-ai: curl is required but not found' | echohl None
-    return
-  endif
+def UrlValid(url: string): bool
+  return url =~# '^https://'
+enddef
 
 def AiConfigure(): void
   var g_key: any = get(g:, 'vproj_ai_api_key', '')
   var g_url: any = get(g:, 'vproj_ai_api_url', '')
 
   # Validate URL before use (prevent SSRF/credential forwarding)
-  def UrlValid(url: string): bool
-    return url =~# '^https://'
-  enddef
-
   if type(g_url) == v:t_string && !empty(g_url) && !UrlValid(g_url)
     echohl ErrorMsg | echom 'vproj-ai: only HTTPS URLs allowed for API endpoint' | echohl None
     return
@@ -151,11 +146,11 @@ def AiConfigure(): void
     endif
   endif
 
-  # Select model: explicit override > endpoint inference > hardcoded default
+  # Select model: explicit override > provider inference > hardcoded default
   var g_model: any = get(g:, 'vproj_ai_model', '')
   if type(g_model) == v:t_string && !empty(g_model)
     ai_model = g_model
-  elseif stridx(ai_api_url, 'openai.com') >= 0
+  elseif !empty(getenv('OPENAI_API_KEY')) && empty(getenv('DEEPSEEK_API_KEY'))
     ai_model = 'gpt-4o-mini'
   else
     ai_model = 'deepseek-chat'
@@ -216,16 +211,12 @@ enddef
 export def AiCall(prompt: string, ctx: dict<any>): string
   if !executable('curl')
     echohl ErrorMsg | echom 'vproj-ai: curl is required but not found' | echohl None
-    return
+    return ''
   endif
 
   AiConfigure()
   if empty(ai_api_key)
     echohl ErrorMsg | echom 'vproj-ai: no API key. Set g:vproj_ai_api_key or $DEEPSEEK_API_KEY.' | echohl None
-    return ''
-  endif
-  if !executable('curl')
-    echohl ErrorMsg | echom 'vproj-ai: curl is required but not found' | echohl None
     return ''
   endif
 

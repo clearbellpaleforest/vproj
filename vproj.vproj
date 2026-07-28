@@ -6,13 +6,13 @@ doc/
 tests/
 doc
 /home/aldous/Desktop/work/vproj/vproj/doc
-/home/aldous/Desktop/work/vproj/vproj/src
 Included Files:
 design.md
 Excluded Directories:
 .git/
 .github/
 .claude/
+/home/aldous/Desktop/work/vproj/vproj/src
 Excluded Files:
 *.swp
 *.swo

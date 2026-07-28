@@ -15,7 +15,6 @@ var current_page: number = 0
 var items_per_page: number = 1
 var paging_active: bool = false
 var nav_offset: number = 0
-var original_cwd: string = ''
 var saved_shortmess: string = ''
 var filter_pattern: string = ''
 var git_filter_active: bool = false
@@ -349,7 +348,6 @@ export def PaneOpen(): void
   if empty(current_dir)
     current_dir = expand('~')
   endif
-  original_cwd = current_dir
   selected_line = FirstSelectableLine()
   try
     LoadSession()
@@ -423,7 +421,6 @@ export def HandleBufWipeout(): void
   expanded_dirs = {}
   preview_active = false
   preview_bufnr = -1
-  original_cwd = ''
   git_status_map = {}
   git_branch_cache = ''
   git_root_cache = ''
@@ -1644,14 +1641,14 @@ export def DiscardChanges(): void
       Error("vproj: Failed to unstage " .. name)
     endif
   elseif st == "M" || st == "R"
-    system("git checkout -- " .. shellescape(path) .. " 2>/dev/null")
+    system("git restore -- " .. shellescape(path) .. " 2>/dev/null")
     if v:shell_error == 0
       echom "Reverted: " .. name
     else
       Error("vproj: Failed to revert " .. name)
     endif
   elseif st == "D"
-    system("git checkout HEAD -- " .. shellescape(path) .. " 2>/dev/null")
+    system("git restore --source=HEAD -- " .. shellescape(path) .. " 2>/dev/null")
     if v:shell_error == 0
       echom "Restored: " .. name
     else
@@ -2045,7 +2042,7 @@ export def GitBranchSwitch(): void
     echom 'vproj: Branch switch cancelled'
     return
   endif
-  var output: string = system('git -C ' .. shellescape(root) .. ' checkout ' .. shellescape(target) .. ' 2>&1')
+  var output: string = system('git -C ' .. shellescape(root) .. ' switch ' .. shellescape(target) .. ' 2>&1')
   if v:shell_error != 0
     echom 'vproj: Checkout failed — ' .. substitute(output, '\n', ' ', 'g')
   else
