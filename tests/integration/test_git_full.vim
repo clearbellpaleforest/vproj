@@ -51,10 +51,13 @@ Assert(lines[0] =~ '\[F\]ile.*\[B\]uf.*\[C\]ode.*\[q\]fix', 'log removed: menu s
 var cursor_line = PaneCursorLine()
 Assert(cursor_line == 3, 'log removed: cursor on first item')
 
-# L is not mapped — log mode key removed, L is a nav char
+# L removed as log mode key — uppercase L is now unmapped (log mode removed)
 var L_map = maparg('L', 'n', 0, 1)
-Assert(!empty(L_map), 'L is now a nav char')
-Assert(L_map.rhs =~ 'SelectByNavChar', 'L maps to SelectByNavChar (nav char, not log mode)')
+Assert(empty(L_map), 'L unmapped (log mode removed)')
+# Lowercase l is a nav char (was previously shadowed by log mode L)
+var l_map = maparg('l', 'n', 0, 1)
+Assert(!empty(l_map), 'l is a nav char')
+Assert(l_map.rhs =~ 'SelectByNavChar\|VprojKey', 'l maps to nav dispatch (freed from log mode)')
 
 # Verify mode switching works correctly with 4 modes only
 vproj#SwitchMode('buf')
@@ -189,9 +192,11 @@ endtry
 # ──────────────────────────────────────────────
 echom '--- D Key Mapping ---'
 vproj#SwitchMode('file')
-var d_map = maparg('D', 'n', 0, 1)
-Assert(!empty(d_map), 'D is mapped in pane buffer')
-Assert(d_map.rhs =~ 'SelectByNavChar', 'D is nav char (freed from git)')
+var D_map = maparg('D', 'n', 0, 1)
+Assert(empty(D_map), 'Uppercase D unmapped (freed from git)')
+var d_map = maparg('d', 'n', 0, 1)
+Assert(!empty(d_map), 'Lowercase d is mapped in pane buffer')
+Assert(d_map.rhs =~ 'VprojKey\|SelectByNavChar', 'd is nav char (freed from git)')
 
 # \D maps to DiscardChanges
 var bslash_D_map = maparg('\D', 'n', 0, 1)
@@ -242,8 +247,10 @@ Assert(!empty(P_map), 'P is mapped in pane buffer')
 Assert(P_map.lhs == 'P', 'P map exists')
 
 var U_map = maparg('U', 'n', 0, 1)
-Assert(!empty(U_map), 'U is mapped in pane buffer')
-Assert(U_map.lhs == 'U', 'U map exists')
+Assert(empty(U_map), 'U is unmapped (freed from git)')
+var u_nav_map = maparg('u', 'n', 0, 1)
+Assert(!empty(u_nav_map), 'u is a nav char')
+Assert(u_nav_map.rhs =~ 'VprojKey\|SelectByNavChar', 'u is nav char (freed from git)')
 
 var b_map = maparg('B', 'n', 0, 1)
 Assert(!empty(b_map), 'B is mapped in pane buffer')
@@ -261,17 +268,19 @@ vproj#SwitchMode('file')
 # d is a nav char (freed by \ prefix), not a direct action key
 var d_nav_map = maparg('d', 'n', 0, 1)
 Assert(!empty(d_nav_map), 'd has a mapping')
-Assert(d_nav_map.rhs =~ 'SelectByNavChar', 'd is nav char (git actions use \\ prefix)')
+Assert(d_nav_map.rhs =~ 'VprojKey\|SelectByNavChar', 'd is nav char (git actions use \\ prefix)')
 
 # \d maps to OpenDiffPreview
 var bslash_d_map = maparg('\d', 'n', 0, 1)
 Assert(!empty(bslash_d_map), '\\d has a mapping')
 Assert(bslash_d_map.rhs =~ 'OpenDiffPreview', '\\d maps to OpenDiffPreview')
 
-# L is a nav char (log mode removed — L freed for navigation)
+# L freed (log mode removed) — uppercase L is unmapped, lowercase l is a nav char
 var L_action_map = maparg('L', 'n', 0, 1)
-Assert(!empty(L_action_map), 'L is mapped as nav char')
-Assert(L_action_map.rhs =~ 'SelectByNavChar', 'L maps to SelectByNavChar (nav char, log removed)')
+Assert(empty(L_action_map), 'L unmapped (log mode removed)')
+var l_action_map = maparg('l', 'n', 0, 1)
+Assert(!empty(l_action_map), 'l is nav char (freed from log mode)')
+Assert(l_action_map.rhs =~ 'VprojKey\|SelectByNavChar', 'l maps to nav dispatch (log mode removed)')
 
 # ──────────────────────────────────────────────
 # SECTION 14: Session Persistence — log→file migration

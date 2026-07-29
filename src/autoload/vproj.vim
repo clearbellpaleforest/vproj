@@ -2426,12 +2426,12 @@ def OpenFile(path: string): void
     return
   endif
   # Navigate to the window the user was in before the pane opened
+  var pane_wid: number = win_getid()
   var target_wid: number = 0
   if saved_origin_wid > 0 && win_id2win(saved_origin_wid) > 0
     target_wid = saved_origin_wid
   else
     # Fallback: find any non-pane window
-    var pane_wid: number = win_getid()
     for wnr in range(1, winnr('$'))
       var wid: number = win_getid(wnr)
       if wid != pane_wid
@@ -2447,6 +2447,18 @@ def OpenFile(path: string): void
     endif
   endif
   win_gotoid(target_wid)
+  if &modified
+    var choice: number = confirm(
+      'Save changes to ' .. expand('%:t') .. ' before switching?',
+      "&Yes\n&No\n&Cancel"
+    )
+    if choice == 1
+      write
+    elseif choice == 3
+      win_gotoid(pane_wid)
+      return
+    endif
+  endif
   var saved_shm: string = &shortmess
   set shortmess+=A
   try
@@ -2688,13 +2700,34 @@ export def CloseBuffer(): void
     return
   endif
   if has_key(item, 'bufnr')
+    var bufnr: number = item.bufnr
+    var bufinfo: list<dict<any>> = getbufinfo(bufnr)
+    var is_modified: bool = !empty(bufinfo) && bufinfo[0].changed > 0
+    if is_modified
+      var choice: number = confirm(
+        'Save changes to ' .. bufname(bufnr) .. '?',
+        "&Yes\n&No\n&Cancel"
+      )
+      if choice == 1
+        var cur_wid: number = win_getid()
+        var target_win: number = bufwinnr(bufnr)
+        if target_win > 0
+          win_execute(win_getid(target_win), 'write')
+        else
+          execute 'sbuffer ' .. bufnr .. ' | write | close'
+        endif
+        win_gotoid(cur_wid)
+      elseif choice == 3
+        return
+      endif
+    endif
     try
-      execute 'bdelete! ' .. item.bufnr
+      execute 'bdelete! ' .. bufnr
     catch
       Error('vproj: Cannot close buffer — ' .. v:exception)
       return
     endtry
-    if !bufexists(item.bufnr)
+    if !bufexists(bufnr)
       selected_line = FirstSelectableLine()
       current_page = 0
       Render()
