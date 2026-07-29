@@ -49,6 +49,12 @@ endif
 command! -bar -nargs=? VprojAiPrompt call vproj#ai#AiPrompt(<q-args>)
 nnoremap <silent> <Plug>VprojAiPrompt :VprojAiPrompt<CR>
 
+nnoremap <silent> <Plug>VprojAgent :call vproj#agent#AgentOpen()<CR>
+
+if !hasmapto('<Plug>VprojAgent', 'n')
+  nmap <S-A> <Plug>VprojAgent
+endif
+
 nnoremap <silent> <Plug>VprojF1 :call vproj#HandleF1()<CR>
 
 if !hasmapto('<Plug>VprojF1', 'n')
