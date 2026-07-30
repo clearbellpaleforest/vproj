@@ -74,9 +74,15 @@ export def AiTerminalChat(): void
   endif
 
   # Use term_start() to create terminal with env vars in a dict.
-  # This avoids shell quoting issues with env command approach.
+  # API key written to temp file (never in /proc/pid/environ) —
+  # bash script reads and immediately deletes it.
+  var keyfile: string = tempname()
+  if writefile([ai_api_key], keyfile) != 0
+    echohl ErrorMsg | echom 'vproj-ai: failed to write key file' | echohl None
+    return
+  endif
   var env_vars: dict<string> = {
-    VPROJ_AI_API_KEY: ai_api_key,
+    VPROJ_AI_KEYFILE: keyfile,
     VPROJ_AI_API_URL: ai_api_url,
     VPROJ_AI_MODEL: ai_model,
     VPROJ_AI_TMPFILE: tmpfile,

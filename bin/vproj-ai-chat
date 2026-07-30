@@ -8,7 +8,14 @@ REQUEST_FILE="${VPROJ_AI_TMPFILE:-/dev/null}"
 if [ -n "${VPROJ_AI_TMPFILE:-}" ] && [ -f "$REQUEST_FILE" ]; then
   trap 'rm -f "$REQUEST_FILE"' EXIT
 fi
-API_KEY="${VPROJ_AI_API_KEY:-}"
+# Read API key from temp file (never in /proc/pid/environ or cmdline).
+# The file is deleted immediately after reading.
+if [ -n "${VPROJ_AI_KEYFILE:-}" ] && [ -f "$VPROJ_AI_KEYFILE" ]; then
+  API_KEY=$(cat "$VPROJ_AI_KEYFILE")
+  rm -f "$VPROJ_AI_KEYFILE"
+else
+  API_KEY=""
+fi
 API_URL="${VPROJ_AI_API_URL:-https://api.deepseek.com/v1/chat/completions}"
 MODEL="${VPROJ_AI_MODEL:-deepseek-chat}"
 
@@ -183,12 +190,15 @@ while true; do
           FULL_RESPONSE+="$content"
         fi
       fi
+    AUTH_HDR=$(mktemp) || AUTH_HDR="/tmp/vproj-ai-auth.$$"
+    printf 'Authorization: Bearer %s' "$API_KEY" > "$AUTH_HDR"
     done < <(curl -sS --no-buffer \
       --connect-timeout 10 -m 120 \
       -H "Content-Type: application/json" \
-      -H "Authorization: Bearer $API_KEY" \
+      -H "@$AUTH_HDR" \
       -d "{\"model\":\"$MODEL\",\"messages\":$MESSAGES],\"stream\":true}" \
       "$API_URL" 2>"$CURL_ERRORS"; echo $? > "$CURL_EXIT_FILE")
+    rm -f "$AUTH_HDR"
   fi
 
   echo ""
