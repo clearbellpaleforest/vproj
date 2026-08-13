@@ -1,4 +1,5 @@
 vim9script
+set nomore
 
 # Test suite for vproj AI module (autoload/vproj/ai.vim)
 # Run: vim -N -u NONE -S tests/unit/test_ai.vim -c 'qall!'

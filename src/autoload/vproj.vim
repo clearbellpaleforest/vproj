@@ -3628,7 +3628,7 @@ def SessionFilePath(): string
     return cache_val .. '/vproj/session'
   endif
   var cache: string = expand('~/.cache')
-  if cache =~ '^~'
+  if cache =~ '^\~'
     cache = substitute(cache, '\~', $HOME, '')
   endif
   # macOS: XDG spec uses ~/Library/Caches
