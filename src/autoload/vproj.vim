@@ -3007,11 +3007,13 @@ export def DeleteSelected(): void
 enddef
 
 # Copy src to a dst that does not exist yet. filecopy() is used when this
-# Vim has it (it is recent in 9.1); otherwise a binary-safe read/write that
+# Vim has it (not in 9.1.0016, e.g. Ubuntu 24.04); otherwise a binary-safe read/write that
 # keeps the source's permissions.
 def CopyFileBytes(src: string, dst: string): bool
+  # call() by name: a direct filecopy() call fails to compile (E117) on a
+  # Vim without it, even behind the exists() check, breaking the function.
   if exists('*filecopy')
-    return filecopy(src, dst)
+    return !!call('filecopy', [src, dst])
   endif
   try
     if writefile(readblob(src), dst, 'b') != 0

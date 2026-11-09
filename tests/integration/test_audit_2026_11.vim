@@ -343,13 +343,15 @@ if executable('git')
   SelectName('staged.txt')
   test_feedinput("y\<CR>")
   vproj#DiscardChanges()
-  Assert(Git(repo, 'status --porcelain -- staged.txt') == '', '\D discards a staged-only change')
+  var st_after: string = Git(repo, 'status --porcelain -- staged.txt')
+  Assert(st_after == '', '\D discards a staged-only change (status now: ' .. string(st_after) .. ', msgs: ' .. string(split(execute(':3messages'), "\n")) .. ')')
 
   # * used to never return results
   test_feedinput("needle\<CR>")
   vproj#GrepSearch()
   var qf: list<dict<any>> = getqflist()
-  Assert(len(qf) == 1 && fnamemodify(bufname(qf[0].bufnr), ':p') == repo .. '/hay.txt', '* finds the match with an absolute path')
+  Assert(len(qf) == 1 && fnamemodify(bufname(qf[0].bufnr), ':p') == repo .. '/hay.txt',
+    '* finds the match with an absolute path (qf: ' .. string(map(copy(qf), (_, e) => bufname(e.bufnr) .. ':' .. e.lnum)) .. ', msgs: ' .. string(split(execute(':3messages'), "\n")) .. ')')
   vproj#SwitchMode('file')
 endif
 
