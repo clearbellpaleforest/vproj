@@ -120,7 +120,8 @@ tests/
 │   ├── test_paging.vim
 │   ├── test_qfix_mode.vim
 │   ├── test_git_full.vim
-│   └── test_special_chars.vim
+│   ├── test_special_chars.vim
+│   └── test_file_ops.vim
 ├── smoke.vim
 ├── final.vim
 ├── regression.vim
@@ -215,6 +216,10 @@ closes the pane in temporary mode and is a no-op in permanent mode.
 | `vproj#NavigateUp()` | Parent directory |
 | `vproj#Refresh()` | Re-render pane contents |
 | `vproj#CloseBuffer()` | Close selected buffer (buf mode) |
+| `vproj#CopySelected()` | Copy selected file to name_N.ext (file mode, :Copy) |
+| `vproj#DeleteSelected()` | Delete selected file after confirm (file mode, :Delete, Delete key) |
+| `vproj#RenameSelected()` | Rename selected file in place (file mode, :Rename) |
+| `vproj#MoveSelected()` | Move selected file to another directory (file mode, :Move) |
 | `vproj#ToggleInclude()` | Include/exclude item (code mode) |
 | `vproj#IncludeItem()` | Include item (code mode, + key) |
 | `vproj#ExcludeItem()` | Exclude item (code mode, - key) |
@@ -300,6 +305,7 @@ and backslash-prefixed git commands.
 | Key | Action |
 |-----|--------|
 | Left/Right | Shrink/grow width |
+| Delete | Delete selected file, with confirm (file mode) |
 | Esc | Close pane (temp mode only) |
 | +/- | Include/exclude item (code mode) |
 | / | Filter by name |
@@ -319,6 +325,9 @@ and backslash-prefixed git commands.
 ## Commands
 
 `:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`
+
+File operations on the file selected in the pane (file mode only):
+`:Copy`, `:Delete`, `:Rename`, `:Move`
 
 Default mapping: `<Tab>` toggles pane (uses `<Plug>VprojToggle` indirection).
 
@@ -358,7 +367,8 @@ tests/
 │   ├── test_paging.vim             # Paging with 60-item directory
 │   ├── test_qfix_mode.vim          # Qfix mode display, jump-to-entry, empty state
 │   ├── test_git_full.vim           # Git features: diff, blame, discard, symlink guards
-│   └── test_special_chars.vim      # Special characters in filenames
+│   ├── test_special_chars.vim      # Special characters in filenames
+│   └── test_file_ops.vim           # :Copy :Delete :Rename :Move, Delete key
 ├── smoke.vim                       # Basic open/close
 ├── final.vim                       # Audit fix verification
 ├── regression.vim                  # Regression checks

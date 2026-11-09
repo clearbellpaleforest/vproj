@@ -10,6 +10,7 @@ vim9script
 #   :VprojOpen    — Open the project pane.
 #   :VprojClose   — Close the project pane.
 #   :VprojRefresh — Refresh the pane contents.
+#   :Copy :Delete :Rename :Move — act on the file selected in the pane.
 
 # Load guard
 if exists('g:loaded_vproj')
@@ -28,6 +29,12 @@ command! -bar -nargs=0 VprojOpen    vproj#PaneOpen()
 command! -bar -nargs=0 VprojClose   vproj#PaneClose()
 command! -bar -nargs=0 VprojRefresh vproj#Refresh()
 command! -bar -nargs=0 VprojDiag    call vproj#PaneDiagnose()
+
+# File operations on the file selected in the pane (file mode only)
+command! -bar -nargs=0 Copy   vproj#CopySelected()
+command! -bar -nargs=0 Delete vproj#DeleteSelected()
+command! -bar -nargs=0 Rename vproj#RenameSelected()
+command! -bar -nargs=0 Move   vproj#MoveSelected()
 
 # ---------------------------------------------------------------------------
 # Default key mapping: Tab toggles the project pane (temporary mode).

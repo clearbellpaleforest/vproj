@@ -2736,6 +2736,205 @@ export def CloseBuffer(): void
 enddef
 
 # ──────────────────────────────────────────────
+# File operations (file mode) — :Copy :Delete :Rename :Move, Delete key
+# ──────────────────────────────────────────────
+
+# Path of the selected regular file, or '' after telling the user why not.
+def SelectedFile(op: string): string
+  if !IsPaneVisible()
+    Error('vproj: ' .. op .. ' needs the project pane open')
+    return ''
+  endif
+  if current_mode != 'file'
+    Error('vproj: ' .. op .. ' works in file mode only (press F for file mode)')
+    return ''
+  endif
+  var item: dict<any> = GetSelectedItem()
+  if empty(item) || get(item, 'is_parent', false)
+    Error('vproj: ' .. op .. ' — no file selected')
+    return ''
+  endif
+  if get(item, 'is_dir', false)
+    Error('vproj: ' .. op .. ' works on files, not directories')
+    return ''
+  endif
+  var path: string = get(item, 'path', '')
+  if empty(path) || !IsRegularFile(path)
+    Error('vproj: ' .. op .. ' — file no longer exists: ' .. path)
+    return ''
+  endif
+  return path
+enddef
+
+# Buffer number holding this file, or -1. Compares full paths instead of
+# bufnr(path), because bufnr() treats its argument as a pattern.
+def FileBufnr(path: string): number
+  var full: string = fnamemodify(path, ':p')
+  for info in getbufinfo()
+    if !empty(info.name) && fnamemodify(info.name, ':p') == full
+      return info.bufnr
+    endif
+  endfor
+  return -1
+enddef
+
+# True when the file has unsaved changes in a buffer. Changing the file on
+# disk under those changes would split the buffer from the file.
+def HasUnsavedBuffer(path: string, op: string): bool
+  var bnr: number = FileBufnr(path)
+  if bnr > 0 && getbufvar(bnr, '&modified')
+    Error('vproj: ' .. op .. ' — ' .. fnamemodify(path, ':t') .. ' has unsaved changes; write or discard them first')
+    return true
+  endif
+  return false
+enddef
+
+# After a rename or move: windows showing the old file now edit the new one,
+# and the buffer for the old name is wiped so buf mode lists no stale entry.
+def RetargetBuffer(old_path: string, new_path: string): void
+  var bnr: number = FileBufnr(old_path)
+  if bnr < 0
+    return
+  endif
+  for wid in win_findbuf(bnr)
+    win_execute(wid, 'keepalt edit ' .. fnameescape(new_path))
+  endfor
+  if bufexists(bnr) && empty(win_findbuf(bnr))
+    execute 'bwipeout ' .. bnr
+  endif
+enddef
+
+def AfterFileOp(): void
+  InvalidateGitCache()
+  Render()
+enddef
+
+export def DeleteSelected(): void
+  var path: string = SelectedFile('Delete')
+  if empty(path) || HasUnsavedBuffer(path, 'Delete')
+    return
+  endif
+  var name: string = fnamemodify(path, ':t')
+  if confirm('Delete "' .. name .. '"?', "&Yes\n&No", 2) != 1
+    echom 'Cancelled'
+    return
+  endif
+  if delete(path) != 0
+    Error('vproj: Could not delete: ' .. path)
+    return
+  endif
+  # A buffer no window shows would linger in buf mode; a shown one stays
+  # so the user still sees the text and can write it back.
+  var bnr: number = FileBufnr(path)
+  if bnr > 0 && empty(win_findbuf(bnr))
+    execute 'bwipeout ' .. bnr
+  endif
+  echom 'Deleted: ' .. name
+  AfterFileOp()
+enddef
+
+export def CopySelected(): void
+  var src: string = SelectedFile('Copy')
+  if empty(src)
+    return
+  endif
+  var dir: string = fnamemodify(src, ':h')
+  var base: string = fnamemodify(src, ':t:r')
+  var ext: string = fnamemodify(src, ':e')
+  var suffix: string = empty(ext) ? '' : '.' .. ext
+
+  # First unused name: name_1.ext, name_2.ext, ... getftype() is '' only
+  # when nothing exists at the path, including a dangling symlink.
+  var n: number = 1
+  var dst: string = dir .. '/' .. base .. '_' .. n .. suffix
+  while getftype(dst) != ''
+    n += 1
+    dst = dir .. '/' .. base .. '_' .. n .. suffix
+  endwhile
+
+  if !filecopy(src, dst)
+    Error('vproj: Copy failed: ' .. src)
+    return
+  endif
+  echom 'Created ' .. fnamemodify(dst, ':t')
+  AfterFileOp()
+enddef
+
+export def RenameSelected(): void
+  var src: string = SelectedFile('Rename')
+  if empty(src) || HasUnsavedBuffer(src, 'Rename')
+    return
+  endif
+  var old_name: string = fnamemodify(src, ':t')
+  var new_name: string = input('Rename to: ', old_name)
+  if empty(new_name) || new_name == old_name
+    echom 'Cancelled'
+    return
+  endif
+  if new_name =~ '[/\\]'
+    Error('vproj: Rename — name cannot contain path separators (use :Move)')
+    return
+  endif
+  if new_name == '.' || new_name == '..'
+    Error('vproj: Rename — invalid name: ' .. new_name)
+    return
+  endif
+  var dst: string = fnamemodify(src, ':h') .. '/' .. new_name
+  # rename() overwrites without warning — refuse instead.
+  if getftype(dst) != ''
+    Error('vproj: Rename — already exists: ' .. new_name)
+    return
+  endif
+  if rename(src, dst) != 0
+    Error('vproj: Could not rename ' .. old_name .. ' to ' .. new_name)
+    return
+  endif
+  RetargetBuffer(src, dst)
+  echom 'Renamed ' .. old_name .. ' -> ' .. new_name
+  AfterFileOp()
+enddef
+
+export def MoveSelected(): void
+  var src: string = SelectedFile('Move')
+  if empty(src) || HasUnsavedBuffer(src, 'Move')
+    return
+  endif
+  var name: string = fnamemodify(src, ':t')
+  var answer: string = input('Move ' .. name .. ' to directory: ', fnamemodify(src, ':h') .. '/', 'dir')
+  if empty(answer)
+    echom 'Cancelled'
+    return
+  endif
+  # :p expands a leading ~ and makes the path absolute; drop the trailing
+  # slash it leaves on directories.
+  var dest_dir: string = fnamemodify(answer, ':p')
+  if dest_dir != '/'
+    dest_dir = dest_dir->substitute('/\+$', '', '')
+  endif
+  if !isdirectory(dest_dir)
+    Error('vproj: Move — not a directory: ' .. answer)
+    return
+  endif
+  if resolve(dest_dir) == resolve(fnamemodify(src, ':p:h'))
+    echom 'vproj: Move — ' .. name .. ' is already in ' .. dest_dir
+    return
+  endif
+  var dst: string = (dest_dir == '/' ? '' : dest_dir) .. '/' .. name
+  # rename() overwrites without warning — refuse instead.
+  if getftype(dst) != ''
+    Error('vproj: Move — already exists: ' .. dst)
+    return
+  endif
+  if rename(src, dst) != 0
+    Error('vproj: Could not move ' .. name .. ' to ' .. dest_dir)
+    return
+  endif
+  RetargetBuffer(src, dst)
+  echom 'Moved ' .. name .. ' -> ' .. dest_dir
+  AfterFileOp()
+enddef
+
+# ──────────────────────────────────────────────
 # .vproj file I/O
 # ──────────────────────────────────────────────
 
@@ -3385,6 +3584,7 @@ export def ShowHelp(): void
     'Actions',
     '  Shift-R       refresh',
     '  Shift-X       close buffer (buf)',
+    '  Delete        delete file (file)',
     '  Shift-T       toggle tree view',
     '  Shift-P       toggle preview',
     '  +/-           include/exclude (code)',
@@ -3404,6 +3604,8 @@ export def ShowHelp(): void
     '  :VprojToggle  :VprojOpen',
     '  :VprojClose   :VprojRefresh',
     '  :VprojDiag    :help vproj',
+    '  :Copy :Delete :Rename :Move',
+    '                selected file (file mode)',
     '',
     'Press q to close this help.',
   ]
@@ -3482,6 +3684,9 @@ def SetupPaneMappings(): void
 
   # Close buffer (buf mode — Shift-X so lowercase x stays a nav key)
   nnoremap <buffer> <silent> X <Cmd>call vproj#CloseBuffer()<CR>
+
+  # Delete key: delete the selected file (file mode, confirms first)
+  nnoremap <buffer> <silent> <Delete> <Cmd>call vproj#DeleteSelected()<CR>
 
   # Nav indicator shift
   nnoremap <buffer> <silent> <nowait> > <Cmd>call vproj#ShiftNavForward()<CR>

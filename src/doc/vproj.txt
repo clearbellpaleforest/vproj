@@ -48,6 +48,31 @@ manually to ~/.vim/pack/bundle/start/vproj/.
     dimensions, cmdheight, and winmin settings. Useful for
     debugging E36 "Not enough room" errors.
 
+:Copy                                               *vproj-:Copy*
+    Copy the file selected in the pane (file mode). The copy goes
+    in the same directory under the first unused name of the form
+    name_1.ext, name_2.ext, ...
+
+:Delete                                             *vproj-:Delete*
+    Delete the file selected in the pane (file mode), after a
+    confirm prompt that defaults to No. The <Delete> key in the
+    pane does the same.
+
+:Rename                                             *vproj-:Rename*
+    Rename the file selected in the pane (file mode). Prompts for
+    the new name; the file stays in its directory. Refuses a name
+    that already exists.
+
+:Move                                               *vproj-:Move*
+    Move the file selected in the pane (file mode) to another
+    directory. Prompts for the directory (with completion).
+    Refuses if a file of that name already exists there.
+
+    These four act on files only, not directories. Delete, Rename
+    and Move refuse while the file has unsaved changes in a
+    buffer. After Rename or Move, windows showing the file follow
+    it to the new name.
+
 ==============================================================================
 3. MODES                                             *vproj-modes*
 
@@ -155,6 +180,7 @@ Git actions — backslash prefix (file and code modes):
 Actions:
     |Shift-R|            Refresh listing
     |Shift-X|            Close selected buffer (buf mode)
+    <Delete>            Delete selected file (file mode, confirms)
     |+| / |-|           Include / exclude item (code mode)
     |Shift-T|            Toggle tree view (file mode)
     |Shift-P|            Toggle file preview split
