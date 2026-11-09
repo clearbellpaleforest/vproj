@@ -38,10 +38,13 @@ write legacy `function!` or `let`/`const` in these files.
    quote characters. `getenv()` returns `v:null` for missing vars. `sort()`
    takes a Funcref, not a string name.
 
-7. **Two source files + one add-on.** `plugin/vproj.vim` is the public surface — commands,
+7. **Two source files + two add-ons.** `plugin/vproj.vim` is the public surface — commands,
    mappings, `<Plug>` indirections. `autoload/vproj.vim` is the implementation
-   — all logic, all state. `autoload/vproj/ai.vim` is an approved third file
-   for AI integration, loaded on demand via `vproj#ai#` autoload namespacing.
+   — all logic, all state. Two add-ons are approved, each loaded on demand
+   through its own autoload namespace: `autoload/vproj/ai.vim` (`vproj#ai#`)
+   talks to an AI provider's API, and `autoload/vproj/agent.vim`
+   (`vproj#agent#`, approved 2026-11-09) launches an external coding-agent CLI
+   in a terminal split. They do different jobs; keep them separate.
    Plugin calls autoload. Never the reverse. Do not add additional files
    without approval.
 
@@ -107,6 +110,8 @@ state. `docs/` is design reference material — not shipped with the plugin.
 src/
 ├── plugin/vproj.vim           # Entry point — commands, default Tab mapping
 ├── autoload/vproj.vim         # All logic — Vim9Script
+├── autoload/vproj/ai.vim      # Add-on: AI provider API (chat, prompt)
+├── autoload/vproj/agent.vim   # Add-on: external agent CLI in a terminal
 └── doc/
     ├── vproj.txt               # Help file
     └── tags                    # Help tag index
@@ -142,7 +147,7 @@ tests/
 ```
 
 Two source files. The plugin file declares the public surface. The autoload file
-owns all logic and state. Nothing else.
+owns all logic and state. The two add-ons (rule 7) own only their own feature.
 
 ## Add-on Support
 
