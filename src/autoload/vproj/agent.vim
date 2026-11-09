@@ -1,9 +1,12 @@
 vim9script
 
 # autoload/vproj/agent.vim — Agent CLI integration for vproj.
-# Launches a multi-provider AI agent (claudex, aether, openheim, claude, codex)
-# in a vproj-managed terminal split. Provider-agnostic — users configure their
-# own CLI (env vars, API keys, model) and vproj just launches it with context.
+# Launches a coding-agent CLI in a vproj-managed terminal split. By default
+# it looks for the two official CLIs, claude (Anthropic) then codex (OpenAI).
+# Any other agent is launched only when the user names it in
+# g:vproj_agent_cmd (a program name, or a list: program + arguments). vproj
+# never guesses other program names, because whatever it launches is handed
+# the file context.
 #
 # Context handed to the agent:
 #   VPROJ_AGENT_CTX_FILE  path of a JSON file (mode 0600) with keys cwd, and
@@ -19,13 +22,46 @@ vim9script
 
 # ── Detection ──
 
-def DetectAgent(): string
-  for bin in ['claudex', 'aether', 'openheim', 'claude', 'codex']
+const OFFICIAL_AGENTS: list<string> = ['claude', 'codex']
+
+# The command to run, or [] after telling the user why there is none. A
+# configured g:vproj_agent_cmd that cannot run is an error, not a reason to
+# fall back to another program.
+def AgentCommand(): list<string>
+  if has_key(g:, 'vproj_agent_cmd')
+    var raw: any = g:vproj_agent_cmd
+    var cmd: list<string> = []
+    if type(raw) == v:t_string && !empty(raw)
+      cmd = [raw]
+    elseif type(raw) == v:t_list && !empty(raw)
+        && empty(filter(copy(raw), (_, a) => type(a) != v:t_string))
+      cmd = copy(raw)
+    else
+      echohl ErrorMsg
+      echom 'vproj-agent: g:vproj_agent_cmd must be a program name or a list of strings'
+      echohl None
+      return []
+    endif
+    if !executable(cmd[0])
+      echohl ErrorMsg
+      echom 'vproj-agent: g:vproj_agent_cmd: ' .. cmd[0] .. ' not found or not executable'
+      echohl None
+      return []
+    endif
+    return cmd
+  endif
+  for bin in OFFICIAL_AGENTS
     if executable(bin)
-      return bin
+      return [bin]
     endif
   endfor
-  return ''
+  echohl ErrorMsg
+  echom 'vproj-agent: no agent CLI found. Install one of:'
+  echom '  npm install -g @anthropic-ai/claude-code   (claude)'
+  echom '  npm install -g @openai/codex               (codex)'
+  echom 'or set g:vproj_agent_cmd to the agent you use.'
+  echohl None
+  return []
 enddef
 
 # ── Context ──
@@ -82,17 +118,11 @@ export def AgentOpen(): void
     return
   endif
 
-  var bin: string = DetectAgent()
-  if empty(bin)
-    echohl ErrorMsg
-    echom 'vproj-agent: no agent CLI found'
-    echom 'Install one: npm install -g claudex  (recommended — Claude + Codex)'
-    echom '           npm install -g aether    (Claude Code fork, multi-provider)'
-    echom '           npm install -g @anthropic-ai/claude-code'
-    echom '           npm install -g @openai/codex'
-    echohl None
+  var cmd: list<string> = AgentCommand()
+  if empty(cmd)
     return
   endif
+  var bin: string = cmd[0]
 
   var ctx_file: string = WriteContextFile(json_encode(GatherAgentContext()))
   if empty(ctx_file)
@@ -113,7 +143,7 @@ export def AgentOpen(): void
   botright new
   setlocal bufhidden=wipe
   resize 20
-  var termbuf: number = term_start(bin, opts)
+  var termbuf: number = term_start(cmd, opts)
   var agent_job: any = termbuf > 0 ? term_getjob(termbuf) : v:null
   if termbuf == 0 || agent_job == v:null || job_status(agent_job) == 'fail'
     DeleteContextFile(ctx_file)

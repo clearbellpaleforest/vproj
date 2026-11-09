@@ -56,10 +56,14 @@ var fake_lines: list<string> = [
   'f="${VPROJ_AGENT_CTX_FILE:-}"',
   '{ echo "ctxfile=$f"; stat -c %a "$f"; echo "inline=${VPROJ_AGENT_CTX:-unset}"; } > "$FAKE_DIR/agent.meta"',
   'cp "$f" "$FAKE_DIR/agent.ctx"',
+  'basename "$0" > "$FAKE_DIR/agent.name"',
   'echo FAKE-AGENT-READY',
   'IFS= read -r line',
 ]
-for name in ['claudex', 'aether', 'openheim', 'claude', 'codex']
+# claudex/aether/openheim were once auto-detected; none is a real agent CLI
+# (unrelated or nonexistent npm packages). They are on PATH first here to
+# prove they are never picked.
+for name in ['claudex', 'aether', 'openheim', 'claude', 'codex', 'myagent']
   writefile(fake_lines, fake_dir .. '/' .. name)
   setfperm(fake_dir .. '/' .. name, 'rwx------')
 endfor
@@ -106,6 +110,51 @@ def SectionOpen(): void
   Assert(WaitFor(() => winnr('$') == wins_before), 'AgentOpen: window closes when the agent exits')
 enddef
 RunSection('AgentOpen', SectionOpen)
+
+# ── Which program is launched ──
+def LaunchedName(): string
+  var nfile: string = fake_dir .. '/agent.name'
+  delete(nfile)
+  vproj#agent#AgentOpen()
+  var termbuf: number = bufnr('%')
+  if getbufvar(termbuf, '&buftype') != 'terminal'
+    return ''
+  endif
+  WaitFor(() => filereadable(nfile))
+  var name: string = filereadable(nfile) ? get(readfile(nfile), 0, '') : ''
+  var agent_job: job = term_getjob(termbuf)
+  term_sendkeys(termbuf, "\r")
+  WaitFor(() => job_status(agent_job) == 'dead')
+  WaitFor(() => winnr('$') == 1)
+  return name
+enddef
+
+def SectionSelection(): void
+  execute 'edit ' .. fnameescape(src_file)
+  only
+  Assert(LaunchedName() == 'claude', 'default: official claude, never claudex/aether/openheim')
+  g:vproj_agent_cmd = 'myagent'
+  Assert(LaunchedName() == 'myagent', 'g:vproj_agent_cmd (string) is launched')
+  g:vproj_agent_cmd = ['codex', '--flag']
+  Assert(LaunchedName() == 'codex', 'g:vproj_agent_cmd (list) is launched')
+  messages clear
+  g:vproj_agent_cmd = 'no-such-agent-xyz'
+  var wins: number = winnr('$')
+  vproj#agent#AgentOpen()
+  Assert(winnr('$') == wins && stridx(execute('messages'), 'no-such-agent-xyz not found') >= 0,
+    'misconfigured g:vproj_agent_cmd: error, no fallback, no window')
+  unlet g:vproj_agent_cmd
+  # Nothing official on PATH: only the official packages are suggested.
+  var saved_path: string = $PATH
+  $PATH = tempname()
+  messages clear
+  vproj#agent#AgentOpen()
+  var msgs: string = execute('messages')
+  $PATH = saved_path
+  Assert(winnr('$') == wins && stridx(msgs, '@anthropic-ai/claude-code') >= 0, 'none found: official install hint')
+  Assert(msgs !~ 'claudex\|aether\|openheim', 'none found: no unrelated packages suggested')
+enddef
+RunSection('Agent selection', SectionSelection)
 
 # ── Cleanup and report ──
 delete(fake_dir, 'rf')

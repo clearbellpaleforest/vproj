@@ -388,6 +388,15 @@ Commands ~
   <Plug>VprojAgent             Mapping for :VprojAgent. No default key:
                                e.g. nmap <Leader>a <Plug>VprojAgent
 
+                                                 *g:vproj_agent_cmd*
+By default :VprojAgent runs the first official agent CLI found on PATH:
+claude (npm install -g @anthropic-ai/claude-code), then codex
+(npm install -g @openai/codex). To run another agent, name it:
+  let g:vproj_agent_cmd = 'myagent'               program on PATH
+  let g:vproj_agent_cmd = ['myagent', '--flag']   program and arguments
+If the configured program cannot run, :VprojAgent reports it and runs
+nothing else.
+
 The agent receives the current file context through $VPROJ_AGENT_CTX_FILE,
 the path of a private (0600) file that is deleted when the agent exits.
 Esc in the agent terminal goes to the agent; the split closes when the
