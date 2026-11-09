@@ -10,7 +10,9 @@ vim9script
 #   :VprojOpen    — Open the project pane.
 #   :VprojClose   — Close the project pane.
 #   :VprojRefresh — Refresh the pane contents.
-#   :Copy :Delete :Rename :Move — act on the file selected in the pane.
+#   :VprojCopy :VprojDelete :VprojRename :VprojMove — act on the file
+#   selected in the pane. :Copy :Delete :Rename :Move are short aliases,
+#   defined only when no other plugin (e.g. vim-eunuch) already owns them.
 
 # Load guard
 if exists('g:loaded_vproj')
@@ -31,10 +33,24 @@ command! -bar -nargs=0 VprojRefresh vproj#Refresh()
 command! -bar -nargs=0 VprojDiag    call vproj#PaneDiagnose()
 
 # File operations on the file selected in the pane (file mode only)
-command! -bar -nargs=0 Copy   vproj#CopySelected()
-command! -bar -nargs=0 Delete vproj#DeleteSelected()
-command! -bar -nargs=0 Rename vproj#RenameSelected()
-command! -bar -nargs=0 Move   vproj#MoveSelected()
+command! -bar -nargs=0 VprojCopy   vproj#CopySelected()
+command! -bar -nargs=0 VprojDelete vproj#DeleteSelected()
+command! -bar -nargs=0 VprojRename vproj#RenameSelected()
+command! -bar -nargs=0 VprojMove   vproj#MoveSelected()
+# Short aliases. Never replace another plugin's command of the same name:
+# vim-eunuch's :Delete deletes the current buffer's file, not the pane's.
+if exists(':Copy') != 2
+  command -bar -nargs=0 Copy   vproj#CopySelected()
+endif
+if exists(':Delete') != 2
+  command -bar -nargs=0 Delete vproj#DeleteSelected()
+endif
+if exists(':Rename') != 2
+  command -bar -nargs=0 Rename vproj#RenameSelected()
+endif
+if exists(':Move') != 2
+  command -bar -nargs=0 Move   vproj#MoveSelected()
+endif
 
 # ---------------------------------------------------------------------------
 # Default key mapping: Tab toggles the project pane (temporary mode).

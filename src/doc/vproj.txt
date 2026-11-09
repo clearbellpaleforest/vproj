@@ -48,22 +48,22 @@ manually to ~/.vim/pack/bundle/start/vproj/.
     dimensions, cmdheight, and winmin settings. Useful for
     debugging E36 "Not enough room" errors.
 
-:Copy                                               *vproj-:Copy*
+:VprojCopy  :Copy                                  *:VprojCopy* *vproj-:Copy*
     Copy the file selected in the pane (file mode). The copy goes
     in the same directory under the first unused name of the form
     name_1.ext, name_2.ext, ...
 
-:Delete                                             *vproj-:Delete*
+:VprojDelete  :Delete                              *:VprojDelete* *vproj-:Delete*
     Delete the file selected in the pane (file mode), after a
     confirm prompt that defaults to No. The <Delete> key in the
     pane does the same.
 
-:Rename                                             *vproj-:Rename*
+:VprojRename  :Rename                              *:VprojRename* *vproj-:Rename*
     Rename the file selected in the pane (file mode). Prompts for
     the new name; the file stays in its directory. Refuses a name
     that already exists.
 
-:Move                                               *vproj-:Move*
+:VprojMove  :Move                                  *:VprojMove* *vproj-:Move*
     Move the file selected in the pane (file mode) to another
     directory. Prompts for the directory (with completion).
     Refuses if a file of that name already exists there.
@@ -72,6 +72,11 @@ manually to ~/.vim/pack/bundle/start/vproj/.
     and Move refuse while the file has unsaved changes in a
     buffer. After Rename or Move, windows showing the file follow
     it to the new name.
+
+    The short names :Copy :Delete :Rename :Move are defined only
+    when no other plugin already defines them (vim-eunuch defines
+    all four, for the current buffer's file). The :Vproj names
+    always exist.
 
 ==============================================================================
 3. MODES                                             *vproj-modes*
@@ -352,8 +357,9 @@ exist, vproj matches against the .vproj directory and leaves the
 line unchanged when it saves.
 
 A trailing / on a directory entry is ignored ("src/" is "src"). An
-entry containing * ? or [ is a glob, matched against the path and
-against the last name: "*.swp" excludes every .swp file.
+entry containing * or ? is a glob, matched against the path and
+against the last name: "*.swp" excludes every .swp file. [ and ]
+are ordinary characters, so "[id].tsx" names exactly that file.
 
 ==============================================================================
 AI ASSISTANT                                  *vproj-ai* *vproj-ai-setup*

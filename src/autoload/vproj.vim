@@ -30,6 +30,8 @@ var git_status_map: dict<string> = {}
 # (e.g. ' M' modified unstaged, 'M ' staged, 'MM' both, '??' untracked).
 # Actions need both columns; git_status_map folds them into one display char.
 var git_status_xy: dict<string> = {}
+# Source path of a staged rename or copy, keyed like git_status_xy.
+var git_status_orig: dict<string> = {}
 var git_branch_cache: string = ''
 var git_root_cache: string = ''
 
@@ -460,9 +462,7 @@ export def HandleBufWipeout(): void
   expanded_dirs = {}
   preview_active = false
   preview_bufnr = -1
-  git_status_map = {}
-  git_branch_cache = ''
-  git_root_cache = ''
+  InvalidateGitCache()
   if added_shortmess_s
     set shortmess-=S
     added_shortmess_s = false
@@ -649,6 +649,12 @@ def GetSelectedItem(): dict<any>
   var display_items: list<dict<any>> = ApplyFilter(items)
   if git_filter_active && (current_mode == 'file' || current_mode == 'code')
     display_items = ApplyGitFilter(display_items)
+  endif
+  # The menu (and in code mode the status line) sit above the first item.
+  # Without this guard, on page 2+ ItemIndex() lands on an item of the
+  # previous page.
+  if selected_line < FirstSelectableLine()
+    return {}
   endif
   var idx: number = ItemIndex()
   if idx < 0 || idx >= len(display_items)
@@ -882,8 +888,13 @@ def NavBlockCount(): number
   if git_filter_active && (current_mode == 'file' || current_mode == 'code')
     display_items = ApplyGitFilter(display_items)
   endif
+  return BlocksIn(PageSlice(display_items))
+enddef
+
+# Letter blocks needed for the given visible items (parent entry excluded).
+def BlocksIn(visible: list<dict<any>>): number
   var n: number = 0
-  for item in PageSlice(display_items)
+  for item in visible
     if !get(item, 'is_parent', false)
       n += 1
     endif
@@ -1020,7 +1031,8 @@ export def SwitchMode(key: string): void
   selected_line = FirstSelectableLine()
   # Apply mode-specific width config if set
   var width_var: string = 'vproj_pane_width_' .. mode
-  if has_key(g:, width_var)
+  # 0 (the documented default) means: keep the current width.
+  if get(g:, width_var, 0) isnot 0
     pane_width = min([ConfiguredWidth(width_var, pane_width), SafeMaxWidth()])
     ApplyWidth()
   endif
@@ -1183,6 +1195,11 @@ def Render(): void
   endif
   ComputePaging(display_items)
   var visible = PageSlice(display_items)
+  # A directory change, refresh, delete or filter can leave fewer blocks
+  # than nav_offset; with one block < and > cannot fix it.
+  if nav_offset >= BlocksIn(visible)
+    nav_offset = 0
+  endif
   var lines: list<string> = BuildDisplayLines(visible)
 
   setbufvar(pane_bufnr, '&modifiable', 1)
@@ -1453,10 +1470,11 @@ enddef
 # Parse `git status --porcelain -z` into git_status_xy and git_status_map.
 # -z keeps names unquoted, so spaces, quotes and non-ASCII survive. system()
 # turns each NUL into SOH (0x01). A rename or copy entry is followed by a
-# separate field holding the source path, which is skipped.
+# separate field holding the source path, kept in git_status_orig.
 def LoadGitStatus(): void
   git_status_xy = {}
   git_status_map = {}
+  git_status_orig = {}
   var root: string = GitRoot()
   if empty(root)
     return
@@ -1476,6 +1494,9 @@ def LoadGitStatus(): void
     var xy: string = field[0 : 1]
     var full: string = root .. '/' .. substitute(field[3 : ], '/$', '', '')
     if xy[0] == 'R' || xy[0] == 'C'
+      if i < len(fields)
+        git_status_orig[full] = root .. '/' .. fields[i]
+      endif
       i += 1
     endif
     git_status_xy[full] = xy
@@ -1520,6 +1541,7 @@ enddef
 def InvalidateGitCache(): void
   git_status_map = {}
   git_status_xy = {}
+  git_status_orig = {}
   git_branch_cache = ''
   git_root_cache = ''
 enddef
@@ -1714,10 +1736,21 @@ export def DiscardChanges(): void
     return
   endif
 
-  # Say exactly what will happen; the three cases do different things.
+  # Say exactly what will happen; each case does something different.
+  # A staged rename: restoring only the new path would delete it and leave
+  # the source staged as deleted. Restore both together. A copy's source
+  # is untouched by the copy, so only the new path is restored.
+  var orig: string = xy[0] == "R" ? get(git_status_orig, path, '') : ''
+  var copy_of: string = xy[0] == "C" ? get(git_status_orig, path, '') : ''
   var question: string
   if xy == "??"
     question = "Delete untracked file " .. name .. "?"
+  elseif !empty(orig)
+    question = "Undo rename " .. fnamemodify(orig, ':t') .. " -> " .. name
+      .. " and discard all changes to both?"
+  elseif !empty(copy_of)
+    question = "Delete " .. name .. " (a staged copy of "
+      .. fnamemodify(copy_of, ':t') .. ")?"
   elseif xy[0] == "A"
     question = "Unstage new file " .. name .. "? (the file is kept)"
   else
@@ -1744,6 +1777,14 @@ export def DiscardChanges(): void
       echom "Unstaged: " .. name
     else
       Error("vproj: Failed to unstage " .. name .. ": " .. join(res.lines, " "))
+    endif
+  elseif !empty(orig)
+    res = GitLines("restore --source=HEAD --staged --worktree -- "
+      .. shellescape(orig) .. " " .. shellescape(path))
+    if res.ok
+      echom "Reverted to HEAD: " .. fnamemodify(orig, ':t') .. " (and removed " .. name .. ")"
+    else
+      Error("vproj: Failed to revert " .. name .. ": " .. join(res.lines, " "))
     endif
   else
     res = GitLines("restore --source=HEAD --staged --worktree -- " .. shellescape(path))
@@ -3358,15 +3399,19 @@ def RelPath(full: string): string
   return rel
 enddef
 
-# True when entry names rel. An entry with * ? or [ is a glob, matched
+# True when entry names rel. An entry with * or ? is a glob, matched
 # against the whole relative path and against its last component, so
-# "*.swp" matches "a/b/x.swp".
+# "*.swp" matches "a/b/x.swp". [ is literal: "[id].tsx" and "[slug]" are
+# real file names (Next.js, SvelteKit), not character classes.
 def EntryMatches(entry: string, rel: string): bool
-  if entry =~ '[*?[]'
-    var re: string = glob2regpat(entry)
+  if rel == entry
+    return true
+  endif
+  if entry =~ '[*?]'
+    var re: string = glob2regpat(escape(entry, '['))
     return rel =~ re || fnamemodify(rel, ':t') =~ re
   endif
-  return rel == entry
+  return false
 enddef
 
 # True when rel is the directory entry or lies under it.
@@ -3620,6 +3665,17 @@ def DoToggleInclude(action: string): void
     if inc->index(rel) < 0
       inc->add(rel)
     endif
+  endif
+
+  # An Excluded entry that is a pattern or a parent directory still wins;
+  # writing .vproj would change nothing the user can see.
+  if !do_exclude && IsUnderExcluded(rel)
+    project.included_dirs = snap_inc_dirs
+    project.included_files = snap_inc_files
+    project.excluded_dirs = snap_exc_dirs
+    project.excluded_files = snap_exc_files
+    Error('vproj: ' .. rel .. ' stays excluded by a pattern or parent directory in Excluded — remove that entry first')
+    return
   endif
 
   if !WriteVprojFile()
