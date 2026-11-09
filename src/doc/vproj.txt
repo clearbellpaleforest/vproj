@@ -99,7 +99,9 @@ File Mode  ([F]ile)                                 *vproj-mode-file*
                                                *vproj-filter*
                                                *vproj-grep*
     Filter (|/|) narrows the listing by name pattern. Grep (|*|) runs
-    `grep -rn` and populates the quickfix list for |vproj-mode-qfix|.
+    `git grep` (case-insensitive) over the repository, or over the
+    pane's directory outside a repository, and fills the quickfix
+    list for |vproj-mode-qfix|.
 
 Buf Mode  ([B]uf)                                   *vproj-mode-buf*
     Switch between open buffers. Modified buffers marked with +,
@@ -117,11 +119,16 @@ Code Mode  ([C]ode)                                 *vproj-mode-code*
 
                                                *vproj-git-actions*
     Git actions work in file and code modes via \(bslash) prefix.
-    Stage (|\s|) uses `git add` / `git reset HEAD`. Diff preview
-    (|\d|) opens a vertical split with `git diff`. Discard (|\D|)
-    prompts for confirmation before `git checkout`. Commit (|\c|)
-    prompts for a message. Push (|\p|), pull (|\u|), and branch
-    switch (|\b|) use prompts for target/confirmation.
+    Stage (|\s|) stages worktree changes and untracked files
+    (`git add`); on a file whose changes are only staged it unstages
+    them. Diff preview (|\d|) opens a vertical split with the file's
+    diff (staged, unstaged or both); press q to close it. Discard
+    (|\D|) asks first and says what it will do: delete an untracked
+    file, unstage a newly added file (the file is kept), or revert
+    every staged and unstaged change to HEAD. Commit (|\c|) prompts
+    for a message. Push (|\p|), pull (|\u|), and branch switch (|\b|)
+    use prompts for target/confirmation; push and pull never stop to
+    ask for credentials (they fail instead).
 
                                                *vproj-git-stash*
     Stash (|\z|) pushes current changes with an optional message via
@@ -138,7 +145,8 @@ Qfix Mode  ([Q]fix)                                 *vproj-mode-qfix*
     Displays the Vim quickfix list. Press Enter to open the
     selected entry at the file and line number.
 
-Press Enter on the mode menu line (line 1) to cycle through modes.
+Press <Up> on the first item to reach the mode menu line (line 1),
+then Enter to cycle through modes.
 Press |Shift-F|, |Shift-B|, or |Shift-C| inside the pane to switch
 directly. Press |Q| in temporary mode to switch to qfix; in permanent
 mode to close the pane.
@@ -190,8 +198,8 @@ Actions:
     <F1>                Toggle info column
 
 Quick Nav:                                       *vproj-nav-char*
-    >                   Shift nav indicators forward
-    <                   Shift nav indicators backward
+    >                   Letter the next 26 items (more than 26 shown)
+    <                   Letter the previous 26 items
     |a|–|z|             Jump to item by nav character
 
     Nav characters are the colored single letters on each line.
@@ -225,6 +233,13 @@ Pane Modes:                                      *vproj-pane-modes*
 
     Pressing the alternate toggle key while the pane is open
     transitions between modes without closing the pane.
+
+                                                 *vproj-session*
+Session:
+    When the pane closes, vproj saves its mode, directory, width,
+    info column and git filter to $XDG_CACHE_HOME/vproj/session
+    (~/.cache/vproj/session when unset) and restores them the next
+    time the pane opens. The previous file is kept as session.bak.
 
 ==============================================================================
 5. CONFIGURATION                                   *vproj-config*
@@ -327,7 +342,18 @@ Format: >
     Excluded Files:
     .env
 
-Lines starting with # are comments.
+Lines starting with # before the first list section are comments;
+they are kept when vproj saves the file. Inside a list section a
+leading # is part of the name.
+
+Project Root may be empty, which means the directory holding the
+.vproj file, or relative to that directory. If the root does not
+exist, vproj matches against the .vproj directory and leaves the
+line unchanged when it saves.
+
+A trailing / on a directory entry is ignored ("src/" is "src"). An
+entry containing * ? or [ is a glob, matched against the path and
+against the last name: "*.swp" excludes every .swp file.
 
 ==============================================================================
 AI ASSISTANT                                  *vproj-ai* *vproj-ai-setup*
@@ -357,13 +383,24 @@ Commands ~
 
   :VprojAiPrompt [prompt]      One-shot AI prompt (streams to code or popup)
   <Plug>VprojAiPrompt          Mapping indirection for custom keybindings
+                                                 *:VprojAgent*
+  :VprojAgent                  Open your coding-agent CLI in a terminal split
+  <Plug>VprojAgent             Mapping for :VprojAgent. No default key:
+                               e.g. nmap <Leader>a <Plug>VprojAgent
+
+The agent receives the current file context through $VPROJ_AGENT_CTX_FILE,
+the path of a private (0600) file that is deleted when the agent exits.
+Esc in the agent terminal goes to the agent; the split closes when the
+agent exits.
 
 Usage ~
 
 - Press A in the vproj pane → opens a terminal chat
 - Type your prompt and press Enter
 - The AI streams its response in real time
-- Code mode (default) applies the response to your file at the cursor
+- Code mode (default) inserts the first fenced code block of the response
+  into your file below the cursor, only after you confirm (Esc = No). A
+  response without a fenced block is shown in a popup, never inserted.
 - Question mode (what, how, why, etc.) shows the response in a popup
 - Ctrl-D or /exit to quit the chat
 - Ctrl-C to cancel a streaming response

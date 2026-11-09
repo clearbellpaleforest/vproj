@@ -29,13 +29,9 @@ jobs:
           fi
           echo "All files load without errors"
 
-  smoke:
-    name: Smoke test
+  tests:
+    name: Test suite
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        vim_version: ["v9.0", "v9.1"]
     steps:
       - uses: actions/checkout@v5
 
@@ -45,12 +41,9 @@ jobs:
           sudo apt-get install -y vim-gtk3 2>/dev/null || \
           sudo apt-get install -y vim-nox
 
-      - name: Run smoke tests
+      # run_all.sh isolates HOME/XDG_CACHE_HOME per file and decides pass/fail
+      # by Vim's exit code, so an aborted or hung test fails the job.
+      - name: Run all tests
         run: |
           vim --version | head -n 3
-          vim -N -u NONE -S tests/smoke.vim 2>&1 | tee /tmp/smoke.txt
-          if grep -qE 'FAIL|E[0-9]+:' /tmp/smoke.txt; then
-            echo "Smoke tests failed"
-            exit 1
-          fi
-          echo "Smoke tests passed"
+          bash tests/run_all.sh -v

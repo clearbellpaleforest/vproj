@@ -8,6 +8,7 @@ vim9script
 # A refusal must happen before any prompt, so those cases queue nothing:
 # a prompt reached by mistake reads EOF from stdin and the run fails.
 
+$XDG_CACHE_HOME = tempname()
 set rtp+=src
 runtime! plugin/vproj.vim
 set nomore
@@ -47,14 +48,19 @@ def PaneLists(name: string): bool
   return false
 enddef
 
-# Move the pane selection onto the entry whose line shows `name`.
+# Move the pane selection onto the entry whose line shows `name`, looking
+# on every page when the listing is paged.
 def SelectName(name: string): bool
-  vproj#SelectFirst()
-  for _ in range(60)
-    if PaneCursorText() =~ '\V\<' .. escape(name, '\') .. '\>'
-      return true
-    endif
-    vproj#SelectNext()
+  var pages: number = vproj#IsPagingActive() ? vproj#GetTotalPages() : 1
+  for _p in range(pages)
+    vproj#SelectFirst()
+    for _ in range(60)
+      if PaneCursorText() =~ '\V\<' .. escape(name, '\') .. '\>'
+        return true
+      endif
+      vproj#SelectNext()
+    endfor
+    vproj#NextPage()
   endfor
   return false
 enddef
@@ -205,7 +211,69 @@ test_feedinput("\<C-U>" .. tmpdir .. "/taken.txt\<CR>")
 Move
 Assert(filereadable(tmpdir .. '/bravo.txt') && readfile(tmpdir .. '/taken.txt') == ['taken'], 'Move to a file path refused')
 
-# ── Mode guard ──
+# ── Audit 2026-11: symlinks, buffers, relative Move, selection ──
+writefile(['target'], tmpdir .. '/target.txt')
+system('ln -s target.txt ' .. shellescape(tmpdir .. '/rel.lnk'))
+writefile(['scratch'], tmpdir .. '/src.txt')
+mkdir(tmpdir .. '/real', 'p')
+writefile(['in real'], tmpdir .. '/real/f.txt')
+system('ln -s real ' .. shellescape(tmpdir .. '/lnk'))
+vproj#Refresh()
+
+# Copy of a symlink used to produce another symlink sharing the content
+Assert(SelectName('rel.lnk'), 'select rel.lnk')
+Copy
+Assert(getftype(tmpdir .. '/rel_1.lnk') == 'file', 'Copy of a symlink makes a regular file')
+Assert(readfile(tmpdir .. '/rel_1.lnk') == ['target'], 'Copy of a symlink copies the target content')
+
+# Moving a relative symlink used to leave it dangling and unlisted
+Assert(SelectName('rel.lnk'), 'select rel.lnk again')
+test_feedinput("\<C-U>" .. tmpdir .. "/sub\<CR>")
+Move
+Assert(getftype(tmpdir .. '/rel.lnk') == 'link' && getftype(tmpdir .. '/sub/rel.lnk') == '', 'Move refuses a symlink, nothing moved')
+
+# Rename onto a name held by an unwritten buffer used to redirect the window
+execute 'badd ' .. fnameescape(tmpdir .. '/ghost.txt')
+Assert(SelectName('src.txt'), 'select src.txt')
+test_feedinput("\<C-U>ghost.txt\<CR>")
+Rename
+Assert(filereadable(tmpdir .. '/src.txt') && !filereadable(tmpdir .. '/ghost.txt'), 'Rename onto a buffer-held name refused')
+execute 'bwipeout! ' .. bufnr(tmpdir .. '/ghost.txt')
+
+# A relative Move answer used to resolve against Vim's cwd, not the pane's
+# directory. Entering a subdirectory in the pane does not change the cwd.
+mkdir(tmpdir .. '/deep/inner', 'p')
+writefile(['mv'], tmpdir .. '/deep/mv.txt')
+vproj#Refresh()
+Assert(SelectName('deep'), 'select deep/')
+vproj#SelectCurrent()
+Assert(SelectName('mv.txt'), 'select deep/mv.txt (cwd is still the parent)')
+test_feedinput("\<C-U>inner\<CR>")
+Move
+Assert(filereadable(tmpdir .. '/deep/inner/mv.txt'), 'relative Move answer is relative to the file''s directory')
+vproj#NavigateUp()
+
+# Unsaved changes reached through a symlinked directory used to be missed
+execute 'badd ' .. fnameescape(tmpdir .. '/real/f.txt')
+var real_bnr: number = bufnr(tmpdir .. '/real/f.txt')
+bufload(real_bnr)
+setbufline(real_bnr, 1, 'unsaved')
+vproj#Refresh()
+Assert(SelectName('lnk'), 'select lnk/')
+vproj#SelectCurrent()
+Assert(SelectName('f.txt'), 'select f.txt via lnk/')
+Delete
+Assert(filereadable(tmpdir .. '/real/f.txt'), 'Delete refused for a modified buffer reached via a symlinked dir')
+setbufvar(real_bnr, '&modified', false)
+execute 'bwipeout! ' .. real_bnr
+vproj#NavigateUp()
+
+# After Rename the selection used to stay on the old line (another file)
+Assert(SelectName('Makefile'), 'select Makefile')
+test_feedinput("\<C-U>zz_last\<CR>")
+Rename
+Assert(PaneCursorText() =~ 'zz_last', 'selection follows the renamed file')
+
 vproj#SwitchMode('buf')
 var before: list<string> = sort(readdir(tmpdir))
 Copy

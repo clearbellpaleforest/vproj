@@ -3,8 +3,22 @@ vim9script
 # Integration test: Buf mode — buffers, modification flags, selection
 # Run: vim -N -u NONE -S tests/integration/test_buf_mode.vim
 
-set rtp+=src
+# Hermetic setup (run_all.sh also isolates HOME/XDG_CACHE_HOME/TMPDIR):
+#  - session cache lives in a temp dir, never the real user cache
+#  - cwd is a temp fixture dir, so code-mode +/-/ToggleInclude can never write
+#    the repo's tracked vproj.vproj
+#  - runtimepath is absolute so autoload still resolves after any :cd
+$XDG_CACHE_HOME = tempname()
+execute 'set rtp+=' .. fnameescape(expand('<script>:p:h:h:h') .. '/src')
 runtime! plugin/vproj.vim
+set nomore
+const FIXTURE_DIR: string = tempname()
+mkdir(FIXTURE_DIR .. '/subdir_a', 'p')
+mkdir(FIXTURE_DIR .. '/subdir_b', 'p')
+writefile(['alpha'], FIXTURE_DIR .. '/alpha.txt')
+writefile(['beta'], FIXTURE_DIR .. '/beta.txt')
+writefile(['gamma'], FIXTURE_DIR .. '/gamma.txt')
+execute 'cd' fnameescape(FIXTURE_DIR)
 set nomore
 set shortmess+=A
 
@@ -33,17 +47,9 @@ enddef
 
 echom '=== Buf Mode Integration Tests ==='
 
-# Clean up stale swap files from previous runs
-var test_files = ['/tmp/vproj_test_a.txt', '/tmp/vproj_test_b.txt', '/tmp/vproj_test_c.txt']
-for tf in test_files
-  var swap = '/tmp/.' .. fnamemodify(tf, ':t') .. '.swp'
-  try
-    if filereadable(swap)
-      delete(swap)
-    endif
-  catch
-  endtry
-endfor
+# Test files live in the fresh fixture dir (was fixed /tmp names shared with
+# other test files), so there are no stale swap files to clean up.
+var test_files = [FIXTURE_DIR .. '/vproj_test_a.txt', FIXTURE_DIR .. '/vproj_test_b.txt', FIXTURE_DIR .. '/vproj_test_c.txt']
 
 # ── Setup: open some buffers first ──
 for tf in test_files
@@ -127,5 +133,5 @@ else
   echohl None
   cquit!
 endif
-call delete(expand('~/.cache/vproj/session'))
+call delete($XDG_CACHE_HOME .. '/vproj/session')
 qa!

@@ -3,8 +3,22 @@ vim9script
 # Integration test: Paging — activate paging with many items
 # Run: vim -N -u NONE -S tests/integration/test_paging.vim
 
-set rtp+=src
+# Hermetic setup (run_all.sh also isolates HOME/XDG_CACHE_HOME/TMPDIR):
+#  - session cache lives in a temp dir, never the real user cache
+#  - cwd is a temp fixture dir, so code-mode +/-/ToggleInclude can never write
+#    the repo's tracked vproj.vproj
+#  - runtimepath is absolute so autoload still resolves after any :cd
+$XDG_CACHE_HOME = tempname()
+execute 'set rtp+=' .. fnameescape(expand('<script>:p:h:h:h') .. '/src')
 runtime! plugin/vproj.vim
+set nomore
+const FIXTURE_DIR: string = tempname()
+mkdir(FIXTURE_DIR .. '/subdir_a', 'p')
+mkdir(FIXTURE_DIR .. '/subdir_b', 'p')
+writefile(['alpha'], FIXTURE_DIR .. '/alpha.txt')
+writefile(['beta'], FIXTURE_DIR .. '/beta.txt')
+writefile(['gamma'], FIXTURE_DIR .. '/gamma.txt')
+execute 'cd' fnameescape(FIXTURE_DIR)
 set nomore
 
 var failures: number = 0
@@ -34,7 +48,7 @@ echom '=== Paging Integration Tests ==='
 
 # ── Setup: create temp directory with many files ──
 var saved_cwd: string = getcwd()
-var tmpdir: string = '/tmp/vproj_paging_test'
+var tmpdir: string = tempname() .. '_vproj_paging_test'
 silent! call delete(tmpdir, 'rf')
 mkdir(tmpdir)
 var f: number = 0
@@ -112,5 +126,5 @@ else
   echohl None
   cquit!
 endif
-call delete(expand('~/.cache/vproj/session'))
+call delete($XDG_CACHE_HOME .. '/vproj/session')
 qa!

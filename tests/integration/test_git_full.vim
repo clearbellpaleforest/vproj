@@ -3,8 +3,22 @@ vim9script
 # Integration tests for git features: Diff, Commit, Push, Pull, Branch (Log mode removed)
 # Run: vim -N -u NONE -S tests/integration/test_git_full.vim
 
-set rtp+=src
+# Hermetic setup (run_all.sh also isolates HOME/XDG_CACHE_HOME/TMPDIR):
+#  - session cache lives in a temp dir, never the real user cache
+#  - cwd is a temp fixture dir, so code-mode +/-/ToggleInclude can never write
+#    the repo's tracked vproj.vproj
+#  - runtimepath is absolute so autoload still resolves after any :cd
+$XDG_CACHE_HOME = tempname()
+execute 'set rtp+=' .. fnameescape(expand('<script>:p:h:h:h') .. '/src')
 runtime! plugin/vproj.vim
+set nomore
+const FIXTURE_DIR: string = tempname()
+mkdir(FIXTURE_DIR .. '/subdir_a', 'p')
+mkdir(FIXTURE_DIR .. '/subdir_b', 'p')
+writefile(['alpha'], FIXTURE_DIR .. '/alpha.txt')
+writefile(['beta'], FIXTURE_DIR .. '/beta.txt')
+writefile(['gamma'], FIXTURE_DIR .. '/gamma.txt')
+execute 'cd' fnameescape(FIXTURE_DIR)
 set nomore
 
 var failures: number = 0
@@ -28,7 +42,7 @@ enddef
 # Ensure clean slate
 # ──────────────────────────────────────────────
 vproj#PaneClose()
-call delete(expand('~/.cache/vproj/session'))
+call delete($XDG_CACHE_HOME .. '/vproj/session')
 
 # ──────────────────────────────────────────────
 # SECTION 1: Log mode removed
@@ -126,7 +140,7 @@ echom '--- IsRegularFile Symlink ---'
 
 # IsRegularFile is used by ReadDir (line 2079) to filter directory entries.
 # A symlink to a regular file should pass IsRegularFile and appear in the listing.
-var sl_dir = '/tmp/vproj_symlink_test'
+var sl_dir = tempname() .. '_vproj_symlink_test'
 if isdirectory(sl_dir) | delete(sl_dir, 'rf') | endif
 mkdir(sl_dir)
 writefile(['symlink test content', 'line 2'], sl_dir .. '/real_file.txt')
@@ -153,7 +167,9 @@ Assert(sl_real_found, 'symlink: real_file.txt appears in listing')
 Assert(sl_symlink_found, 'symlink: link_to_file.txt appears in listing (IsRegularFile returned true)')
 
 vproj#PaneClose()
-execute 'cd' getcwd()
+# Leave sl_dir before deleting it (was `cd getcwd()`, a no-op that left the
+# cwd pointing at a deleted directory).
+execute 'cd' fnameescape(FIXTURE_DIR)
 delete(sl_dir, 'rf')
 
 # Reopen pane for subsequent sections
@@ -361,7 +377,7 @@ vproj#SwitchMode('file')
 
 unlet! g:vproj_pane_width_log
 vproj#PaneClose()
-call delete(expand('~/.cache/vproj/session'))
+call delete($XDG_CACHE_HOME .. '/vproj/session')
 
 echom ''
 if failures == 0

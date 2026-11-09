@@ -112,17 +112,24 @@ src/
     └── tags                    # Help tag index
 docs/                          # Per the 7-doc structure above
 tests/
+├── run_all.sh
 ├── unit/
-│   └── test_first_selectable.vim
+│   ├── test_first_selectable.vim
+│   ├── test_ai.vim
+│   └── test_agent.vim
 ├── integration/
 │   ├── test_git_mode_full.vim
 │   ├── test_buf_mode.vim
 │   ├── test_paging.vim
+│   ├── test_pane_lifecycle.vim
 │   ├── test_qfix_mode.vim
 │   ├── test_git_full.vim
 │   ├── test_special_chars.vim
-│   └── test_file_ops.vim
+│   ├── test_file_ops.vim
+│   └── test_audit_2026_11.vim
 ├── smoke.vim
+├── concept_audit.vim
+├── audit_fixes.vim
 ├── final.vim
 ├── regression.vim
 ├── coverage.vim
@@ -208,7 +215,7 @@ closes the pane in temporary mode and is a no-op in permanent mode.
 | `vproj#PaneToggle()` | Toggle pane open/closed |
 | `vproj#PaneOpen()` | Open pane |
 | `vproj#PaneClose()` | Close pane |
-| `vproj#SwitchMode(key)` | Switch to 'file', 'buf', 'code', 'qfix', or 'log' |
+| `vproj#SwitchMode(key)` | Switch to 'file', 'buf', 'code', or 'qfix' |
 | `vproj#SelectNext()` / `vproj#SelectPrev()` | Move selection |
 | `vproj#SelectCurrent()` | Activate selected item |
 | `vproj#PaneGrow()` / `vproj#PaneShrink()` | Width +/- 1 |
@@ -295,7 +302,7 @@ and backslash-prefixed git commands.
 | Shift-R | Refresh pane |
 | Shift-P | Toggle file preview split |
 | Shift-X | Close selected buffer (buf mode only) |
-| Shift-Q | Close pane |
+| Shift-Q | Qfix mode (temporary pane) / close pane (permanent pane) |
 | Shift-T | Toggle tree view (file mode) |
 | Tab | Toggle pane (temporary mode) |
 | Shift-Tab | Toggle pane (permanent mode) |
@@ -324,7 +331,8 @@ and backslash-prefixed git commands.
 
 ## Commands
 
-`:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`
+`:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`, `:VprojDiag`,
+`:VprojAiPrompt`, `:VprojAgent` (no default key; `<Plug>VprojAgent`)
 
 File operations on the file selected in the pane (file mode only):
 `:Copy`, `:Delete`, `:Rename`, `:Move`
@@ -359,17 +367,24 @@ Excluded Files:
 
 ```
 tests/
+├── run_all.sh                      # Runs every test hermetically; exit code decides
 ├── unit/
-│   └── test_first_selectable.vim   # FirstSelectableLine mode-awareness
+│   ├── test_first_selectable.vim   # FirstSelectableLine mode-awareness
+│   ├── test_ai.vim                 # AI subsystem (fake curl, no network)
+│   └── test_agent.vim              # Agent terminal (fake agent CLI)
 ├── integration/
 │   ├── test_git_mode_full.vim     # Code mode layout, mode switching
+│   ├── test_pane_lifecycle.vim     # Preview, tree view, permanent mode, toggles
 │   ├── test_buf_mode.vim           # Buf mode with real buffers
 │   ├── test_paging.vim             # Paging with 60-item directory
 │   ├── test_qfix_mode.vim          # Qfix mode display, jump-to-entry, empty state
 │   ├── test_git_full.vim           # Git features: diff, blame, discard, symlink guards
 │   ├── test_special_chars.vim      # Special characters in filenames
-│   └── test_file_ops.vim           # :Copy :Delete :Rename :Move, Delete key
+│   ├── test_file_ops.vim           # :Copy :Delete :Rename :Move, Delete key
+│   └── test_audit_2026_11.vim      # Regressions from the 2026-11 audit
 ├── smoke.vim                       # Basic open/close
+├── concept_audit.vim               # Mapping table vs the concept
+├── audit_fixes.vim                 # Earlier audit fix verification
 ├── final.vim                       # Audit fix verification
 ├── regression.vim                  # Regression checks
 ├── coverage.vim                    # Comprehensive API coverage
@@ -381,7 +396,15 @@ tests/
 └── test_helpers.vim                # Shared helpers (legacy Vimscript, unused)
 ```
 
-Run all: `vim -N -u NONE -S tests/<test_file>.vim`
+Run all: `bash tests/run_all.sh` (`-v` prints failing lines). Each file runs
+with its own temporary HOME and XDG_CACHE_HOME, and passes only on exit code 0:
+a script that aborts falls through to `-c 'cquit!'` and fails. One file:
+`vim -N -u NONE -i NONE -S tests/<file>.vim -c 'cquit!'`.
+
+Every test must be hermetic: set `$XDG_CACHE_HOME = tempname()` before
+loading the plugin, and work in a temp fixture directory, never the repo
+(code mode writes the .vproj it finds). Answer prompts with `test_feedinput()`
+queued before the call; set `ttimeout ttimeoutlen=0` if you feed `<Esc>`.
 
 ## Vim9Script Notes
 

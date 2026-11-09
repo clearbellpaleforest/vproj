@@ -1,20 +1,42 @@
 #!/bin/bash
 # vproj-ai-chat — Terminal-based AI chat for vproj_ai
-# Run by Vim :terminal. Reads context from $VPROJ_AI_TMPFILE env var.
+# Run by Vim :terminal (vproj#ai#AiTerminalChat). Pure bash + curl; no jq.
+#
+# Inputs (environment):
+#   VPROJ_AI_KEYFILE  file holding the API key; read once, then deleted
+#   VPROJ_AI_TMPFILE  file holding the system message as one JSON string
+#                     literal (written by Vim); read once, deleted on exit
+#   VPROJ_AI_API_URL  chat-completions endpoint
+#   VPROJ_AI_MODEL    model name
+#
 # Loops: read prompt → curl SSE → stream response → repeat.
+# The key and the request body go to curl through 0600 temp files
+# (-H @file, --data-binary @file), never through argv.
 set -euo pipefail
+umask 077
 
-REQUEST_FILE="${VPROJ_AI_TMPFILE:-/dev/null}"
-if [ -n "${VPROJ_AI_TMPFILE:-}" ] && [ -f "$REQUEST_FILE" ]; then
-  trap 'rm -f "$REQUEST_FILE"' EXIT
-fi
+REQUEST_FILE="${VPROJ_AI_TMPFILE:-}"
+AUTH_HDR=""
+BODY_FILE=""
+CURL_ERRORS=""
+CURL_EXIT_FILE=""
+
+cleanup() {
+  local f
+  for f in "$AUTH_HDR" "$BODY_FILE" "$CURL_ERRORS" "$CURL_EXIT_FILE" "$REQUEST_FILE"; do
+    if [ -n "$f" ]; then
+      rm -f -- "$f"
+    fi
+  done
+}
+trap cleanup EXIT
+
 # Read API key from temp file (never in /proc/pid/environ or cmdline).
 # The file is deleted immediately after reading.
+API_KEY=""
 if [ -n "${VPROJ_AI_KEYFILE:-}" ] && [ -f "$VPROJ_AI_KEYFILE" ]; then
-  API_KEY=$(cat "$VPROJ_AI_KEYFILE")
-  rm -f "$VPROJ_AI_KEYFILE"
-else
-  API_KEY=""
+  API_KEY=$(<"$VPROJ_AI_KEYFILE")
+  rm -f -- "$VPROJ_AI_KEYFILE"
 fi
 API_URL="${VPROJ_AI_API_URL:-https://api.deepseek.com/v1/chat/completions}"
 MODEL="${VPROJ_AI_MODEL:-deepseek-chat}"
@@ -25,7 +47,9 @@ if ! command -v curl >/dev/null 2>&1; then
 fi
 
 if [ -z "$API_KEY" ]; then
-  echo "vproj-ai: No API key. Set g:vproj_ai_api_key or \$VPROJ_AI_API_KEY."
+  echo "vproj-ai: no API key (VPROJ_AI_KEYFILE missing or empty)."
+  echo "Start the chat from Vim (A in the vproj pane) with g:vproj_ai_api_key,"
+  echo "\$DEEPSEEK_API_KEY or \$OPENAI_API_KEY set."
   exit 1
 fi
 
@@ -62,84 +86,135 @@ if [ -n "${VPROJ_AI_TEST_FAIL:-}" ]; then
   esac
 fi
 
-# ── JSON string escaper (no external deps) ──
+# ── JSON string escaper (pure bash, no forks) ──
+# Sets JSON_OUT to the JSON string literal for $1, quotes included.
 json_escape() {
-  local s="$1"
-  s="${s//\\/\\\\}"
-  s="${s//\"/\\\"}"
-  s="${s//$'\b'/\\b}"
-  s="${s//$'\f'/\\f}"
-  s="${s//$'\n'/\\n}"
-  s="${s//$'\r'/\\r}"
-  s="${s//$'\t'/\\t}"
-  # Escape remaining control characters U+0000-U+001F not already handled
-  local escaped=""
-  local j c ord
-  for (( j=0; j<${#s}; j++ )); do
-    c="${s:$j:1}"
-    ord=$(printf '%d' "'$c" 2>/dev/null) || ord=0
-    if [ "$ord" -lt 32 ] && [ "$ord" -ne 8 ] && [ "$ord" -ne 9 ] && [ "$ord" -ne 10 ] && [ "$ord" -ne 12 ] && [ "$ord" -ne 13 ]; then
-      escaped+="$(printf '\\u%04X' "$ord")"
-    else
-      escaped+="$c"
+  local s="$1" i hex ch rep
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\r'/\\r}
+  s=${s//$'\t'/\\t}
+  s=${s//$'\b'/\\b}
+  s=${s//$'\f'/\\f}
+  # Remaining control characters U+0001-U+001F (bash strings hold no NUL).
+  for (( i = 1; i < 32; i++ )); do
+    printf -v hex '%02x' "$i"
+    # shellcheck disable=SC2059 # format is a single \xHH escape built above
+    printf -v ch "\\x$hex"
+    if [[ "$s" == *"$ch"* ]]; then
+      printf -v rep '\\u%04x' "$i"
+      s=${s//"$ch"/"$rep"}
     fi
   done
-  printf '"%s"' "$escaped"
+  JSON_OUT="\"$s\""
 }
 
-# ── Extract content delta from SSE JSON line (pure bash) ──
+# ── UTF-8 encoder (pure bash) ──
+# Sets UTF8_OUT to the UTF-8 bytes of code point $1. Code points that are
+# not scalar values (NUL, lone surrogates, > U+10FFFF) become U+FFFD.
+utf8_encode() {
+  local cp=$1 fmt
+  if (( cp == 0 || (cp >= 0xD800 && cp <= 0xDFFF) || cp > 0x10FFFF )); then
+    cp=0xFFFD
+  fi
+  if (( cp < 0x80 )); then
+    printf -v fmt '\\x%02x' "$cp"
+  elif (( cp < 0x800 )); then
+    printf -v fmt '\\x%02x\\x%02x' $(( 0xC0 | cp >> 6 )) $(( 0x80 | (cp & 0x3F) ))
+  elif (( cp < 0x10000 )); then
+    printf -v fmt '\\x%02x\\x%02x\\x%02x' $(( 0xE0 | cp >> 12 )) \
+      $(( 0x80 | ((cp >> 6) & 0x3F) )) $(( 0x80 | (cp & 0x3F) ))
+  else
+    printf -v fmt '\\x%02x\\x%02x\\x%02x\\x%02x' $(( 0xF0 | cp >> 18 )) \
+      $(( 0x80 | ((cp >> 12) & 0x3F) )) $(( 0x80 | ((cp >> 6) & 0x3F) )) $(( 0x80 | (cp & 0x3F) ))
+  fi
+  # shellcheck disable=SC2059 # fmt holds only \xHH escapes built above
+  printf -v UTF8_OUT "$fmt"
+}
+
+# ── Extract content delta from one SSE JSON payload (pure bash) ──
+# Sets DELTA to the decoded value of the first "content" string field,
+# or to "" when there is none (e.g. "content":null).
 extract_delta() {
-  local data="$1"
-  local content="${data#*\"content\":\"}"
-  if [ "$content" = "$data" ]; then
-    return
+  local data="$1" content hex lo cp
+  DELTA=""
+  if ! [[ "$data" =~ \"content\":[[:space:]]*\" ]]; then
+    return 0
   fi
-  local result=""
-  local i=0
-  local len=${#content}
-  while [ $i -lt $len ]; do
-    local c="${content:$i:1}"
-    if [ "$c" = '\' ] && [ $((i + 1)) -lt $len ]; then
-      local next="${content:$((i + 1)):1}"
-      case "$next" in
-        '"') result+='"'; i=$((i + 2)) ;;
-        '\') result+='\'; i=$((i + 2)) ;;
-        'n') result+=$'\n'; i=$((i + 2)) ;;
-        't') result+=$'\t'; i=$((i + 2)) ;;
-        'r') result+=$'\r'; i=$((i + 2)) ;;
-        '/') result+='/'; i=$((i + 2)) ;;
-        'b') result+=$'\b'; i=$((i + 2)) ;;
-        'f') result+=$'\f'; i=$((i + 2)) ;;
-        'u') result+="${content:$i:6}"; i=$((i + 6)) ;;
-        *)   result+="$c$next"; i=$((i + 2)) ;;
-      esac
-    elif [ "$c" = '"' ]; then
+  content=${data#*"${BASH_REMATCH[0]}"}
+  local i=0 len=${#content} c next
+  while (( i < len )); do
+    c=${content:i:1}
+    if [ "$c" = '"' ]; then
       break
-    else
-      result+="$c"
-      i=$((i + 1))
     fi
+    if [ "$c" != "\\" ] || (( i + 1 >= len )); then
+      DELTA+=$c
+      i=$(( i + 1 ))
+      continue
+    fi
+    next=${content:i+1:1}
+    case "$next" in
+      '"') DELTA+='"'; i=$(( i + 2 )) ;;
+      "\\") DELTA+="\\"; i=$(( i + 2 )) ;;
+      '/') DELTA+='/'; i=$(( i + 2 )) ;;
+      'n') DELTA+=$'\n'; i=$(( i + 2 )) ;;
+      't') DELTA+=$'\t'; i=$(( i + 2 )) ;;
+      'r') DELTA+=$'\r'; i=$(( i + 2 )) ;;
+      'b') DELTA+=$'\b'; i=$(( i + 2 )) ;;
+      'f') DELTA+=$'\f'; i=$(( i + 2 )) ;;
+      'u')
+        hex=${content:i+2:4}
+        if ! [[ "$hex" =~ ^[0-9a-fA-F]{4}$ ]]; then
+          DELTA+="$c$next"
+          i=$(( i + 2 ))
+          continue
+        fi
+        cp=$(( 16#$hex ))
+        i=$(( i + 6 ))
+        # UTF-16 surrogate pair: \uD8xx\uDCxx
+        if (( cp >= 0xD800 && cp <= 0xDBFF )) && [ "${content:i:2}" = '\u' ]; then
+          lo=${content:i+2:4}
+          if [[ "$lo" =~ ^[dD][c-fC-F][0-9a-fA-F]{2}$ ]]; then
+            cp=$(( 0x10000 + ((cp - 0xD800) << 10) + (16#$lo - 0xDC00) ))
+            i=$(( i + 6 ))
+          fi
+        fi
+        utf8_encode "$cp"
+        DELTA+=$UTF8_OUT
+        ;;
+      *) DELTA+="$c$next"; i=$(( i + 2 )) ;;
+    esac
   done
-  printf '%s' "$result"
 }
 
-# ── Build system prompt from context file ──
-SYSTEM_TEXT="You are a coding assistant embedded in Vim (vproj_ai)."
-if [ -s "$REQUEST_FILE" ]; then
-  CTX_FILE=$(grep -o '"file":"[^"]*"' "$REQUEST_FILE" 2>/dev/null | head -1 | sed 's/"file":"//;s/"$//' || true)
-  CTX_FT=$(grep -o '"filetype":"[^"]*"' "$REQUEST_FILE" 2>/dev/null | head -1 | sed 's/"filetype":"//;s/"$//' || true)
-  CTX_MODE=$(grep -o '"mode":"[^"]*"' "$REQUEST_FILE" 2>/dev/null | head -1 | sed 's/"mode":"//;s/"$//' || true)
-  if [ -n "$CTX_FILE" ]; then
-    SYSTEM_TEXT+=" The user is editing $(basename "$CTX_FILE")"
-    [ -n "$CTX_FT" ] && SYSTEM_TEXT+=" ($CTX_FT)"
-    SYSTEM_TEXT+="."
+# ── System message (JSON string literal written by Vim) ──
+SYSTEM_JSON=""
+if [ -n "$REQUEST_FILE" ] && [ -s "$REQUEST_FILE" ]; then
+  SYSTEM_JSON=$(<"$REQUEST_FILE")
+  # Must be exactly one JSON string literal on one line.
+  if [[ "$SYSTEM_JSON" != \"*\" || "$SYSTEM_JSON" == *$'\n'* ]]; then
+    SYSTEM_JSON=""
   fi
-  [ -n "$CTX_MODE" ] && SYSTEM_TEXT+=" Current mode: $CTX_MODE."
 fi
-SYSTEM_TEXT+=" Be concise. Wrap code in \`\`\` fences with a language tag."
+if [ -z "$SYSTEM_JSON" ]; then
+  json_escape "You are a coding assistant embedded in Vim (vproj_ai). Be concise. Wrap code in \`\`\` fences with a language tag."
+  SYSTEM_JSON=$JSON_OUT
+fi
 
-# ── Conversation history (JSON message array) ──
-MESSAGES="[{\"role\":\"system\",\"content\":$(json_escape "$SYSTEM_TEXT")}"
+json_escape "$MODEL"
+MODEL_JSON=$JSON_OUT
+
+# ── Temp files: created once (0600 via umask), removed by the EXIT trap ──
+AUTH_HDR=$(mktemp)
+BODY_FILE=$(mktemp)
+CURL_ERRORS=$(mktemp)
+CURL_EXIT_FILE=$(mktemp)
+printf 'Authorization: Bearer %s' "$API_KEY" > "$AUTH_HDR"
+
+# ── Conversation history (JSON message array, closing ] added per request) ──
+MESSAGES="[{\"role\":\"system\",\"content\":$SYSTEM_JSON}"
 
 echo "╭─ vproj_ai chat ──────────────────────────────╮"
 echo "│ model: $MODEL"
@@ -163,65 +238,71 @@ while true; do
   fi
 
   # Add user message to history
-  MESSAGES="${MESSAGES},{\"role\":\"user\",\"content\":$(json_escape "$PROMPT")}"
+  json_escape "$PROMPT"
+  MESSAGES+=",{\"role\":\"user\",\"content\":$JSON_OUT}"
 
   echo ""
 
   # ── Stream response from API ──
   FULL_RESPONSE=""
   RAW_RESPONSE=""
-  CURL_ERRORS=$(mktemp) || CURL_ERRORS="/tmp/vproj-ai-curl-errors.$$"
-  CURL_EXIT_FILE=$(mktemp) || CURL_EXIT_FILE="/tmp/vproj-ai-curl-exit.$$"
+  : > "$CURL_ERRORS"
+  : > "$CURL_EXIT_FILE"
   if [ "${VPROJ_AI_TEST:-0}" = "1" ]; then
     # ── Test mode ──
     echo "[test echo] $PROMPT"
     FULL_RESPONSE="[test echo] $PROMPT"
   else
+    printf '{"model":%s,"messages":%s],"stream":true}' "$MODEL_JSON" "$MESSAGES" > "$BODY_FILE"
     while IFS= read -r line; do
+      line=${line%$'\r'}
       RAW_RESPONSE+="$line"$'\n'
       if [[ "$line" =~ ^data:[[:space:]]*(.*) ]]; then
         data="${BASH_REMATCH[1]}"
         if [[ "$data" == "[DONE]"* ]]; then
           break
         fi
-        content=$(extract_delta "$data")
-        if [ -n "$content" ]; then
-          printf "%s" "$content"
-          FULL_RESPONSE+="$content"
+        extract_delta "$data"
+        if [ -n "$DELTA" ]; then
+          printf "%s" "$DELTA"
+          FULL_RESPONSE+="$DELTA"
         fi
       fi
-    AUTH_HDR=$(mktemp) || AUTH_HDR="/tmp/vproj-ai-auth.$$"
-    printf 'Authorization: Bearer %s' "$API_KEY" > "$AUTH_HDR"
-    done < <(curl -sS --no-buffer \
-      --connect-timeout 10 -m 120 \
-      -H "Content-Type: application/json" \
-      -H "@$AUTH_HDR" \
-      -d "{\"model\":\"$MODEL\",\"messages\":$MESSAGES],\"stream\":true}" \
-      "$API_URL" 2>"$CURL_ERRORS"; echo $? > "$CURL_EXIT_FILE")
-    rm -f "$AUTH_HDR"
+    done < <(
+      rc=0
+      curl -sS --no-buffer \
+        --connect-timeout 10 -m 120 \
+        -H "Content-Type: application/json" \
+        -H "@$AUTH_HDR" \
+        --data-binary "@$BODY_FILE" \
+        "$API_URL" 2>"$CURL_ERRORS" || rc=$?
+      echo "$rc" > "$CURL_EXIT_FILE"
+    )
+    # Let curl finish so its exit status is in CURL_EXIT_FILE.
+    wait "$!" 2>/dev/null || true
   fi
 
   echo ""
   echo ""
 
   # Read curl exit code
-  CURL_EXIT=0
-  [ -f "$CURL_EXIT_FILE" ] && CURL_EXIT=$(cat "$CURL_EXIT_FILE" 2>/dev/null || echo 0)
+  CURL_EXIT=$(<"$CURL_EXIT_FILE")
+  CURL_EXIT=${CURL_EXIT:-0}
 
   # Show curl errors if any
   if [ -s "$CURL_ERRORS" ]; then
     printf '\033[31m[curl error (exit %s): %s]\033[0m\n' "$CURL_EXIT" "$(tr '\n' ' ' < "$CURL_ERRORS")"
   fi
-  rm -f "$CURL_ERRORS" "$CURL_EXIT_FILE"
 
   # Add assistant response to conversation history
   if [ -n "$FULL_RESPONSE" ]; then
-    MESSAGES="${MESSAGES},{\"role\":\"assistant\",\"content\":$(json_escape "$FULL_RESPONSE")}"
+    json_escape "$FULL_RESPONSE"
+    MESSAGES+=",{\"role\":\"assistant\",\"content\":$JSON_OUT}"
   else
     # Show raw response to help diagnose the issue
     if [ -n "$RAW_RESPONSE" ]; then
       printf '\033[31m[API returned non-SSE response (curl exit %s, endpoint %s):]\033[0m\n' "$CURL_EXIT" "$API_URL"
-      echo "$RAW_RESPONSE" | head -20
+      printf '%s' "$RAW_RESPONSE" | head -20 || true
     else
       printf '\033[31m[no response — curl exit %s, endpoint: %s, model: %s]\033[0m\n' "$CURL_EXIT" "$API_URL" "$MODEL"
     fi

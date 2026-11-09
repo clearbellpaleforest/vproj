@@ -56,11 +56,11 @@ endif
 command! -bar -nargs=? VprojAiPrompt call vproj#ai#AiPrompt(<q-args>)
 nnoremap <silent> <Plug>VprojAiPrompt :VprojAiPrompt<CR>
 
-nnoremap <silent> <Plug>VprojAgent :call vproj#agent#AgentOpen()<CR>
-
-if !hasmapto('<Plug>VprojAgent', 'n')
-  nmap <S-A> <Plug>VprojAgent
-endif
+# No default key: <S-A> is the same key as A (append at end of line), so a
+# global default would replace a core Vim command in every buffer. Map
+# <Plug>VprojAgent yourself, e.g. nmap <Leader>a <Plug>VprojAgent
+command! -bar -nargs=0 VprojAgent call vproj#agent#AgentOpen()
+nnoremap <silent> <Plug>VprojAgent :VprojAgent<CR>
 
 nnoremap <silent> <Plug>VprojF1 :call vproj#HandleF1()<CR>
 

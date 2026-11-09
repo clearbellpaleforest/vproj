@@ -3,8 +3,22 @@ vim9script
 # Integration: pane lifecycle — preview, tree view, permanent mode
 # Run: vim -N -u NONE -S tests/integration/test_pane_lifecycle.vim
 
-set rtp+=src
+# Hermetic setup (run_all.sh also isolates HOME/XDG_CACHE_HOME/TMPDIR):
+#  - session cache lives in a temp dir, never the real user cache
+#  - cwd is a temp fixture dir, so code-mode +/-/ToggleInclude can never write
+#    the repo's tracked vproj.vproj
+#  - runtimepath is absolute so autoload still resolves after any :cd
+$XDG_CACHE_HOME = tempname()
+execute 'set rtp+=' .. fnameescape(expand('<script>:p:h:h:h') .. '/src')
 runtime! plugin/vproj.vim
+set nomore
+const FIXTURE_DIR: string = tempname()
+mkdir(FIXTURE_DIR .. '/subdir_a', 'p')
+mkdir(FIXTURE_DIR .. '/subdir_b', 'p')
+writefile(['alpha'], FIXTURE_DIR .. '/alpha.txt')
+writefile(['beta'], FIXTURE_DIR .. '/beta.txt')
+writefile(['gamma'], FIXTURE_DIR .. '/gamma.txt')
+execute 'cd' fnameescape(FIXTURE_DIR)
 set nomore
 
 var failures: number = 0
@@ -40,7 +54,7 @@ echom '--- Preview mode toggle ---'
 Setup()
 
 # Create a test file for preview
-writefile(['line one', 'line two', 'line three'], '/tmp/vproj_preview_test.txt')
+writefile(['line one', 'line two', 'line three'], FIXTURE_DIR .. '/vproj_preview_test.txt')
 
 vproj#PaneOpen()
 vproj#SwitchMode('file')
@@ -54,7 +68,7 @@ vproj#TogglePreview()
 Assert(vproj#IsPaneVisible(), 'preview: pane stays visible after toggle')
 
 vproj#PaneClose()
-call delete('/tmp/vproj_preview_test.txt')
+call delete(FIXTURE_DIR .. '/vproj_preview_test.txt')
 
 # ══════════════════════════════════════════════════
 # 2. Tree view — basic toggle in file mode

@@ -3,8 +3,25 @@ vim9script
 # Gap coverage tests — behaviors not exercised by existing test suites
 # Run: vim -N -u NONE -S tests/gaps.vim
 
-set rtp+=src
+# Hermetic setup (run_all.sh also isolates HOME/XDG_CACHE_HOME/TMPDIR):
+#  - session cache lives in a temp dir, never the real user cache
+#  - cwd is a temp fixture dir, so code-mode +/-/ToggleInclude can never write
+#    the repo's tracked vproj.vproj
+#  - runtimepath is absolute so autoload still resolves after any :cd
+$XDG_CACHE_HOME = tempname()
+execute 'set rtp+=' .. fnameescape(expand('<script>:p:h:h') .. '/src')
 runtime! plugin/vproj.vim
+set nomore
+const FIXTURE_DIR: string = tempname()
+mkdir(FIXTURE_DIR .. '/subdir_a', 'p')
+mkdir(FIXTURE_DIR .. '/subdir_b', 'p')
+writefile(['alpha'], FIXTURE_DIR .. '/alpha.txt')
+writefile(['beta'], FIXTURE_DIR .. '/beta.txt')
+writefile(['gamma'], FIXTURE_DIR .. '/gamma.txt')
+execute 'cd' fnameescape(FIXTURE_DIR)
+# Scratch area for this file's own temp dirs/files (was hard-coded /tmp/vproj_*).
+const GTMP: string = tempname()
+mkdir(GTMP, 'p')
 set nomore
 
 var failures: number = 0
@@ -103,7 +120,9 @@ var qline3 = PaneLine(3)
 Assert(qline3 =~ 'no quickfix', 'qfix empty: placeholder message shown')
 
 # Populate qflist and verify entries
-var qfix_tmp = '/tmp/vproj_qfix_gaps'
+# Under the cwd so qfix shows the short relative path (long absolute temp
+# paths are truncated at the pane width and 'x.txt' would not be visible).
+var qfix_tmp = FIXTURE_DIR .. '/vproj_qfix_gaps'
 if isdirectory(qfix_tmp) | delete(qfix_tmp, 'rf') | endif
 mkdir(qfix_tmp)
 writefile(['aaa', 'bbb'], qfix_tmp .. '/x.txt')
@@ -150,19 +169,54 @@ Assert(pane_visible_after_cd, 'PaneOpen after cd /tmp works')
 echom '--- Paging + Nav combination ---'
 Setup()
 
-# Navigate to a directory with many entries to trigger paging
+# nav_offset is a block number: block k letters items 26k..26k+25 of the
+# current page. Shifting wraps modulo the block count and is a no-op when
+# <= 26 items are visible. Use deterministic fixtures, not whatever /tmp holds.
+var nav_saved_cwd: string = getcwd()
+var nav_saved_lines: number = &lines
+vproj#PaneClose()
+
+# <= 26 visible items (the 5-item fixture): shifting is a no-op
+execute 'cd' fnameescape(FIXTURE_DIR)
+vproj#PaneOpen()
 vproj#SwitchMode('file')
-execute 'cd' getcwd()
-
-# Shift nav forward then press a nav char
 vproj#ShiftNavForward()
-Assert(vproj#GetNavOffset() > 0, 'ShiftNavForward advances offset')
-vproj#SelectByNavChar('a')
-Assert(vproj#IsPaneVisible(), 'SelectByNavChar(a) after ShiftNavForward: pane visible, cursor on item')
+Assert(vproj#GetNavOffset() == 0, 'ShiftNavForward with <= 26 items: no-op, offset stays 0')
+vproj#ShiftNavBackward()
+Assert(vproj#GetNavOffset() == 0, 'ShiftNavBackward with <= 26 items: no-op, offset stays 0')
+vproj#PaneClose()
 
-# Shift nav backward
+# 40 items on one page (tall window, no paging): two blocks
+const NAV_DIR: string = GTMP .. '/vproj_gap_nav'
+mkdir(NAV_DIR, 'p')
+for nav_i in range(40)
+  writefile([''], printf('%s/f%02d.txt', NAV_DIR, nav_i))
+endfor
+&lines = 80
+execute 'cd' fnameescape(NAV_DIR)
+vproj#PaneOpen()
+vproj#SwitchMode('file')
+Assert(!vproj#IsPagingActive(), 'nav fixture: 40 items fit on one page with lines=80')
+Assert(vproj#GetNavOffset() == 0, 'nav fixture: offset starts at block 0')
+vproj#ShiftNavForward()
+Assert(vproj#GetNavOffset() == 1, 'ShiftNavForward with 40 items: block 0 -> 1')
+vproj#ShiftNavForward()
+Assert(vproj#GetNavOffset() == 0, 'ShiftNavForward wraps: block 1 -> 0 (2 blocks)')
+vproj#ShiftNavBackward()
+Assert(vproj#GetNavOffset() == 1, 'ShiftNavBackward wraps: block 0 -> 1')
 vproj#ShiftNavBackward()
 Assert(vproj#GetNavOffset() == 0, 'ShiftNavBackward returns to 0')
+vproj#ShiftNavForward()
+# Block 1 letters items 26..39: 'a' is item 26 = f26.txt (the parent '..'
+# entry carries no letter). In temporary mode opening a file closes the pane.
+vproj#SelectByNavChar('a')
+Assert(fnamemodify(bufname('%'), ':t') == 'f26.txt',
+      'SelectByNavChar(a) in block 1 opens f26.txt (got ' .. fnamemodify(bufname('%'), ':t') .. ')')
+vproj#PaneClose()
+&lines = nav_saved_lines
+execute 'cd' fnameescape(nav_saved_cwd)
+vproj#PaneOpen()
+vproj#SwitchMode('file')
 
 # SelectByNavChar with a char on second page (mapped to position that exists)
 vproj#SelectByNavChar('B')
@@ -243,7 +297,7 @@ echom '--- Code mode with .vproj file ---'
 vproj#PaneClose()
 
 # Write a test .vproj file in a temp directory
-var tmpdir = '/tmp/vproj_test_gaps'
+var tmpdir = GTMP .. '/vproj_test_gaps'
 if isdirectory(tmpdir)
   delete(tmpdir, 'rf')
 endif
@@ -268,8 +322,8 @@ var vproj_content = [
 ]
 writefile(vproj_content, tmpdir .. '/.vproj')
 
-	# Clear stale session to avoid inherited dir=/tmp
-	delete(expand('~/.cache/vproj/session'))
+	# Clear stale session to avoid inherited dir
+	delete($XDG_CACHE_HOME .. '/vproj/session')
 	execute 'cd' tmpdir
 	vproj#PaneOpen()
 vproj#SwitchMode('code')
@@ -521,9 +575,9 @@ echom '--- CloseBuffer functional ---'
 vproj#PaneClose()
 
 # Open real buffers
-silent! edit! /tmp/vproj_gap_buf_a.txt
-silent! edit! /tmp/vproj_gap_buf_b.txt
-silent! edit! /tmp/vproj_gap_buf_c.txt
+execute 'silent! edit!' fnameescape(GTMP .. '/vproj_gap_buf_a.txt')
+execute 'silent! edit!' fnameescape(GTMP .. '/vproj_gap_buf_b.txt')
+execute 'silent! edit!' fnameescape(GTMP .. '/vproj_gap_buf_c.txt')
 
 vproj#PaneOpen()
 vproj#SwitchMode('buf')
@@ -539,9 +593,9 @@ endtry
 vproj#PaneClose()
 
 # Cleanup
-silent! bdelete! /tmp/vproj_gap_buf_a.txt
-silent! bdelete! /tmp/vproj_gap_buf_b.txt
-silent! bdelete! /tmp/vproj_gap_buf_c.txt
+execute 'silent! bdelete!' fnameescape(GTMP .. '/vproj_gap_buf_a.txt')
+execute 'silent! bdelete!' fnameescape(GTMP .. '/vproj_gap_buf_b.txt')
+execute 'silent! bdelete!' fnameescape(GTMP .. '/vproj_gap_buf_c.txt')
 
 # ══════════════════════════════════════════════════
 # 19. PromptFilter — feedkeys functional test
@@ -588,9 +642,9 @@ Assert(vproj#GetCurrentMode() == 'file', 'SwitchMode: qfix→file')
 echom '--- NavigateIntoFirstDir in empty dir ---'
 
 vproj#PaneClose()
-call delete(expand('~/.cache/vproj/session'))
-call mkdir('/tmp/vproj_gap_empty_dir', 'p')
-execute 'cd /tmp/vproj_gap_empty_dir'
+call delete($XDG_CACHE_HOME .. '/vproj/session')
+call mkdir(GTMP .. '/vproj_gap_empty_dir', 'p')
+execute 'cd' fnameescape(GTMP .. '/vproj_gap_empty_dir')
 
 vproj#PaneOpen()
 try
@@ -604,15 +658,15 @@ catch
   Assert(false, 'NavigateIntoFirstDir empty-dir error: ' .. v:exception)
 endtry
 vproj#PaneClose()
-call delete('/tmp/vproj_gap_empty_dir', 'rf')
+call delete(GTMP .. '/vproj_gap_empty_dir', 'rf')
 
 # ══════════════════════════════════════════════════
 # 22. Empty directory — works without crash, shows parent dir
 # ══════════════════════════════════════════════════
 echom '--- Empty directory ---'
 
-call mkdir('/tmp/vproj_gap_empty2', 'p')
-execute 'cd /tmp/vproj_gap_empty2'
+call mkdir(GTMP .. '/vproj_gap_empty2', 'p')
+execute 'cd' fnameescape(GTMP .. '/vproj_gap_empty2')
 
 vproj#PaneOpen()
 var elines = getbufline(bufnr('VPROJ'), 1, '$')
@@ -626,7 +680,7 @@ endfor
 Assert(has_parent, 'empty directory shows parent (..) entry')
 Assert(vproj#GetCurrentMode() == 'file', 'empty directory: stays in file mode')
 vproj#PaneClose()
-call delete('/tmp/vproj_gap_empty2', 'rf')
+call delete(GTMP .. '/vproj_gap_empty2', 'rf')
 
 # ══════════════════════════════════════════════════
 # 23. Session persistence round-trip (gap 4 — enhanced)
@@ -634,7 +688,7 @@ call delete('/tmp/vproj_gap_empty2', 'rf')
 echom '--- Session persistence ---'
 
 # Clean session and open fresh
-call delete(expand('~/.cache/vproj/session'))
+call delete($XDG_CACHE_HOME .. '/vproj/session')
 vproj#PaneOpen()
 # Stay in file mode — SwitchMode clears git_filter_active (line 901)
 vproj#SwitchMode('file')
@@ -679,7 +733,7 @@ vproj#PaneClose()
 # ══════════════════════════════════════════════════
 echom '--- ParseVprojFile malformed ---'
 
-var tmp_v = '/tmp/vproj_gap_malformed.vproj'
+var tmp_v = GTMP .. '/vproj_gap_malformed.vproj'
 
 # Minimal valid .vproj
 writefile(['Project Name: GapTest', '# comment', '', 'garbage line', 'Included Directories:', 'src'], tmp_v)
@@ -695,7 +749,10 @@ endtry
 writefile(['Project Name: Bogus', 'Project Root: /nonexistent/xyz/123', 'Included Directories:', 'src'], tmp_v)
 try
   var p2 = vproj#ParseVprojFile(tmp_v)
-  Assert(empty(get(p2, 'root', '')), 'bogus root: cleared to empty')
+  # A missing root falls back to the .vproj directory for matching, and the
+  # original text is kept so a save does not erase it.
+  Assert(get(p2, 'root', '') == fnamemodify(tmp_v, ':p:h'), 'bogus root: falls back to the .vproj directory')
+  Assert(get(p2, 'root_raw', '') == '/nonexistent/xyz/123', 'bogus root: original text kept for writing')
 catch
   Assert(false, 'ParseVprojFile bogus-root error: ' .. v:exception)
 endtry
@@ -708,10 +765,10 @@ call delete(tmp_v)
 echom '--- Binary file ---'
 
 var bdata = 0z000102030405060708090a0b0c0d0e0f
-writefile(bdata, '/tmp/vproj_gap_binary.bin')
+writefile(bdata, GTMP .. '/vproj_gap_binary.bin')
 
 vproj#PaneClose()
-execute 'cd /tmp'
+execute 'cd' fnameescape(GTMP)
 vproj#PaneOpen()
 vproj#SwitchMode('file')
 
@@ -725,11 +782,19 @@ for i in range(len(p_lines))
 endfor
 
 if bin_line > 0
-  var pw2 = win_findbuf(bufnr('VPROJ'))[0]
-  win_execute(pw2, 'normal ' .. bin_line .. 'G')
+  # Move the plugin's selection (not just the cursor) onto the .bin entry.
+  vproj#SelectFirst()
+  var bin_steps: number = 0
+  while PaneCursorLine() != bin_line && bin_steps < 50
+    vproj#SelectNext()
+    bin_steps += 1
+  endwhile
+  Assert(PaneCursorLine() == bin_line, 'binary file: selection on the .bin entry')
+  var wins_before_bin: number = winnr('$')
   try
-    vproj#SelectCurrent()
+    silent! vproj#SelectCurrent()
     Assert(winnr('$') == wins_before_bin, 'binary file: SelectCurrent did not open new window')
+    Assert(bufnr('vproj_gap_binary.bin') == -1, 'binary file: no buffer created for the .bin file')
     Assert(vproj#GetCurrentMode() == 'file', 'binary file: mode stays file')
   catch
     Assert(false, 'Binary SelectCurrent error: ' .. v:exception)
@@ -747,19 +812,19 @@ else
 endif
 
 vproj#PaneClose()
-call delete('/tmp/vproj_gap_binary.bin')
+call delete(GTMP .. '/vproj_gap_binary.bin')
 
 # ══════════════════════════════════════════════════
 # 26. Qfix column jump and invalid entry skip
 # ══════════════════════════════════════════════════
 echom '--- Qfix edge cases ---'
 
-writefile(['col1 col2 col3 col4 col5', 'a b c d e'], '/tmp/vproj_gap_qfix2.txt')
+writefile(['col1 col2 col3 col4 col5', 'a b c d e'], GTMP .. '/vproj_gap_qfix2.txt')
 
 # Mix valid and invalid entries
 setqflist([
   {filename: '/nonexistent/bad.txt', lnum: 1, col: 1, text: 'bad', valid: false},
-  {filename: '/tmp/vproj_gap_qfix2.txt', lnum: 2, col: 5, text: 'col 5', valid: true},
+  {filename: GTMP .. '/vproj_gap_qfix2.txt', lnum: 2, col: 5, text: 'col 5', valid: true},
 ])
 
 vproj#PaneOpen()
@@ -785,7 +850,7 @@ catch
 endtry
 
 vproj#PaneClose()
-call delete('/tmp/vproj_gap_qfix2.txt')
+call delete(GTMP .. '/vproj_gap_qfix2.txt')
 
 # ══════════════════════════════════════════════════
 # 27. GitStageToggle guards (non-file modes)
@@ -930,8 +995,8 @@ execute 'cd' getcwd()
 # ══════════════════════════════════════════════════
 echom '--- Empty directory edge cases ---'
 
-call mkdir('/tmp/vproj_gap_empty3', 'p')
-execute 'cd /tmp/vproj_gap_empty3'
+call mkdir(GTMP .. '/vproj_gap_empty3', 'p')
+execute 'cd' fnameescape(GTMP .. '/vproj_gap_empty3')
 vproj#PaneOpen()
 vproj#SwitchMode('file')
 
@@ -966,7 +1031,7 @@ vproj#SelectPrev()
 Assert(vproj#IsPaneVisible(), 'empty dir: SelectPrev wraps, pane visible')
 
 vproj#PaneClose()
-call delete('/tmp/vproj_gap_empty3', 'rf')
+call delete(GTMP .. '/vproj_gap_empty3', 'rf')
 
 # ══════════════════════════════════════════════════
 # 34. Refresh clears state — git_filter, filter_pattern (gap 10)

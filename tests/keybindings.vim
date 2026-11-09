@@ -3,8 +3,22 @@ vim9script
 # Keybinding verification — tests every mapped and passthrough key
 # Run: vim -N -u NONE -S tests/keybindings.vim
 
-set rtp+=src
+# Hermetic setup (run_all.sh also isolates HOME/XDG_CACHE_HOME/TMPDIR):
+#  - session cache lives in a temp dir, never the real user cache
+#  - cwd is a temp fixture dir, so code-mode +/-/ToggleInclude can never write
+#    the repo's tracked vproj.vproj
+#  - runtimepath is absolute so autoload still resolves after any :cd
+$XDG_CACHE_HOME = tempname()
+execute 'set rtp+=' .. fnameescape(expand('<script>:p:h:h') .. '/src')
 runtime! plugin/vproj.vim
+set nomore
+const FIXTURE_DIR: string = tempname()
+mkdir(FIXTURE_DIR .. '/subdir_a', 'p')
+mkdir(FIXTURE_DIR .. '/subdir_b', 'p')
+writefile(['alpha'], FIXTURE_DIR .. '/alpha.txt')
+writefile(['beta'], FIXTURE_DIR .. '/beta.txt')
+writefile(['gamma'], FIXTURE_DIR .. '/gamma.txt')
+execute 'cd' fnameescape(FIXTURE_DIR)
 set nomore
 
 var failures: number = 0
@@ -86,7 +100,7 @@ Assert(vproj#IsPaneVisible() && vproj#GetCurrentMode() == 'file',
 
 # h — nav char (not parent navigation; freed as nav char)
 var h_map = maparg('h', 'n', 0, 1)
-Assert(empty(h_map) || h_map.rhs =~ 'VprojKey\|SelectByNavChar',
+Assert(empty(h_map) || get(h_map, 'rhs', '') =~ 'VprojKey\|SelectByNavChar',
       'h is NOT mapped to NavigateUp (nav char or unmapped)')
 
 # S-L — Log mode removed; verify S-L is not mapped to a mode switch
@@ -155,7 +169,7 @@ if winnr('$') > 1
 else
   rightbelow new
 endif
-edit /tmp/vproj_test_xbuf.txt
+execute 'edit' fnameescape(FIXTURE_DIR .. '/vproj_test_xbuf.txt')
 write!
 FocusPane()
 vproj#SwitchMode('buf')
@@ -169,7 +183,7 @@ try
 catch
   Assert(false, 'X error: ' .. v:exception)
 endtry
-silent! call delete('/tmp/vproj_test_xbuf.txt')
+silent! call delete(FIXTURE_DIR .. '/vproj_test_xbuf.txt')
 
 # +/- — toggle include (code mode); verify mode preserved
 Setup()
@@ -254,7 +268,7 @@ vproj#PaneClose()
 echom '--- q nav char ---'
 Setup()
 var q_map = maparg('q', 'n', 0, 1)
-Assert(empty(q_map) || q_map.rhs =~ 'VprojKey\|SelectByNavChar',
+Assert(empty(q_map) || get(q_map, 'rhs', '') =~ 'VprojKey\|SelectByNavChar',
       'q is NOT mapped to HandlePaneQ (nav char or unmapped)')
 
 # ──────────────────────────────────────────────
@@ -290,14 +304,14 @@ Assert(empty(ctrl_f), 'Ctrl-F is unmapped (Vim default)')
 var slash_map = maparg('/', 'n', 0, 1)
 Assert(!empty(slash_map), '/ is mapped in pane')
 if !empty(slash_map)
-  Assert(slash_map.rhs =~ 'PromptFilter', '/ maps to PromptFilter')
+  Assert(get(slash_map, 'rhs', '') =~ 'PromptFilter', '/ maps to PromptFilter')
 endif
 
 # * — grep search (mapped to GrepSearch)
 var star_map = maparg('*', 'n', 0, 1)
 Assert(!empty(star_map), '* is mapped in pane')
 if !empty(star_map)
-  Assert(star_map.rhs =~ 'GrepSearch', '* maps to GrepSearch')
+  Assert(get(star_map, 'rhs', '') =~ 'GrepSearch', '* maps to GrepSearch')
 endif
 
 # ──────────────────────────────────────────────
@@ -498,7 +512,7 @@ var expected_mappings: list<list<string>> = [
 for [lhs, rhs_fragment] in expected_mappings
   var m = maparg(lhs, 'n', 0, 1)
   Assert(!empty(m), lhs .. ' is mapped in pane buffer')
-  Assert(m.rhs =~ rhs_fragment, lhs .. ' maps to ' .. rhs_fragment)
+  Assert(get(m, 'rhs', '') =~ rhs_fragment, lhs .. ' maps to ' .. rhs_fragment)
 endfor
 
 # Verify single-letter git keys are now nav chars (freed from git duty)
@@ -507,13 +521,13 @@ endfor
 for ch in ['s', 'd', 'c', 'b', 'z', 'a']
   var m = maparg(ch, 'n', 0, 1)
   Assert(!empty(m), ch .. ' mapped as nav char')
-  Assert(m.rhs =~ 'VprojKey\|SelectByNavChar',
+  Assert(get(m, 'rhs', '') =~ 'VprojKey\|SelectByNavChar',
         ch .. ' maps to VprojKey or SelectByNavChar (freed from git)')
 endfor
 for ch in ['D', 'P', 'U', 'Z']
   var m = maparg(ch, 'n', 0, 1)
   # D/U/Z should not be mapped. P is Shift-P (TogglePreview) — not a git action.
-  Assert(empty(m) || m.rhs =~ 'VprojKey\|SelectByNavChar\|TogglePreview\|Git',
+  Assert(empty(m) || get(m, 'rhs', '') =~ 'VprojKey\|SelectByNavChar\|TogglePreview\|Git',
         ch .. ' is NOT mapped to a git action (freed)')
 endfor
 

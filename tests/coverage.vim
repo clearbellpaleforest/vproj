@@ -3,8 +3,22 @@ vim9script
 # Coverage tests — untested behaviors from the audit gap analysis
 # Run: vim -N -u NONE -S tests/coverage.vim
 
-set rtp+=src
+# Hermetic setup (run_all.sh also isolates HOME/XDG_CACHE_HOME/TMPDIR):
+#  - session cache lives in a temp dir, never the real user cache
+#  - cwd is a temp fixture dir, so code-mode +/-/ToggleInclude can never write
+#    the repo's tracked vproj.vproj
+#  - runtimepath is absolute so autoload still resolves after any :cd
+$XDG_CACHE_HOME = tempname()
+execute 'set rtp+=' .. fnameescape(expand('<script>:p:h:h') .. '/src')
 runtime! plugin/vproj.vim
+set nomore
+const FIXTURE_DIR: string = tempname()
+mkdir(FIXTURE_DIR .. '/subdir_a', 'p')
+mkdir(FIXTURE_DIR .. '/subdir_b', 'p')
+writefile(['alpha'], FIXTURE_DIR .. '/alpha.txt')
+writefile(['beta'], FIXTURE_DIR .. '/beta.txt')
+writefile(['gamma'], FIXTURE_DIR .. '/gamma.txt')
+execute 'cd' fnameescape(FIXTURE_DIR)
 set nomore
 
 var failures: number = 0
@@ -50,13 +64,25 @@ Assert(PaneCursorLine() == 4, 'cursor starts on line 4 in git mode (separator at
 
 # SelectNext from line 3 → line 4 (not status line)
 vproj#SwitchMode('file')
+# j/k are nav chars since 53f814c — cursor movement is <Down>/<Up>.
 var before = PaneCursorLine()
-execute 'normal j'
-Assert(PaneCursorLine() == before + 1, 'SelectNext advances from first item')
+execute "normal \<Down>"
+Assert(PaneCursorLine() == before + 1, '<Down> (SelectNext) advances from first item')
 
-# SelectPrev from line 3 → wraps to last item
-execute 'normal k'
-Assert(PaneCursorLine() >= 3, 'SelectPrev wraps from first item')
+execute "normal \<Up>"
+Assert(PaneCursorLine() == before, '<Up> (SelectPrev) returns to first item')
+
+# <Up> from the first item skips the separator (line 2) and lands on the
+# mode-menu line (line 1, selectable: Enter there cycles mode). One more <Up>
+# wraps to the last selectable line. The fixture listing is short (no paging)
+# and ends in a file, so the last selectable line is the last buffer line.
+var pane_last_line: number = getbufinfo(bufnr('VPROJ'))[0].linecount
+execute "normal \<Up>"
+Assert(PaneCursorLine() == 1, '<Up> from first item lands on mode-menu line 1 (got ' .. PaneCursorLine() .. ')')
+execute "normal \<Up>"
+Assert(PaneCursorLine() == pane_last_line,
+      '<Up> from menu line wraps to last selectable line ' .. pane_last_line
+      .. ' (got ' .. PaneCursorLine() .. ')')
 
 # ──────────────────────────────────────────────
 # NavigateIntoFirstDir
@@ -65,7 +91,7 @@ echom '--- NavigateIntoFirstDir ---'
 Setup()
 vproj#SwitchMode('file')
 
-# In the vproj project root, first subdir should be src/ or tests/
+# In the fixture dir, first subdir is subdir_a/
 try
   vproj#NavigateIntoFirstDir()
   Assert(vproj#IsPaneVisible(), 'NavigateIntoFirstDir keeps pane open')
@@ -97,6 +123,8 @@ Assert(vproj#IsPaneVisible(), '+ in code mode no-project: pane stays visible')
 # - key similarly
 execute 'normal -'
 Assert(vproj#IsPaneVisible(), '- in code mode no-project: pane stays visible')
+Assert(empty(glob(FIXTURE_DIR .. '/*.vproj', true, true)) && !filereadable(FIXTURE_DIR .. '/.vproj'),
+      '+/- in code mode no-project: no .vproj file created')
 
 # ──────────────────────────────────────────────
 # CloseBuffer outside buf mode
@@ -105,18 +133,18 @@ echom '--- CloseBuffer outside buf mode ---'
 Setup()
 vproj#SwitchMode('file')
 try
-  execute 'normal x'
-  Assert(vproj#IsPaneVisible(), 'x in file mode: pane stays visible, mode unchanged')
+  execute 'normal X'
+  Assert(vproj#IsPaneVisible(), 'X (CloseBuffer) in file mode: pane stays visible, mode unchanged')
 catch
-  Assert(false, 'x in file mode error: ' .. v:exception)
+  Assert(false, 'X in file mode error: ' .. v:exception)
 endtry
 
 vproj#SwitchMode('code')
 try
-  execute 'normal x'
-  Assert(vproj#IsPaneVisible(), 'x in code mode: pane stays visible, mode unchanged')
+  execute 'normal X'
+  Assert(vproj#IsPaneVisible(), 'X (CloseBuffer) in code mode: pane stays visible, mode unchanged')
 catch
-  Assert(false, 'x in git mode error: ' .. v:exception)
+  Assert(false, 'X in code mode error: ' .. v:exception)
 endtry
 
 # ──────────────────────────────────────────────

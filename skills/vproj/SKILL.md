@@ -8,24 +8,12 @@ description: Vproj Vim plugin development and testing. Use when working in the v
 ## Quick Commands
 
 ```bash
-# Smoke test (always start here)
-vim -N -u NONE -S tests/smoke.vim -c 'qall!' 2>&1 | grep -E 'PASS|FAIL'
+# Full suite — hermetic, exit code decides (always use this before a push)
+bash tests/run_all.sh          # -v prints the failing lines
 
-# Integration tests
-vim -N -u NONE -S tests/integration/test_buf_mode.vim -c 'qall!'
-vim -N -u NONE -S tests/integration/test_git_full.vim -c 'qall!'
-vim -N -u NONE -S tests/integration/test_qfix_mode.vim -c 'qall!'
-
-# Keybinding test
-vim -N -u NONE -S tests/keybindings.vim -c 'qall!'
-
-# Full suite (run these in order)
-vim -N -u NONE -S tests/smoke.vim -c 'qall!'
-vim -N -u NONE -S tests/keybindings.vim -c 'qall!'
-vim -N -u NONE -S tests/regression.vim -c 'qall!'
-vim -N -u NONE -S tests/integration/test_buf_mode.vim -c 'qall!'
-vim -N -u NONE -S tests/integration/test_git_full.vim -c 'qall!'
-vim -N -u NONE -S tests/integration/test_qfix_mode.vim -c 'qall!'
+# One file. -c 'cquit!' makes a script that aborts exit nonzero; never use
+# -c 'qall!', which reports an aborted test as a pass.
+vim -N -u NONE -i NONE -S tests/smoke.vim -c 'cquit!'
 ```
 
 ## Architecture
@@ -173,7 +161,7 @@ Use `<nowait>` for char mappings to prevent prefix-key timeout.
 ## Testing Rules
 
 1. **Always run smoke test first** — verifies basic load/open/close/mode switch
-2. **Run before every commit** — `vim -N -u NONE -S tests/smoke.vim -c 'qall!'`
+2. **Run before every commit** — `bash tests/run_all.sh`
 3. **Test each mode independently** — don't combine file/buf/code tests
 4. **Test edge cases**: empty directory, missing .vproj, deleted buffer, Ctrl-C
 5. **AI tests** can only verify function existence (no curl in headless Vim)

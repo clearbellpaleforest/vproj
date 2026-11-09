@@ -15,13 +15,21 @@ var current_page: number = 0
 var items_per_page: number = 1
 var paging_active: bool = false
 var nav_offset: number = 0
-var saved_shortmess: string = ''
+# True while vproj has added 'S' to 'shortmess'; only that flag is removed
+# on close, so the user's own shortmess changes survive.
+var added_shortmess_s: bool = false
+# Window view carried across RetargetBuffer's :edit (see there).
+var retarget_view: dict<any> = {}
 var filter_pattern: string = ''
 var git_filter_active: bool = false
 var saved_origin_wid: number = -1
 
 # Git integration cache
 var git_status_map: dict<string> = {}
+# Raw two-column porcelain status per absolute path: X = index, Y = worktree
+# (e.g. ' M' modified unstaged, 'M ' staged, 'MM' both, '??' untracked).
+# Actions need both columns; git_status_map folds them into one display char.
+var git_status_xy: dict<string> = {}
 var git_branch_cache: string = ''
 var git_root_cache: string = ''
 
@@ -106,11 +114,30 @@ def SortByName(A: dict<any>, B: dict<any>): number
   return 0
 enddef
 
+# Widest the pane may be: leave at least 20 columns for editing.
+def SafeMaxWidth(): number
+  return max([MIN_WIDTH, &columns - 20])
+enddef
+
+# Width from g:{name}, clamped to MIN_WIDTH..MAX_WIDTH. A value that is not a
+# Number (e.g. the string '50') falls back to the default with a message,
+# instead of throwing E1012 on a typed assignment.
+def ConfiguredWidth(name: string, default: number): number
+  var raw: any = get(g:, name, default)
+  if type(raw) != v:t_number
+    Error('vproj: g:' .. name .. ' must be a Number, got ' .. string(raw))
+    raw = default
+  endif
+  return min([MAX_WIDTH, max([MIN_WIDTH, raw])])
+enddef
+
 def NavChar(item: dict<any>, visible_idx: number): string
   if get(item, 'is_parent', false)
     return '. '
   endif
-  var nav_idx = visible_idx + nav_offset
+  # nav_offset is a block number: block 0 letters items 0-25, block 1
+  # letters items 26-51, and so on.
+  var nav_idx = visible_idx - nav_offset * len(NAV_CHARS)
   if nav_idx >= 0 && nav_idx < len(NAV_CHARS)
     return NAV_CHARS[nav_idx] .. ' '
   endif
@@ -163,25 +190,14 @@ export def PaneOpen(): void
   # Remember which window the user was in — files will open there
   saved_origin_wid = win_getid()
 
-  if saved_shortmess == ''
-    saved_shortmess = &shortmess
+  if !added_shortmess_s && &shortmess !~# 'S'
     set shortmess+=S
+    added_shortmess_s = true
   endif
 
-  pane_width = get(g:, 'vproj_pane_width_default', 40)
-  if type(pane_width) != v:t_number || pane_width < MIN_WIDTH
-    pane_width = MIN_WIDTH
-  endif
-  if pane_width > MAX_WIDTH
-    pane_width = MAX_WIDTH
-  endif
-  # Don't let the pane consume the entire screen — leave at least 20 cols
-  var safe_max: number = &columns - 20
-  if safe_max < MIN_WIDTH
-    safe_max = MIN_WIDTH
-  endif
-  if pane_width > safe_max
-    pane_width = safe_max
+  pane_width = ConfiguredWidth('vproj_pane_width_default', 40)
+  if pane_width > SafeMaxWidth()
+    pane_width = SafeMaxWidth()
   endif
 
   # Reuse existing buffer if it still exists
@@ -304,6 +320,10 @@ export def PaneOpen(): void
       new
     catch
       Error('vproj: Cannot open pane (new) — ' .. v:exception .. ' (' .. &columns .. ' cols, ' .. winnr('$') .. ' wins)')
+      if added_shortmess_s
+        set shortmess-=S
+        added_shortmess_s = false
+      endif
       return
     endtry
     try
@@ -366,9 +386,22 @@ enddef
 
 export def PaneClose(): void
   ClosePreview()
-  SaveSession()
+  # Wiping the pane buffer runs HandleBufWipeout, which saves the session
+  # while state is still valid and then resets it. A second close finds
+  # pane_bufnr == -1 and saves nothing, so it cannot clobber the session.
   var did_enew: bool = false
   if pane_bufnr > 0 && bufexists(pane_bufnr)
+    # The pane buffer may also be shown in other tab pages; close those
+    # windows too, or they linger with dead mappings.
+    for wid in win_findbuf(pane_bufnr)
+      if win_id2tabwin(wid)[0] != tabpagenr()
+        try
+          win_execute(wid, 'close')
+        catch
+          # Last window of the last tab — leave it; the wipe below handles state.
+        endtry
+      endif
+    endfor
     var pane_wid: number = win_getid(bufwinnr(pane_bufnr))
     if pane_wid > 0
       if winnr('$') < 2
@@ -397,6 +430,12 @@ export def PaneClose(): void
 enddef
 
 export def HandleBufWipeout(): void
+  # Reached from PaneClose and from the BufWipeout autocmd (:q in the pane).
+  # Save before resetting, and only while a pane actually existed.
+  if pane_bufnr > 0
+    SaveSession()
+  endif
+  execute 'augroup ' .. AUTOGROUP .. ' | autocmd! | augroup END'
   ClosePreview()
   ClearPaneHighlights()
   match_ids = []
@@ -424,9 +463,9 @@ export def HandleBufWipeout(): void
   git_status_map = {}
   git_branch_cache = ''
   git_root_cache = ''
-  if saved_shortmess != ''
-    &shortmess = saved_shortmess
-    saved_shortmess = ''
+  if added_shortmess_s
+    set shortmess-=S
+    added_shortmess_s = false
   endif
   saved_origin_wid = -1
 enddef
@@ -441,7 +480,7 @@ export def PaneDiagnose(): void
   echom 'splitbelow: ' .. (&splitbelow ? '1' : '0') .. '  splitright: ' .. (&splitright ? '1' : '0')
   echom 'pane_bufnr: ' .. pane_bufnr .. ' (exists: ' .. (pane_bufnr > 0 && bufexists(pane_bufnr) ? '1' : '0') .. ')'
   echom 'current_mode: ' .. current_mode
-  echom 'saved_shortmess: "' .. saved_shortmess .. '"'
+  echom 'added_shortmess_s: ' .. (added_shortmess_s ? '1' : '0')
   echom '&shortmess: ' .. &shortmess
   echom ''
 
@@ -553,10 +592,9 @@ def MoveCursor(lnum: number): void
   win_execute(win_getid(wnr), 'silent! call cursor(' .. lnum .. ', 1)')
 enddef
 
+# The mode menu (line 1) is selectable: Up from the first item lands on it
+# and Enter cycles the mode. Separator and page-nav rows are not.
 def SkipNonSelectable(line: number): bool
-  if line == MODE_MENU_LINE
-    return true
-  endif
   if current_mode != 'code' && current_mode != 'qfix' && line == FILE_STATUS_SEP_LINE
     return true
   endif
@@ -819,8 +857,11 @@ export def SelectByNavChar(ch: string): void
           # Directory navigation via nav key: keep pane open in temp mode too
           return
         endif
-        # File — open it
-        SelectCurrent()
+        # File — open it. Keep the pane when nothing opened (cancelled
+        # save prompt, binary or unreadable file).
+        if !OpenFile(get(item, 'path', ''))
+          return
+        endif
         if pane_open_mode == 'temporary'
           PaneClose()
         else
@@ -835,24 +876,45 @@ export def SelectByNavChar(ch: string): void
   endfor
 enddef
 
+# Number of letter blocks needed for the items on the current page.
+def NavBlockCount(): number
+  var display_items = empty(filter_pattern) ? items : ApplyFilter(items)
+  if git_filter_active && (current_mode == 'file' || current_mode == 'code')
+    display_items = ApplyGitFilter(display_items)
+  endif
+  var n: number = 0
+  for item in PageSlice(display_items)
+    if !get(item, 'is_parent', false)
+      n += 1
+    endif
+  endfor
+  return n == 0 ? 1 : (n + len(NAV_CHARS) - 1) / len(NAV_CHARS)
+enddef
+
+# > moves the letters to the next block of 26 items, wrapping at the end.
 export def ShiftNavForward(): void
   if !IsPaneVisible()
     return
   endif
-  if nav_offset < len(NAV_CHARS) - 1
-    nav_offset += 1
-    Render()
+  var blocks: number = NavBlockCount()
+  if blocks <= 1
+    return
   endif
+  nav_offset = (nav_offset + 1) % blocks
+  Render()
 enddef
 
+# < moves the letters to the previous block, wrapping at the start.
 export def ShiftNavBackward(): void
   if !IsPaneVisible()
     return
   endif
-  if nav_offset > 0
-    nav_offset -= 1
-    Render()
+  var blocks: number = NavBlockCount()
+  if blocks <= 1
+    return
   endif
+  nav_offset = (nav_offset + blocks - 1) % blocks
+  Render()
 enddef
 
 export def SelectCurrent(): void
@@ -957,18 +1019,9 @@ export def SwitchMode(key: string): void
   endif
   selected_line = FirstSelectableLine()
   # Apply mode-specific width config if set
-  var mode_width: number = 0
-  if mode == 'file'
-    mode_width = get(g:, 'vproj_pane_width_file', 0)
-  elseif mode == 'buf'
-    mode_width = get(g:, 'vproj_pane_width_buf', 0)
-  elseif mode == 'code'
-    mode_width = get(g:, 'vproj_pane_width_code', 0)
-  elseif mode == 'qfix'
-    mode_width = get(g:, 'vproj_pane_width_qfix', 0)
-  endif
-  if type(mode_width) == v:t_number && mode_width >= MIN_WIDTH && mode_width <= MAX_WIDTH
-    pane_width = mode_width
+  var width_var: string = 'vproj_pane_width_' .. mode
+  if has_key(g:, width_var)
+    pane_width = min([ConfiguredWidth(width_var, pane_width), SafeMaxWidth()])
     ApplyWidth()
   endif
   current_page = 0
@@ -1311,6 +1364,7 @@ def ComputePaging(all_items: list<dict<any>>): void
   paging_active = len(all_items) > items_per_page
   if !paging_active
     current_page = 0
+    total_pages = 1
     return
   endif
   total_pages = (len(all_items) + items_per_page - 1) / items_per_page
@@ -1326,12 +1380,10 @@ def PageSlice(all_items: list<dict<any>>): list<dict<any>>
   if !paging_active
     return all_items
   endif
+  # slice() excludes its end index; [a : b] would include b and show one
+  # item too many per page.
   var start_idx = current_page * items_per_page
-  var end_idx = start_idx + items_per_page
-  if end_idx > len(all_items)
-    end_idx = len(all_items)
-  endif
-  return all_items[start_idx : end_idx]
+  return slice(all_items, start_idx, start_idx + items_per_page)
 enddef
 
 def BuildPageNavRow(): string
@@ -1378,61 +1430,83 @@ def GitBranch(): string
   return ''
 enddef
 
-def GitStatusMap(): dict<string>
-  if !empty(git_status_map)
-    return git_status_map
+# Fold a porcelain XY pair into the single display char: M/A/D/R/?/!
+def GitDisplayChar(xy: string): string
+  var x: string = xy[0]
+  var y: string = xy[1]
+  if xy == '??'
+    return '?'
+  elseif x == 'U' || y == 'U' || xy == 'AA' || xy == 'DD'
+    return '!'
+  elseif x == 'A' || y == 'A'
+    return 'A'
+  elseif x == 'D' || y == 'D'
+    return 'D'
+  elseif x == 'R' || x == 'C'
+    return 'R'
+  elseif x == 'M' || y == 'M' || x == 'T' || y == 'T'
+    return 'M'
   endif
+  return ' '
+enddef
+
+# Parse `git status --porcelain -z` into git_status_xy and git_status_map.
+# -z keeps names unquoted, so spaces, quotes and non-ASCII survive. system()
+# turns each NUL into SOH (0x01). A rename or copy entry is followed by a
+# separate field holding the source path, which is skipped.
+def LoadGitStatus(): void
+  git_status_xy = {}
+  git_status_map = {}
   var root: string = GitRoot()
   if empty(root)
-    return {}
+    return
   endif
-  var output: string = system('git -C ' .. shellescape(root) .. ' status --porcelain 2>/dev/null')
-  var shell_err: number = v:shell_error
-  if shell_err != 0
-    return {}
+  var output: string = system('git -C ' .. shellescape(root) .. ' status --porcelain -z 2>/dev/null')
+  if v:shell_error != 0
+    return
   endif
-  var result: dict<string> = {}
-  for line in output->split('\n')
-    if empty(line) || strwidth(line) < 3
+  var fields: list<string> = split(output, "\x01")
+  var i: number = 0
+  while i < len(fields)
+    var field: string = fields[i]
+    i += 1
+    if strlen(field) < 4
       continue
     endif
-    var fname: string = line[3 : ]
-    # Handle renames (old -> new)
-    var arrow: number = stridx(fname, ' -> ')
-    if arrow > 0
-      fname = fname[arrow + 4 : ]
+    var xy: string = field[0 : 1]
+    var full: string = root .. '/' .. substitute(field[3 : ], '/$', '', '')
+    if xy[0] == 'R' || xy[0] == 'C'
+      i += 1
     endif
-    # Handle quoted filenames
-    if fname[0] == '"'
-      fname = fname[1 : -1]
-      fname = substitute(fname, '\\n', nr2char(10), 'g')
-      fname = substitute(fname, '\\t', nr2char(9), 'g')
-      fname = substitute(fname, '\\\\', '\\', 'g')
-      fname = substitute(fname, '\\"', '"', 'g')
+    git_status_xy[full] = xy
+    var ch: string = GitDisplayChar(xy)
+    if ch != ' '
+      git_status_map[full] = ch
     endif
-    # Map porcelain status to single char: M/A/D/?
-    var x: string = line[0]
-    var y: string = line[1]
-    var status: string = ' '
-    if x == '?' && y == '?'
-      status = '?'
-    elseif x == 'A' || y == 'A'
-      status = 'A'
-    elseif x == 'D' || y == 'D'
-      status = 'D'
-    elseif x == 'M' || y == 'M'
-      status = 'M'
-    elseif x == 'U' || y == 'U'
-      status = '!'
-    elseif x == 'R'
-      status = 'R'
-    endif
-    if status != ' '
-      result[root .. '/' .. fname] = status
-    endif
-  endfor
-  git_status_map = result
-  return result
+  endwhile
+enddef
+
+def GitStatusMap(): dict<string>
+  if empty(git_status_map) && empty(git_status_xy)
+    LoadGitStatus()
+  endif
+  return git_status_map
+enddef
+
+def GitStatusXY(path: string): string
+  if empty(git_status_map) && empty(git_status_xy)
+    LoadGitStatus()
+  endif
+  return get(git_status_xy, path, '')
+enddef
+
+# Run a git command in the repo root. Returns {ok, lines}: lines holds the
+# output, or git's error text when ok is false. ok_codes lists the exit codes
+# that mean success (git diff --no-index exits 1 when the files differ).
+def GitLines(args: string, ok_codes: list<number> = [0]): dict<any>
+  var root: string = GitRoot()
+  var out: list<string> = systemlist('git -C ' .. shellescape(root) .. ' ' .. args .. ' 2>&1')
+  return {ok: index(ok_codes, v:shell_error) >= 0, lines: out}
 enddef
 
 def IsInGitRepo(): bool
@@ -1445,6 +1519,7 @@ enddef
 
 def InvalidateGitCache(): void
   git_status_map = {}
+  git_status_xy = {}
   git_branch_cache = ''
   git_root_cache = ''
 enddef
@@ -1494,34 +1569,37 @@ export def GitStageToggle(): void
     return
   endif
 
-  var status_map: dict<string> = GitStatusMap()
-  var st: string = get(status_map, path, '')
+  var xy: string = GitStatusXY(path)
   var name: string = get(item, 'name', path)
-  if empty(st)
+  if empty(xy)
     echom 'vproj: No git changes for ' .. name
     return
   endif
 
-  if st == '?'
-    system('git add ' .. shellescape(path) .. ' 2>/dev/null')
-    if v:shell_error == 0
+  # Worktree changes (Y) or untracked: stage them. Otherwise only the
+  # index differs (X): unstage. git add -A also stages a worktree deletion.
+  var res: dict<any>
+  if xy == '??' || xy[1] != ' '
+    res = GitLines('add -A -- ' .. shellescape(path))
+    if res.ok
       echom 'Staged: ' .. name
     else
-      Error('vproj: Failed to stage ' .. name)
+      Error('vproj: Failed to stage ' .. name .. ': ' .. join(res.lines, ' '))
     endif
-  elseif st == 'A' || st == 'M' || st == 'R'
-    system('git reset HEAD -- ' .. shellescape(path) .. ' 2>/dev/null')
-    if v:shell_error == 0
+  elseif xy[0] == 'A'
+    # A new file: drop it from the index, keep it on disk.
+    res = GitLines('rm --cached -q -- ' .. shellescape(path))
+    if res.ok
       echom 'Unstaged: ' .. name
     else
-      Error('vproj: Failed to unstage ' .. name)
+      Error('vproj: Failed to unstage ' .. name .. ': ' .. join(res.lines, ' '))
     endif
-  elseif st == 'D'
-    system('git rm --cached -- ' .. shellescape(path) .. ' 2>/dev/null')
-    if v:shell_error == 0
-      echom 'Staged deletion: ' .. name
+  else
+    res = GitLines('restore --staged -- ' .. shellescape(path))
+    if res.ok
+      echom 'Unstaged: ' .. name
     else
-      Error('vproj: Failed to stage deletion of ' .. name)
+      Error('vproj: Failed to unstage ' .. name .. ': ' .. join(res.lines, ' '))
     endif
   endif
 
@@ -1552,48 +1630,68 @@ export def OpenDiffPreview(): void
     return
   endif
 
-  var status_map: dict<string> = GitStatusMap()
-  var st: string = get(status_map, path, "")
-  var cmd: string = ""
-
-  if st == "?" || empty(st)
-    cmd = "git diff --no-index /dev/null " .. shellescape(path)
-  elseif st == "A" || st == "M" || st == "R"
-    cmd = "git diff --cached -- " .. shellescape(path)
+  var xy: string = GitStatusXY(path)
+  var name: string = get(item, "name", path)
+  var res: dict<any>
+  if empty(xy)
+    echom "vproj: No git changes for " .. name
+    return
+  elseif xy == "??"
+    res = GitLines("diff --no-index -- /dev/null " .. shellescape(path), [0, 1])
+  elseif xy[0] != " " && xy[1] != " "
+    res = GitLines("diff HEAD -- " .. shellescape(path))
+  elseif xy[0] != " "
+    res = GitLines("diff --cached -- " .. shellescape(path))
   else
-    cmd = "git diff -- " .. shellescape(path)
+    res = GitLines("diff -- " .. shellescape(path))
   endif
+  # Output is gathered before any window changes, so a failure leaves the
+  # layout untouched.
+  if !res.ok
+    Error("vproj: Diff failed for " .. name .. ": " .. join(res.lines, " "))
+    return
+  endif
+  if ShowScratchSplit('vproj-diff:' .. name, res.lines, 'diff')
+    echom "Diff: " .. name
+  endif
+enddef
 
+# Show lines read-only in a new vertical split beside the edit window;
+# q closes it. The user's own windows and buffers are not touched. Returns
+# false when no split could be made.
+def ShowScratchSplit(name: string, lines: list<string>, ftype: string): bool
   var pane_wid: number = win_getid()
-  if OpenInRightPanel() < 0
-    return
+  var target_wid: number = EditTargetWindow()
+  if target_wid == 0
+    return false
   endif
-  enew
-  setlocal buftype=nofile
-  setlocal bufhidden=wipe
-  setlocal noswapfile
-  setlocal nobuflisted
-  setlocal filetype=diff
-  setlocal syntax=diff
-  setlocal wrap=0
-  setlocal readonly
-  nnoremap <buffer> <silent> q <Cmd>close<CR>
-  nnoremap <buffer> <silent> do <Nop>
-  nnoremap <buffer> <silent> dp <Nop>
-  silent execute 'read !' .. cmd
-  if v:shell_error != 0
-    close
+  win_gotoid(target_wid)
+  LowerCmdheight()
+  var saved_minwidth: number = &winminwidth
+  var saved_minheight: number = &winminheight
+  set winminwidth=1 winminheight=1
+  try
+    rightbelow vnew
+  catch
     win_gotoid(pane_wid)
-    Error('vproj: Diff failed for ' .. get(item, "name", path))
-    return
+    Error('vproj: Cannot open split — ' .. v:exception)
+    return false
+  finally
+    RestoreCmdheight()
+    &winminwidth = saved_minwidth
+    &winminheight = saved_minheight
+  endtry
+  setlocal buftype=nofile bufhidden=wipe noswapfile nobuflisted nowrap
+  execute 'silent! keepalt file ' .. fnameescape(name)
+  setline(1, lines)
+  if !empty(ftype)
+    &l:filetype = ftype
   endif
+  setlocal nomodifiable nomodified readonly
+  nnoremap <buffer> <silent> q <Cmd>close<CR>
   cursor(1, 1)
-  delete _
-  setlocal nomodifiable
-  setlocal nomodified
-
   win_gotoid(pane_wid)
-  echom "Diff: " .. get(item, "name", path)
+  return true
 enddef
 
 export def DiscardChanges(): void
@@ -1609,53 +1707,55 @@ export def DiscardChanges(): void
     return
   endif
 
-  var status_map: dict<string> = GitStatusMap()
-  var st: string = get(status_map, path, "")
+  var xy: string = GitStatusXY(path)
   var name: string = get(item, "name", path)
-  if empty(st)
+  if empty(xy)
     echom "vproj: No git changes for " .. name
     return
   endif
 
+  # Say exactly what will happen; the three cases do different things.
+  var question: string
+  if xy == "??"
+    question = "Delete untracked file " .. name .. "?"
+  elseif xy[0] == "A"
+    question = "Unstage new file " .. name .. "? (the file is kept)"
+  else
+    question = "Discard all changes to " .. name .. " (staged and unstaged)?"
+  endif
   echohl WarningMsg
-  var answer: string = input("Discard changes to " .. name .. "? y/N: ")
+  var answer: string = input(question .. " y/N: ")
   echohl None
   if tolower(answer) != "y"
     echom "Cancelled"
     return
   endif
 
-  if st == "?"
-    var abs_path: string = fnamemodify(path, ':p')
-    delete(abs_path)
-    if !filereadable(abs_path)
+  var res: dict<any>
+  if xy == "??"
+    if delete(path) == 0
       echom "Deleted: " .. name
     else
-      echom "Failed to delete: " .. name
+      Error("vproj: Failed to delete " .. name)
     endif
-  elseif st == "A"
-    system("git reset HEAD -- " .. shellescape(path) .. " 2>/dev/null")
-    if v:shell_error == 0
+  elseif xy[0] == "A"
+    res = GitLines("rm --cached -q -- " .. shellescape(path))
+    if res.ok
       echom "Unstaged: " .. name
     else
-      Error("vproj: Failed to unstage " .. name)
+      Error("vproj: Failed to unstage " .. name .. ": " .. join(res.lines, " "))
     endif
-  elseif st == "M" || st == "R"
-    system("git restore -- " .. shellescape(path) .. " 2>/dev/null")
-    if v:shell_error == 0
-      echom "Reverted: " .. name
+  else
+    res = GitLines("restore --source=HEAD --staged --worktree -- " .. shellescape(path))
+    if res.ok
+      echom "Reverted to HEAD: " .. name
     else
-      Error("vproj: Failed to revert " .. name)
-    endif
-  elseif st == "D"
-    system("git restore --source=HEAD -- " .. shellescape(path) .. " 2>/dev/null")
-    if v:shell_error == 0
-      echom "Restored: " .. name
-    else
-      Error("vproj: Failed to restore " .. name)
+      Error("vproj: Failed to revert " .. name .. ": " .. join(res.lines, " "))
     endif
   endif
 
+  # Buffers showing the file now differ from disk; let Vim notice.
+  silent! checktime
   InvalidateGitCache()
   Render()
 enddef
@@ -1681,38 +1781,20 @@ export def GitBlame(): void
     echom 'vproj: Not in a git repository'
     return
   endif
-  var tracked: string = system('git -C ' .. shellescape(root) .. ' ls-files ' .. shellescape(path) .. ' 2>/dev/null')
-  if empty(trim(tracked))
+  var tracked: dict<any> = GitLines('ls-files -- ' .. shellescape(path))
+  if !tracked.ok || empty(tracked.lines)
     echom 'vproj: File is not tracked by git'
     return
   endif
-  var pane_wid: number = win_getid()
-  if OpenInRightPanel() < 0
+  var name: string = get(item, 'name', path)
+  var res: dict<any> = GitLines('annotate -- ' .. shellescape(path))
+  if !res.ok
+    Error('vproj: Blame failed for ' .. name .. ': ' .. join(res.lines, ' '))
     return
   endif
-  enew
-  setlocal buftype=nofile
-  setlocal bufhidden=wipe
-  setlocal noswapfile
-  setlocal nobuflisted
-  setlocal wrap=0
-  setlocal readonly
-  nnoremap <buffer> <silent> q <Cmd>close<CR>
-  nnoremap <buffer> <silent> do <Nop>
-  nnoremap <buffer> <silent> dp <Nop>
-  silent execute 'read !git -C ' .. shellescape(root) .. ' annotate -- ' .. shellescape(path)
-  if v:shell_error != 0
-    close
-    win_gotoid(pane_wid)
-    Error('vproj: Blame failed for ' .. get(item, 'name', path))
-    return
+  if ShowScratchSplit('vproj-blame:' .. name, res.lines, '')
+    echom 'Blame: ' .. name
   endif
-  cursor(1, 1)
-  delete _
-  setlocal nomodifiable
-  setlocal nomodified
-  win_gotoid(pane_wid)
-  echom 'Blame: ' .. get(item, 'name', path)
 enddef
 
 export def TogglePreview(): void
@@ -1963,13 +2045,26 @@ export def GitCommit(): void
   endif
   var output: string = system('git -C ' .. shellescape(root) .. ' commit -m ' .. shellescape(msg) .. ' 2>&1')
   if v:shell_error != 0
-    echom 'vproj: Commit failed — ' .. substitute(output, '\n', ' ', 'g')
+    Error('vproj: Commit failed — ' .. substitute(output, '\n', ' ', 'g'))
   else
     var hash: string = system('git -C ' .. shellescape(root) .. ' rev-parse --short HEAD 2>/dev/null')
     echom 'vproj: Committed ' .. trim(hash)
   endif
   InvalidateGitCache()
   Render()
+enddef
+
+# Run a network git command with terminal prompts disabled: a credential
+# prompt would hang Vim, since system() has no terminal to type into.
+def GitNoPrompt(args: string): string
+  var saved: any = getenv('GIT_TERMINAL_PROMPT')
+  setenv('GIT_TERMINAL_PROMPT', '0')
+  try
+    return system('git -C ' .. shellescape(GitRoot()) .. ' ' .. args .. ' 2>&1')
+  finally
+    setenv('GIT_TERMINAL_PROMPT', saved)
+  endtry
+  return ''
 enddef
 
 export def GitPush(): void
@@ -1986,9 +2081,9 @@ export def GitPush(): void
     Error('vproj: No remote configured')
     return
   endif
-  var output: string = system('git -C ' .. shellescape(root) .. ' push 2>&1')
+  var output: string = GitNoPrompt('push')
   if v:shell_error != 0
-    echom 'vproj: Push failed — ' .. substitute(output, '\n', ' ', 'g')
+    Error('vproj: Push failed — ' .. substitute(output, '\n', ' ', 'g'))
   else
     echom 'vproj: Pushed'
   endif
@@ -2010,12 +2105,14 @@ export def GitPull(): void
     Error('vproj: No remote configured')
     return
   endif
-  var output: string = system('git -C ' .. shellescape(root) .. ' pull --ff-only 2>&1')
+  var output: string = GitNoPrompt('pull --ff-only')
   if v:shell_error != 0
-    echom 'vproj: Pull failed — ' .. substitute(output, '\n', ' ', 'g')
+    Error('vproj: Pull failed — ' .. substitute(output, '\n', ' ', 'g'))
   else
     echom 'vproj: Pulled — ' .. substitute(trim(output), '\n', ' ', 'g')
   endif
+  # Files under open buffers may have changed.
+  silent! checktime
   InvalidateGitCache()
   Render()
 enddef
@@ -2043,12 +2140,19 @@ export def GitBranchSwitch(): void
     echom 'vproj: Branch switch cancelled'
     return
   endif
+  # A leading '-' would be read as an option, not a branch name.
+  if target =~ '^-'
+    Error('vproj: Invalid branch name: ' .. target)
+    return
+  endif
   var output: string = system('git -C ' .. shellescape(root) .. ' switch ' .. shellescape(target) .. ' 2>&1')
   if v:shell_error != 0
-    echom 'vproj: Checkout failed — ' .. substitute(output, '\n', ' ', 'g')
+    Error('vproj: Branch switch failed — ' .. substitute(output, '\n', ' ', 'g'))
   else
     echom 'vproj: Switched to ' .. target
   endif
+  # Files under open buffers may have changed.
+  silent! checktime
   InvalidateGitCache()
   Render()
 enddef
@@ -2069,10 +2173,12 @@ export def GitStashPush(): void
   endif
   var output: string = system(cmd .. ' 2>&1')
   if v:shell_error != 0
-    echom 'vproj: Stash failed — ' .. substitute(output, '\n', ' ', 'g')
+    Error('vproj: Stash failed — ' .. substitute(output, '\n', ' ', 'g'))
   else
     echom 'vproj: Changes stashed' .. (empty(msg) ? '' : ' — ' .. msg)
   endif
+  # Files under open buffers may have changed.
+  silent! checktime
   InvalidateGitCache()
   Render()
 enddef
@@ -2096,16 +2202,22 @@ export def GitStashPop(): void
     echom '  ' .. line
   endfor
   var ref: string = input('Pop which stash? (Enter for top): ')
+  if ref =~ '^-'
+    Error('vproj: Invalid stash reference: ' .. ref)
+    return
+  endif
   var cmd: string = 'git -C ' .. shellescape(root) .. ' stash pop'
   if !empty(ref)
     cmd ..= ' ' .. shellescape(ref)
   endif
   var output: string = system(cmd .. ' 2>&1')
   if v:shell_error != 0
-    echom 'vproj: Stash pop failed — ' .. substitute(output, '\n', ' ', 'g')
+    Error('vproj: Stash pop failed — ' .. substitute(output, '\n', ' ', 'g'))
   else
     echom 'vproj: Stash popped'
   endif
+  # Files under open buffers may have changed.
+  silent! checktime
   InvalidateGitCache()
   Render()
 enddef
@@ -2377,86 +2489,100 @@ def NavigateInto(subdir: string): void
   Render()
 enddef
 
-def OpenInRightPanel(): number
-  # If only the pane window exists, create a new vertical split on the right.
-  # If a non-pane window already exists, move there (reuse it).
-  # Returns with cursor in the target window.
-  var pane_wid: number = win_getid()
+# True when wid shows an ordinary file buffer the user edits in: not the
+# pane, not the preview, not a terminal, help, quickfix or other special
+# buffer. Opening a file in a terminal window would end its job.
+def IsEditWindow(wid: number): bool
+  if wid <= 0 || win_id2win(wid) <= 0
+    return false
+  endif
+  var bnr: number = winbufnr(wid)
+  if bnr == pane_bufnr || bnr == preview_bufnr
+    return false
+  endif
+  return getbufvar(bnr, '&buftype') == ''
+enddef
+
+# The window a file or buffer from the pane should open in: the window the
+# user came from if it is still an edit window, else the first edit window
+# in this tab, else a new vertical split right of the pane (a horizontal
+# split would put the file inside the pane's column). Returns 0 on failure.
+def EditTargetWindow(): number
+  if IsEditWindow(saved_origin_wid)
+    return saved_origin_wid
+  endif
+  for wnr in range(1, winnr('$'))
+    if IsEditWindow(win_getid(wnr))
+      saved_origin_wid = win_getid(wnr)
+      return saved_origin_wid
+    endif
+  endfor
+  var back_wid: number = win_getid()
   LowerCmdheight()
   var saved_minwidth: number = &winminwidth
   var saved_minheight: number = &winminheight
   set winminwidth=1 winminheight=1
   try
-    var found_non_pane: bool = false
-    for wnr in range(1, winnr('$'))
-      var wid: number = win_getid(wnr)
-      if wid != pane_wid
-        win_gotoid(wid)
-        found_non_pane = true
-        break
-      endif
-    endfor
-    if !found_non_pane
-      botright vnew
-    endif
+    botright vnew
   catch
-    win_gotoid(pane_wid)
-    Error('vproj: Cannot open right panel — ' .. v:exception)
-    return -1
+    win_gotoid(back_wid)
+    Error('vproj: Cannot open a window for the file — ' .. v:exception)
+    return 0
   finally
     RestoreCmdheight()
     &winminwidth = saved_minwidth
     &winminheight = saved_minheight
   endtry
-  return 0
+  saved_origin_wid = win_getid()
+  win_gotoid(back_wid)
+  return saved_origin_wid
 enddef
 
-def OpenFile(path: string): void
+# Open path in the edit window. Returns true when the file is now shown,
+# false when it was refused or the user cancelled.
+def OpenFile(path: string): bool
   if !IsRegularFile(path)
     Error('vproj: Cannot open special file: ' .. fnamemodify(path, ':t'))
-    return
+    return false
   endif
   if !filereadable(path)
     Error('vproj: Cannot read: ' .. path)
-    return
+    return false
   endif
   # Check for binary (null bytes in first 8KB)
   if IsBinary(path)
     Error('vproj: Binary file: ' .. fnamemodify(path, ':t'))
-    return
+    return false
   endif
-  # Navigate to the window the user was in before the pane opened
   var pane_wid: number = win_getid()
-  var target_wid: number = 0
-  if saved_origin_wid > 0 && win_id2win(saved_origin_wid) > 0
-    target_wid = saved_origin_wid
-  else
-    # Fallback: find any non-pane window
-    for wnr in range(1, winnr('$'))
-      var wid: number = win_getid(wnr)
-      if wid != pane_wid
-        target_wid = wid
-        break
-      endif
-    endfor
-    # Only pane exists — create a split for the file
-    if target_wid == 0
-      botright new
-      target_wid = win_getid()
-      saved_origin_wid = target_wid
-    endif
+  var target_wid: number = EditTargetWindow()
+  if target_wid == 0
+    return false
   endif
   win_gotoid(target_wid)
+  # Already showing this file: nothing to do, and :edit! would throw away
+  # its unsaved changes.
+  if fnamemodify(bufname('%'), ':p') == fnamemodify(path, ':p')
+    return true
+  endif
   if &modified
     var choice: number = confirm(
       'Save changes to ' .. expand('%:t') .. ' before switching?',
       "&Yes\n&No\n&Cancel"
     )
-    if choice == 1
-      write
-    elseif choice == 3
+    # confirm() returns 0 for Esc / Ctrl-C: that is a cancel, not a "No".
+    if choice == 0 || choice == 3
       win_gotoid(pane_wid)
-      return
+      return false
+    endif
+    if choice == 1
+      try
+        write
+      catch
+        Error('vproj: Cannot write ' .. expand('%:t') .. ' — ' .. v:exception)
+        win_gotoid(pane_wid)
+        return false
+      endtry
     endif
   endif
   var saved_shm: string = &shortmess
@@ -2466,6 +2592,7 @@ def OpenFile(path: string): void
   finally
     &shortmess = saved_shm
   endtry
+  return true
 enddef
 
 def IsBinary(path: string): bool
@@ -2555,25 +2682,17 @@ def OpenBuffer(bufnr: number): void
     return
   endif
   var pane_wid: number = win_getid()
-  if winnr('$') < 2
-    LowerCmdheight()
-    var saved_minwidth: number = &winminwidth
-    var saved_minheight: number = &winminheight
-    set winminwidth=1 winminheight=1
-    try
-      rightbelow split
-    catch
-      Error('vproj: Cannot open buffer — ' .. v:exception)
-      return
-    finally
-      RestoreCmdheight()
-      &winminwidth = saved_minwidth
-      &winminheight = saved_minheight
-    endtry
-  else
-    wincmd p
+  var target_wid: number = EditTargetWindow()
+  if target_wid == 0
+    return
   endif
-  execute 'buffer ' .. bufnr
+  win_gotoid(target_wid)
+  try
+    execute 'buffer ' .. bufnr
+  catch
+    # E37: the window's buffer has unsaved changes and 'hidden' is off.
+    Error('vproj: Cannot switch buffer — ' .. v:exception)
+  endtry
   win_gotoid(pane_wid)
 enddef
 
@@ -2597,43 +2716,45 @@ export def GrepSearch(): void
   if empty(pattern)
     return
   endif
+  # Inside a repo search the whole worktree; outside one, search the pane's
+  # directory with --no-index.
   var root: string = GitRoot()
+  var no_index: string = ''
   if empty(root)
     root = current_dir
+    no_index = '--no-index '
   endif
-  var cmd: string = 'git -C ' .. shellescape(root) .. ' grep -n -i -z -- ' .. shellescape(pattern) .. ' 2>&1'
-  var output: string = system(cmd)
-  var shell_err: number = v:shell_error
-  if shell_err != 0
-    Error('vproj: no matches for: ' .. pattern)
+  var output: string = system('git -C ' .. shellescape(root) .. ' grep ' .. no_index
+    .. '-n -i -z -- ' .. shellescape(pattern) .. ' 2>&1')
+  # git grep: 0 = matches, 1 = no match, anything else = error.
+  if v:shell_error == 1
+    echom 'vproj: no matches for: ' .. pattern
+    return
+  elseif v:shell_error != 0
+    Error('vproj: grep failed: ' .. substitute(trim(output), '\n', ' ', 'g'))
     return
   endif
+  # With -z each match is file NUL lnum NUL text NL; system() turns NUL into
+  # SOH (0x01). Paths are relative to root, so make them absolute for
+  # quickfix, which would otherwise resolve them against Vim's cwd.
   var qflist: list<dict<any>> = []
-  var nul: string = nr2char(0)
-  var parts: list<string> = split(output, nul)
-  if !empty(parts) && parts[-1] == ''
-    parts = parts[: -2]
-  endif
-  var i: number = 0
-  while i + 1 < len(parts)
-    var fname: string = parts[i]
-    var linenum_text: string = parts[i + 1]
-    var colon: number = stridx(linenum_text, ':')
-    if colon > 0
-      var lnum: number = str2nr(linenum_text[: colon - 1])
-      var text: string = linenum_text[colon + 1 :]
-      if !empty(fname) && lnum > 0
-        qflist->add({
-          filename: fname,
-          lnum: lnum,
-          text: substitute(text, '^\s*', '', ''),
-        })
-      endif
+  for line in split(output, "\n")
+    var fields: list<string> = split(line, "\x01", true)
+    if len(fields) < 3
+      continue
     endif
-    i += 2
-  endwhile
+    var lnum: number = str2nr(fields[1])
+    if empty(fields[0]) || lnum <= 0
+      continue
+    endif
+    qflist->add({
+      filename: root .. '/' .. fields[0],
+      lnum: lnum,
+      text: substitute(join(fields[2 : ], ' '), '^\s*', '', ''),
+    })
+  endfor
   if empty(qflist)
-    Error('vproj: no matches for: ' .. pattern)
+    echom 'vproj: no matches for: ' .. pattern
     return
   endif
   setqflist([], ' ', {items: qflist, title: 'grep: ' .. pattern})
@@ -2673,6 +2794,7 @@ export def NextPage(): void
     return
   endif
   current_page = (current_page + 1) % total_pages
+  nav_offset = 0
   Render()
 enddef
 
@@ -2687,6 +2809,7 @@ export def PrevPage(): void
   if current_page < 0
     current_page = total_pages - 1
   endif
+  nav_offset = 0
   Render()
 enddef
 
@@ -2717,7 +2840,8 @@ export def CloseBuffer(): void
           execute 'sbuffer ' .. bufnr .. ' | write | close'
         endif
         win_gotoid(cur_wid)
-      elseif choice == 3
+      elseif choice == 0 || choice == 3
+        # 0 is Esc / Ctrl-C: a cancel, not a "No" that discards the edits.
         return
       endif
     endif
@@ -2766,16 +2890,60 @@ def SelectedFile(op: string): string
   return path
 enddef
 
-# Buffer number holding this file, or -1. Compares full paths instead of
-# bufnr(path), because bufnr() treats its argument as a pattern.
-def FileBufnr(path: string): number
+# Canonical spelling of a file path: the directory part is resolved, so
+# a file reached through a symlinked directory matches its buffer opened via
+# the real path. The last component is kept, so a symlinked file is still
+# told apart from its target.
+def CanonicalPath(path: string): string
   var full: string = fnamemodify(path, ':p')
+  return resolve(fnamemodify(full, ':h')) .. '/' .. fnamemodify(full, ':t')
+enddef
+
+# Buffer number holding this file, or -1. Compares canonical paths instead
+# of bufnr(path), because bufnr() treats its argument as a pattern.
+def FileBufnr(path: string): number
+  var want: string = CanonicalPath(path)
   for info in getbufinfo()
-    if !empty(info.name) && fnamemodify(info.name, ':p') == full
+    if !empty(info.name) && CanonicalPath(info.name) == want
       return info.bufnr
     endif
   endfor
   return -1
+enddef
+
+# True when a buffer already holds the destination name. Writing the file
+# there would split that buffer from its file, and :edit would show it in
+# place of the renamed file.
+def DestinationHasBuffer(dst: string, op: string): bool
+  if FileBufnr(dst) > 0
+    Error('vproj: ' .. op .. ' — a buffer named ' .. fnamemodify(dst, ':t') .. ' is open; close it first')
+    return true
+  endif
+  return false
+enddef
+
+# Put the selection on path if it is listed on any page, so the next key
+# acts on the file the user just created or renamed.
+def SelectPath(path: string): void
+  var display_items = empty(filter_pattern) ? items : ApplyFilter(items)
+  if git_filter_active && (current_mode == 'file' || current_mode == 'code')
+    display_items = ApplyGitFilter(display_items)
+  endif
+  var want: string = fnamemodify(path, ':p')
+  var idx: number = 0
+  for item in display_items
+    if fnamemodify(get(item, 'path', ''), ':p') == want && !get(item, 'is_parent', false)
+      if paging_active && items_per_page > 0
+        current_page = idx / items_per_page
+        selected_line = FirstSelectableLine() + idx % items_per_page
+      else
+        selected_line = FirstSelectableLine() + idx
+      endif
+      Render()
+      return
+    endif
+    idx += 1
+  endfor
 enddef
 
 # True when the file has unsaved changes in a buffer. Changing the file on
@@ -2796,8 +2964,13 @@ def RetargetBuffer(old_path: string, new_path: string): void
   if bnr < 0
     return
   endif
+  # Keep each window's cursor and scroll position across the :edit. The
+  # command string run by win_execute() cannot see this function's locals,
+  # so the view travels through a script variable.
   for wid in win_findbuf(bnr)
+    win_execute(wid, 'retarget_view = winsaveview()')
     win_execute(wid, 'keepalt edit ' .. fnameescape(new_path))
+    win_execute(wid, 'winrestview(retarget_view)')
   endfor
   if bufexists(bnr) && empty(win_findbuf(bnr))
     execute 'bwipeout ' .. bnr
@@ -2833,6 +3006,25 @@ export def DeleteSelected(): void
   AfterFileOp()
 enddef
 
+# Copy src to a dst that does not exist yet. filecopy() is used when this
+# Vim has it (it is recent in 9.1); otherwise a binary-safe read/write that
+# keeps the source's permissions.
+def CopyFileBytes(src: string, dst: string): bool
+  if exists('*filecopy')
+    return filecopy(src, dst)
+  endif
+  try
+    if writefile(readblob(src), dst, 'b') != 0
+      return false
+    endif
+  catch
+    silent! delete(dst)
+    return false
+  endtry
+  setfperm(dst, getfperm(src))
+  return true
+enddef
+
 export def CopySelected(): void
   var src: string = SelectedFile('Copy')
   if empty(src)
@@ -2852,12 +3044,18 @@ export def CopySelected(): void
     dst = dir .. '/' .. base .. '_' .. n .. suffix
   endwhile
 
-  if !filecopy(src, dst)
+  if DestinationHasBuffer(dst, 'Copy')
+    return
+  endif
+  # Copy what a symlink points to; copying the link itself would make the
+  # copy share its content with the original.
+  if !CopyFileBytes(resolve(src), dst)
     Error('vproj: Copy failed: ' .. src)
     return
   endif
   echom 'Created ' .. fnamemodify(dst, ':t')
   AfterFileOp()
+  SelectPath(dst)
 enddef
 
 export def RenameSelected(): void
@@ -2885,6 +3083,9 @@ export def RenameSelected(): void
     Error('vproj: Rename — already exists: ' .. new_name)
     return
   endif
+  if DestinationHasBuffer(dst, 'Rename')
+    return
+  endif
   if rename(src, dst) != 0
     Error('vproj: Could not rename ' .. old_name .. ' to ' .. new_name)
     return
@@ -2892,11 +3093,21 @@ export def RenameSelected(): void
   RetargetBuffer(src, dst)
   echom 'Renamed ' .. old_name .. ' -> ' .. new_name
   AfterFileOp()
+  SelectPath(dst)
 enddef
 
 export def MoveSelected(): void
   var src: string = SelectedFile('Move')
   if empty(src) || HasUnsavedBuffer(src, 'Move')
+    return
+  endif
+  # A symlink with a relative target would dangle in another directory,
+  # and a dangling link is not listed, so it could not be moved back. Vim
+  # cannot read a link's raw target (and rename() misreports on dangling
+  # links), so links are not moved at all. Rename keeps the directory and
+  # is safe.
+  if getftype(src) == 'link'
+    Error('vproj: Move — ' .. fnamemodify(src, ':t') .. ' is a symbolic link; vproj does not move links (a relative link would break)')
     return
   endif
   var name: string = fnamemodify(src, ':t')
@@ -2905,9 +3116,14 @@ export def MoveSelected(): void
     echom 'Cancelled'
     return
   endif
-  # :p expands a leading ~ and makes the path absolute; drop the trailing
-  # slash it leaves on directories.
-  var dest_dir: string = fnamemodify(answer, ':p')
+  # A relative answer is relative to the file's own directory (the pane's
+  # directory), not Vim's cwd. :p expands a leading ~ and makes the path
+  # absolute; drop the trailing slash it leaves on directories.
+  var target: string = answer
+  if target !~ '^\~' && !isabsolutepath(target)
+    target = fnamemodify(src, ':h') .. '/' .. target
+  endif
+  var dest_dir: string = simplify(fnamemodify(target, ':p'))
   if dest_dir != '/'
     dest_dir = dest_dir->substitute('/\+$', '', '')
   endif
@@ -2923,6 +3139,9 @@ export def MoveSelected(): void
   # rename() overwrites without warning — refuse instead.
   if getftype(dst) != ''
     Error('vproj: Move — already exists: ' .. dst)
+    return
+  endif
+  if DestinationHasBuffer(dst, 'Move')
     return
   endif
   if rename(src, dst) != 0
@@ -2944,13 +3163,15 @@ def FindVprojFile(dir: string): string
   if !empty(exact) && filereadable(exact)
     return fnamemodify(exact, ':p')
   endif
-  # Fall back to wildcard pattern for hand-named .vproj files
-  var d: string = fnamemodify(dir, ':p')
+  # Fall back to wildcard pattern for hand-named .vproj files. :p leaves a
+  # trailing slash on directories; strip it, or the result reads dir//x.vproj
+  # and no longer compares equal to the same file spelled dir/x.vproj.
+  var d: string = fnamemodify(dir, ':p')->substitute('/\+$', '', '')
   while d != '' && d != '/'
     var matches = glob(escape(d, '*?[]{}~\\') .. '/*.vproj', 0, 1)
     for m in matches
       if m !~ '[~]$' && m !~ '\.bak$' && filereadable(m) && getftype(m) == 'file'
-        return m
+        return fnamemodify(m, ':p')
       endif
     endfor
     var parent = fnamemodify(d, ':h')
@@ -2971,11 +3192,39 @@ const SECTION_MAP: dict<string> = {
   'excluded files': 'excluded_files',
 }
 
+# Resolve a Project Root value. Empty means the .vproj file's directory; a
+# relative value is relative to that directory, not to Vim's cwd.
+def ResolveProjectRoot(raw: string, vproj_path: string): string
+  var base: string = fnamemodify(vproj_path, ':p:h')
+  if empty(raw)
+    return base
+  endif
+  var r: string = raw
+  if r =~ '^\~'
+    r = fnamemodify(r, ':p')
+  elseif !isabsolutepath(r)
+    r = base .. '/' .. r
+  endif
+  r = simplify(r)->substitute('/\+$', '', '')
+  return empty(r) ? '/' : r
+enddef
+
+# Normalise a list entry: trailing slashes carry no meaning ("src/" is "src").
+def NormalizeEntry(entry: string): string
+  var e: string = entry->substitute('/\+$', '', '')
+  return empty(e) ? entry : e
+enddef
+
 export def ParseVprojFile(path: string): dict<any>
+  # root is the resolved directory used for matching; root_raw is the text
+  # from the file, written back unchanged so a root that is missing today
+  # (e.g. an unmounted drive) is not erased. comments keeps top-level #
+  # lines so a save does not drop them.
   var p: dict<any> = {
-    name: '', root: '', vproj_file: path,
+    name: '', root: ResolveProjectRoot('', path), root_raw: '', vproj_file: path,
     included_dirs: [], included_files: [],
     excluded_dirs: [], excluded_files: [],
+    comments: [],
   }
   if !filereadable(path)
     return p
@@ -2995,56 +3244,59 @@ export def ParseVprojFile(path: string): dict<any>
     if empty(t)
       continue
     endif
-    # Only skip # comments at top level (before any section), not inside
-    # list sections where filenames may legitimately start with #
+    # Only treat # as a comment at top level (before any section), not
+    # inside list sections where filenames may legitimately start with #
     if (empty(section) || section == 'name' || section == 'root') && t[0] == '#'
+      p.comments->add(t)
       continue
     endif
 
     # Check if line starts with a known section header
     var header_type: string = ''
+    var value: string = ''
     for key in keys(SECTION_MAP)
       if tolower(t) =~ '^' .. escape(key, ' ') .. '\s*:'
         header_type = SECTION_MAP[key]
-        # Extract value after colon for name/root inline format
-        var after_colon: string = t->substitute('^[^:]*:\s*', '', '')
-        if !empty(after_colon) && (header_type == 'name' || header_type == 'root')
-          p[header_type] = after_colon
-          if header_type == 'root'
-            p[header_type] = p[header_type]->substitute('/$', '', '')
-            p[header_type] = fnamemodify(p[header_type], ':p')->substitute('/$', '', '')
-            if !isdirectory(p[header_type])
-              Error('vproj: Invalid project root in .vproj: ' .. p[header_type])
-              p[header_type] = ''
-            endif
-          endif
-          section = ''
-        else
-          section = header_type
-        endif
+        value = t->substitute('^[^:]*:\s*', '', '')
         break
       endif
     endfor
+
     if !empty(header_type)
+      # Name and root may be inline ("Project Name: x") or on the next line.
+      if !empty(value) && (header_type == 'name' || header_type == 'root')
+        SetScalar(p, header_type, value, path)
+        section = ''
+      else
+        section = header_type
+      endif
       continue
     endif
 
     if section == 'name' || section == 'root'
-      p[section] = t
-      if section == 'root'
-        p[section] = p[section]->substitute('/$', '', '')
-        p[section] = fnamemodify(p[section], ':p')->substitute('/$', '', '')
-        if !isdirectory(p[section])
-          Error('vproj: Invalid project root in .vproj: ' .. p[section])
-          p[section] = ''
-        endif
-      endif
+      SetScalar(p, section, t, path)
       section = ''
     elseif !empty(section)
-      p[section]->add(t)
+      p[section]->add(section =~ '_dirs$' ? NormalizeEntry(t) : t)
     endif
   endfor
   return p
+enddef
+
+def SetScalar(p: dict<any>, field: string, value: string, path: string): void
+  if field == 'name'
+    p.name = value
+    return
+  endif
+  p.root_raw = value
+  var resolved: string = ResolveProjectRoot(value, path)
+  if isdirectory(resolved)
+    p.root = resolved
+  else
+    # Keep root_raw for writing; match against the .vproj directory meanwhile.
+    Error('vproj: Project root not found, using the .vproj directory: ' .. resolved)
+    p.root = ResolveProjectRoot('', path)
+  endif
 enddef
 
 def WriteVprojFile(): bool
@@ -3052,9 +3304,9 @@ def WriteVprojFile(): bool
     return false
   endif
 
-  var lines: list<string> = []
+  var lines: list<string> = copy(get(project, 'comments', []))
   lines->add('Project Name: ' .. project.name)
-  lines->add('Project Root: ' .. project.root)
+  lines->add('Project Root: ' .. get(project, 'root_raw', project.root))
 
   lines->add('Included Directories:')
   for d in project.included_dirs
@@ -3104,28 +3356,62 @@ def RelPath(full: string): string
   return rel
 enddef
 
-def IsUnderIncluded(rel: string): bool
-  for d in project.included_dirs
-    if rel == d
+# True when entry names rel. An entry with * ? or [ is a glob, matched
+# against the whole relative path and against its last component, so
+# "*.swp" matches "a/b/x.swp".
+def EntryMatches(entry: string, rel: string): bool
+  if entry =~ '[*?[]'
+    var re: string = glob2regpat(entry)
+    return rel =~ re || fnamemodify(rel, ':t') =~ re
+  endif
+  return rel == entry
+enddef
+
+# True when rel is the directory entry or lies under it.
+def UnderDirEntry(entry: string, rel: string): bool
+  if empty(entry)
+    return false
+  endif
+  var r: string = rel
+  while !empty(r) && r != '.'
+    if EntryMatches(entry, r)
       return true
     endif
-    if !empty(d) && stridx(rel, d .. '/') == 0
+    var parent: string = fnamemodify(r, ':h')
+    if parent == r
+      break
+    endif
+    r = parent
+  endwhile
+  return false
+enddef
+
+def IsUnderIncluded(rel: string): bool
+  for d in project.included_dirs
+    if UnderDirEntry(d, rel)
       return true
     endif
   endfor
-  return project.included_files->index(rel) >= 0
+  for f in project.included_files
+    if EntryMatches(f, rel)
+      return true
+    endif
+  endfor
+  return false
 enddef
 
 def IsUnderExcluded(rel: string): bool
   for d in project.excluded_dirs
-    if rel == d
-      return true
-    endif
-    if !empty(d) && stridx(rel, d .. '/') == 0
+    if UnderDirEntry(d, rel)
       return true
     endif
   endfor
-  return project.excluded_files->index(rel) >= 0
+  for f in project.excluded_files
+    if EntryMatches(f, rel)
+      return true
+    endif
+  endfor
+  return false
 enddef
 
 def CodeItems(): list<dict<any>>
@@ -3383,7 +3669,8 @@ export def RenameProject(): void
         return
       endif
     endif
-    project = {name: new_name, root: CurrentRoot(), vproj_file: target_path, included_dirs: [], included_files: [], excluded_dirs: [], excluded_files: []}
+    project = {name: new_name, root: CurrentRoot(), root_raw: CurrentRoot(), vproj_file: target_path,
+      included_dirs: [], included_files: [], excluded_dirs: [], excluded_files: [], comments: []}
     code_root = CurrentRoot()
     if !WriteVprojFile()
       project = {}
@@ -3407,15 +3694,25 @@ export def RenameProject(): void
 
   var old_name = project.name
   var old_file = project.vproj_file
+  var new_file: string = fnamemodify(old_file, ':h') .. '/' .. new_name .. '.vproj'
+  # Compare resolved full paths: "dir//x.vproj" and "dir/x.vproj" are the
+  # same file, and deleting the "old" one would delete the project.
+  var same_file: bool = resolve(fnamemodify(old_file, ':p')) == resolve(fnamemodify(new_file, ':p'))
+  if !same_file && getftype(new_file) != ''
+    var overwrite: string = tolower(input(new_file .. ' already exists. Overwrite? (y/N): '))
+    if overwrite != 'y'
+      return
+    endif
+  endif
   project.name = new_name
-  project.vproj_file = fnamemodify(old_file, ':h') .. '/' .. new_name .. '.vproj'
+  project.vproj_file = same_file ? old_file : new_file
   if !WriteVprojFile()
     project.name = old_name
     project.vproj_file = old_file
     Error('vproj: Failed to save renamed project — name reverted')
     return
   endif
-  if old_file != project.vproj_file && filereadable(old_file)
+  if !same_file && filereadable(old_file)
     if delete(old_file) != 0
       Error('vproj: Renamed project saved, but old file ' .. old_file .. ' could not be removed')
     endif
@@ -3447,8 +3744,11 @@ def QfixItems(): list<dict<any>>
     else
       fname = fnamemodify(fname, ':.')
     endif
+    # bufnr is the quickfix entry's own buffer; opening by it avoids
+    # bufnr(name), which pattern-matches and can pick a different file.
     result->add({
       filename: fname,
+      bufnr: get(entry, 'bufnr', 0),
       lnum: get(entry, 'lnum', 0),
       col: get(entry, 'col', 0),
       text: get(entry, 'text', ''),
@@ -3486,57 +3786,29 @@ def BuildQfixLines(qfix_items: list<dict<any>>): list<string>
 enddef
 
 def OpenQfixEntry(item: dict<any>): void
-  if empty(get(item, 'filename', ''))
+  var bnr: number = get(item, 'bufnr', 0)
+  if bnr <= 0 || !bufexists(bnr)
+    Error('vproj: Cannot open: ' .. get(item, 'filename', ''))
     return
   endif
   var pane_wid: number = win_getid()
-  # Find or create a non-pane window
-  if winnr('$') < 2
-    LowerCmdheight()
-    var saved_minwidth: number = &winminwidth
-    var saved_minheight: number = &winminheight
-    set winminwidth=1 winminheight=1
-    try
-      rightbelow split
-    catch
-      Error('vproj: Cannot open qfix entry — ' .. v:exception)
-      return
-    finally
-      RestoreCmdheight()
-      &winminwidth = saved_minwidth
-      &winminheight = saved_minheight
-    endtry
-  else
-    wincmd p
-  endif
-  # Open the file
-  var fname: string = get(item, 'filename', '')
-  if empty(fname)
-    win_gotoid(pane_wid)
+  var target_wid: number = EditTargetWindow()
+  if target_wid == 0
     return
   endif
-  var bufnr: number = bufnr(fname)
-  if bufnr >= 1
-    execute 'buffer ' .. bufnr
-  elseif filereadable(fname)
-    var saved_shm_qf: string = &shortmess
-    set shortmess+=A
-    try
-      execute 'edit ' .. fnameescape(fname)
-    finally
-      &shortmess = saved_shm_qf
-    endtry
-  else
-    Error('vproj: Cannot open: ' .. fname)
+  win_gotoid(target_wid)
+  try
+    execute 'buffer ' .. bnr
+  catch
+    # E37: the window's buffer has unsaved changes and 'hidden' is off.
+    Error('vproj: Cannot open ' .. get(item, 'filename', '') .. ' — ' .. v:exception)
     win_gotoid(pane_wid)
     return
-  endif
-  # Jump to line/column
-  if get(item, 'lnum', 0) > 0
-    execute 'normal! ' .. get(item, 'lnum', 0) .. 'G'
-  endif
-  if get(item, 'col', 0) > 0
-    execute 'normal! ' .. get(item, 'col', 0) .. '|'
+  endtry
+  # Quickfix col is a byte index; cursor() takes bytes, unlike the | motion.
+  var lnum: number = get(item, 'lnum', 0)
+  if lnum > 0
+    cursor(lnum, max([1, get(item, 'col', 0)]))
   endif
   win_gotoid(pane_wid)
 enddef
@@ -3610,6 +3882,14 @@ export def ShowHelp(): void
     'Press q to close this help.',
   ]
 
+  # Already open: go to it rather than stacking a second, broken window.
+  for info in getbufinfo()
+    if fnamemodify(info.name, ':t') == '[vproj-help]' && !empty(info.windows)
+      win_gotoid(info.windows[0])
+      return
+    endif
+  endfor
+
   var help_wid: number = 0
   var saved_winminwidth: number = &winminwidth
   var saved_winminheight: number = &winminheight
@@ -3619,7 +3899,8 @@ export def ShowHelp(): void
     help_wid = win_getid()
     setlocal bufhidden=wipe buftype=nofile nobuflisted noswapfile
     setlocal nonumber norelativenumber
-    silent file [vproj-help]
+    # fnameescape: unescaped, [vproj-help] is read as a pattern (E944).
+    execute 'silent file ' .. fnameescape('[vproj-help]')
     setlocal modifiable
     setline(1, lines)
     setlocal nomodifiable
@@ -3627,6 +3908,10 @@ export def ShowHelp(): void
     execute 'vert resize ' .. min([80, &columns - vproj#GetPaneWidth() - 4])
     redraw
   catch
+    # Don't leave a half-built empty window behind.
+    if help_wid > 0 && win_id2win(help_wid) > 0
+      win_execute(help_wid, 'close')
+    endif
     Error('vproj: Cannot open help — ' .. v:exception)
   finally
     &winminwidth = saved_winminwidth
@@ -3860,18 +4145,31 @@ def SaveSession(): void
   endif
   lines->add('width=' .. pane_width)
   lines->add('info=' .. (show_info_column ? '1' : '0'))
-  lines->add('open=' .. pane_open_mode)
   lines->add('git_filter=' .. (git_filter_active ? '1' : '0'))
+  # Write the new file first; keep the old one as .bak only once the new
+  # one is safely on disk. writefile() and rename() report failure by
+  # return value, so check both.
   var tmp: string = path .. '.tmp'
+  var written: bool = false
   try
-    if filereadable(path)
-      silent! rename(path, path .. '.bak')
-    endif
-    writefile(lines, tmp)
-    rename(tmp, path)
+    written = writefile(lines, tmp) == 0
   catch
-    silent! delete(tmp)
+    written = false
   endtry
+  if !written
+    silent! delete(tmp)
+    Error('vproj: could not save session to ' .. tmp)
+    return
+  endif
+  if filereadable(path) && rename(path, path .. '.bak') != 0
+    silent! delete(tmp)
+    Error('vproj: could not rotate session file ' .. path)
+    return
+  endif
+  if rename(tmp, path) != 0
+    silent! delete(tmp)
+    Error('vproj: could not save session to ' .. path)
+  endif
 enddef
 
 def LoadSession(): void
@@ -3907,14 +4205,10 @@ def LoadSession(): void
     elseif key == 'width'
       var w: number = str2nr(val)
       if w >= MIN_WIDTH && w <= MAX_WIDTH
-        pane_width = w
+        pane_width = min([w, SafeMaxWidth()])
       endif
     elseif key == 'info'
       show_info_column = (val == '1')
-    elseif key == 'open' && !empty(val)
-      if val == 'temporary' || val == 'permanent'
-        pane_open_mode = val
-      endif
     elseif key == 'git_filter'
       git_filter_active = (val == '1')
     endif

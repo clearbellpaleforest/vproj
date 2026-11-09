@@ -3,8 +3,22 @@ vim9script
 # Integration test: Special characters in filenames
 # Run: vim -N -u NONE -S tests/integration/test_special_chars.vim
 
-set rtp+=src
+# Hermetic setup (run_all.sh also isolates HOME/XDG_CACHE_HOME/TMPDIR):
+#  - session cache lives in a temp dir, never the real user cache
+#  - cwd is a temp fixture dir, so code-mode +/-/ToggleInclude can never write
+#    the repo's tracked vproj.vproj
+#  - runtimepath is absolute so autoload still resolves after any :cd
+$XDG_CACHE_HOME = tempname()
+execute 'set rtp+=' .. fnameescape(expand('<script>:p:h:h:h') .. '/src')
 runtime! plugin/vproj.vim
+set nomore
+const FIXTURE_DIR: string = tempname()
+mkdir(FIXTURE_DIR .. '/subdir_a', 'p')
+mkdir(FIXTURE_DIR .. '/subdir_b', 'p')
+writefile(['alpha'], FIXTURE_DIR .. '/alpha.txt')
+writefile(['beta'], FIXTURE_DIR .. '/beta.txt')
+writefile(['gamma'], FIXTURE_DIR .. '/gamma.txt')
+execute 'cd' fnameescape(FIXTURE_DIR)
 set nomore
 
 var failures: number = 0
@@ -36,7 +50,7 @@ def PaneContains(pattern: string): bool
 enddef
 
 # ── Create temp dir with special-char filenames ──
-var tmpdir: string = '/tmp/vproj_test_special_' .. strftime('%s')
+var tmpdir: string = tempname() .. '_vproj_test_special'
 mkdir(tmpdir, 'p')
 
 # Files with various special characters
@@ -152,7 +166,7 @@ endtry
 vproj#PaneClose()
 execute 'cd' saved_cwd
 silent! call delete(tmpdir, 'rf')
-call delete(expand('~/.cache/vproj/session'))
+call delete($XDG_CACHE_HOME .. '/vproj/session')
 
 echom ''
 if failures == 0

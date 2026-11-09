@@ -3,8 +3,22 @@ vim9script
 # Audit Fix Verification — tests all 8 items from the bug report
 # Run: vim -N -u NONE -S tests/audit_fixes.vim
 
-set rtp+=src
+# Hermetic setup (run_all.sh also isolates HOME/XDG_CACHE_HOME/TMPDIR):
+#  - session cache lives in a temp dir, never the real user cache
+#  - cwd is a temp fixture dir, so code-mode +/-/ToggleInclude can never write
+#    the repo's tracked vproj.vproj
+#  - runtimepath is absolute so autoload still resolves after any :cd
+$XDG_CACHE_HOME = tempname()
+execute 'set rtp+=' .. fnameescape(expand('<script>:p:h:h') .. '/src')
 runtime! plugin/vproj.vim
+set nomore
+const FIXTURE_DIR: string = tempname()
+mkdir(FIXTURE_DIR .. '/subdir_a', 'p')
+mkdir(FIXTURE_DIR .. '/subdir_b', 'p')
+writefile(['alpha'], FIXTURE_DIR .. '/alpha.txt')
+writefile(['beta'], FIXTURE_DIR .. '/beta.txt')
+writefile(['gamma'], FIXTURE_DIR .. '/gamma.txt')
+execute 'cd' fnameescape(FIXTURE_DIR)
 set nomore
 
 var failures: number = 0
@@ -71,7 +85,7 @@ FocusPane()
 # '.' must route through VprojKey (which dispatches to SelectByNavChar)
 var dot_map = maparg('.', 'n', 0, 1)
 Assert(!empty(dot_map), 'dot key "." is mapped')
-Assert(dot_map.rhs =~ 'VprojKey\|SelectByNavChar', 'dot "." maps to VprojKey or SelectByNavChar')
+Assert(get(dot_map, 'rhs', '') =~ 'VprojKey\|SelectByNavChar', 'dot "." maps to VprojKey or SelectByNavChar')
 
 # ──────────────────────────────────────────────
 # FIX 3: SelectByNavChar opens files immediately
@@ -81,36 +95,32 @@ Setup()
 FocusPane()
 vproj#SwitchMode('file')
 
-# Navigate past parent dir and subdirectories to a file
-var pbuf = bufnr('VPROJ')
-var cline: number = 3
-var found_file: bool = false
-for _ in range(100)
-  if cline > getbufinfo(pbuf)[0].linecount
-    break
-  endif
-  var linetext: string = getbufline(pbuf, cline)[0]
-  if linetext !~ '^[.a-z] .*/' && linetext =~ '^[.a-z] '
-    # This is a file — get its nav char
-    var nav_char = linetext[0]
-    if nav_char != '.'
-      # Save current window layout
-      var wins_before = winnr('$')
-      # Press the nav char
-      execute 'normal ' .. nav_char
-      # Should have opened file (new window or replaced content)
-      # In temp mode, pane should close
-      Assert(vproj#IsPaneVisible() == false || winnr('$') >= wins_before,
-            'Nav char ' .. nav_char .. ' opens file without crashing')
-      found_file = true
-      break
+# Find the first file line (not '..', not a dir/) and return its nav char.
+# A def, not a script-level loop: `var` inside a script-level for body is a
+# script item, and the second iteration aborts with E1041 (redefining).
+def FirstFileNavChar(): string
+  var pbuf: number = bufnr('VPROJ')
+  var total: number = getbufinfo(pbuf)[0].linecount
+  for lnum in range(3, total)
+    var linetext: string = getbufline(pbuf, lnum)[0]
+    if linetext =~ '^[a-z] ' && linetext !~ '^[a-z] .*/'
+      return linetext[0]
     endif
-  endif
-  cline += 1
-endfor
+  endfor
+  return ''
+enddef
 
-if !found_file
-  Assert(true, 'No file found in current dir (skipping nav-char file-open test)')
+# The fixture (cwd) holds alpha.txt, beta.txt, gamma.txt, so a file exists.
+var nav_char: string = FirstFileNavChar()
+Assert(!empty(nav_char), 'fixture listing has a file line with a nav char')
+if !empty(nav_char)
+  var wins_before: number = winnr('$')
+  execute 'normal ' .. nav_char
+  # Temporary mode: opening a file closes the pane; the file is current.
+  Assert(fnamemodify(bufname('%'), ':t') =~ '^\(alpha\|beta\|gamma\)\.txt$',
+        'Nav char ' .. nav_char .. ' opened a fixture file (got ' .. bufname('%') .. ')')
+  Assert(!vproj#IsPaneVisible() || winnr('$') >= wins_before,
+        'Nav char ' .. nav_char .. ' opens file without crashing')
 endif
 
 # ──────────────────────────────────────────────
@@ -120,13 +130,16 @@ echom '=== Fix 4/5: Origin window tracking ==='
 
 # Open a file in a window first, then open pane, then open another file
 # The second file should open in the first window, not create a new split
-cd /tmp
-# Create test files
-writefile(['test1'], '/tmp/vproj_test_a.txt')
-writefile(['test2'], '/tmp/vproj_test_b.txt')
+# Own temp dir (was /tmp): a known, small listing.
+const ORIGIN_DIR: string = tempname()
+mkdir(ORIGIN_DIR, 'p')
+execute 'cd' fnameescape(ORIGIN_DIR)
+writefile(['test1'], ORIGIN_DIR .. '/vproj_test_a.txt')
+writefile(['test2'], ORIGIN_DIR .. '/vproj_test_b.txt')
 
 # Start with one file open in a single window
-execute 'edit /tmp/vproj_test_a.txt'
+only
+execute 'edit' fnameescape(ORIGIN_DIR .. '/vproj_test_a.txt')
 var origin_wid = win_getid()
 
 # Open pane (should remember origin_wid)
@@ -141,36 +154,39 @@ Assert(wins_after_pane == 2, 'After pane open: exactly 2 windows')
 FocusPane()
 vproj#SwitchMode('file')
 
-# Try to find and open test_b.txt via Enter
-var pbuf2 = bufnr('VPROJ')
-var found_b: bool = false
-for cl in range(1, getbufinfo(pbuf2)[0].linecount)
-  var lt = getbufline(pbuf2, cl)[0]
-  if lt =~ 'vproj_test_b'
-    # Move cursor there and press Enter
-    var pane_wid = PaneWinID()
-    if pane_wid > 0
-      win_gotoid(pane_wid)
-      execute 'normal ' .. cl .. 'G'
-      # Need to be in permanent mode so pane stays
-      vproj#PaneTogglePermanent()
-      execute "normal \<CR>"
-      # File should have opened in the origin window or reused it
-      var wins_after = winnr('$')
-      Assert(wins_after == 2, 'File open: still 2 windows (no extra split)')
-      found_b = true
-    endif
-    break
+# Select vproj_test_b.txt through the plugin (SelectNext keeps the plugin's
+# selected_line in sync; a bare cursor jump would not) and open it with Enter.
+def SelectLineMatching(pat: string): bool
+  var pbuf: number = bufnr('VPROJ')
+  var wins: list<number> = win_findbuf(pbuf)
+  if empty(wins)
+    return false
   endif
-endfor
+  vproj#SelectFirst()
+  for _ in range(getbufinfo(pbuf)[0].linecount)
+    if getbufline(pbuf, line('.', wins[0]))[0] =~ pat
+      return true
+    endif
+    vproj#SelectNext()
+  endfor
+  return false
+enddef
 
-if !found_b
-  Assert(true, 'test_b.txt not visible in pane (skipping origin window test)')
+var found_b: bool = SelectLineMatching('vproj_test_b')
+Assert(found_b, 'vproj_test_b.txt is listed in the pane')
+if found_b
+  # Permanent mode so the pane stays open after the file opens
+  vproj#PaneTogglePermanent()
+  FocusPane()
+  execute "normal \<CR>"
+  Assert(winnr('$') == 2, 'File open: still 2 windows (no extra split)')
+  Assert(win_id2win(origin_wid) > 0
+        && fnamemodify(bufname(winbufnr(origin_wid)), ':t') == 'vproj_test_b.txt',
+        'File open: vproj_test_b.txt opened in the origin window')
 endif
 
 vproj#PaneClose()
-silent! call delete('/tmp/vproj_test_a.txt')
-silent! call delete('/tmp/vproj_test_b.txt')
+execute 'cd' fnameescape(FIXTURE_DIR)
 
 # ──────────────────────────────────────────────
 # FIX 6: Key mappings — j/k/h/p/q/r/x freed for nav
@@ -184,61 +200,62 @@ FocusPane()
 
 # j — must NOT be mapped to cursor movement
 var j_map = maparg('j', 'n', 0, 1)
-Assert(empty(j_map) || j_map.rhs =~ 'SelectByNavChar',
+Assert(empty(j_map) || get(j_map, 'rhs', '') =~ 'VprojKey\|SelectByNavChar',
       'j is NOT mapped to cursor movement (nav char or unmapped)')
 
 # k — must NOT be mapped to cursor movement
 var k_map = maparg('k', 'n', 0, 1)
-Assert(empty(k_map) || k_map.rhs =~ 'SelectByNavChar',
+Assert(empty(k_map) || get(k_map, 'rhs', '') =~ 'VprojKey\|SelectByNavChar',
       'k is NOT mapped to cursor movement (nav char or unmapped)')
 
 # h — must NOT be mapped to parent navigation
 var h_map = maparg('h', 'n', 0, 1)
-Assert(empty(h_map) || h_map.rhs =~ 'SelectByNavChar',
+Assert(empty(h_map) || get(h_map, 'rhs', '') =~ 'VprojKey\|SelectByNavChar',
       'h is NOT mapped to NavigateUp (nav char or unmapped)')
 
 # Arrow keys MUST still work (replacement for j/k)
 var down_map = maparg('<Down>', 'n', 0, 1)
 Assert(!empty(down_map), '<Down> is mapped')
-Assert(down_map.rhs =~ 'SelectNext', '<Down> maps to SelectNext')
+Assert(get(down_map, 'rhs', '') =~ 'SelectNext', '<Down> maps to SelectNext')
 
 var up_map = maparg('<Up>', 'n', 0, 1)
 Assert(!empty(up_map), '<Up> is mapped')
-Assert(up_map.rhs =~ 'SelectPrev', '<Up> maps to SelectPrev')
+Assert(get(up_map, 'rhs', '') =~ 'SelectPrev', '<Up> maps to SelectPrev')
 
 # Q (capital) must close pane
+# Q → HandlePaneQ: switches to qfix in temporary mode, closes in permanent
 var Q_map = maparg('Q', 'n', 0, 1)
 Assert(!empty(Q_map), 'Q is mapped')
-Assert(Q_map.rhs =~ 'PaneClose', 'Q maps to PaneClose')
+Assert(get(Q_map, 'rhs', '') =~ 'HandlePaneQ', 'Q maps to HandlePaneQ')
 
 # R (shift-R) must be refresh
 var R_map = maparg('R', 'n', 0, 1)
 Assert(!empty(R_map), 'R is mapped')
-Assert(R_map.rhs =~ 'Refresh', 'R maps to Refresh')
+Assert(get(R_map, 'rhs', '') =~ 'Refresh', 'R maps to Refresh')
 
 # P (shift-P) must be preview toggle
 var P_map = maparg('P', 'n', 0, 1)
 Assert(!empty(P_map), 'P is mapped')
-Assert(P_map.rhs =~ 'TogglePreview', 'P maps to TogglePreview')
+Assert(get(P_map, 'rhs', '') =~ 'TogglePreview', 'P maps to TogglePreview')
 
 # X (shift-X) must be close buffer
 var X_map = maparg('X', 'n', 0, 1)
 Assert(!empty(X_map), 'X is mapped')
-Assert(X_map.rhs =~ 'CloseBuffer', 'X maps to CloseBuffer')
+Assert(get(X_map, 'rhs', '') =~ 'CloseBuffer', 'X maps to CloseBuffer')
 
 # p must be a nav char (TogglePreview moved to P)
 var p_map = maparg('p', 'n', 0, 1)
-Assert(empty(p_map) || p_map.rhs =~ 'SelectByNavChar',
+Assert(empty(p_map) || get(p_map, 'rhs', '') =~ 'VprojKey\|SelectByNavChar',
       'p is NOT mapped to TogglePreview (nav char or unmapped)')
 
 # r must be a nav char (Refresh moved to R)
 var r_map = maparg('r', 'n', 0, 1)
-Assert(empty(r_map) || r_map.rhs =~ 'SelectByNavChar',
+Assert(empty(r_map) || get(r_map, 'rhs', '') =~ 'VprojKey\|SelectByNavChar',
       'r is NOT mapped to Refresh (nav char or unmapped)')
 
 # x must be a nav char (CloseBuffer moved to X)
 var x_map = maparg('x', 'n', 0, 1)
-Assert(empty(x_map) || x_map.rhs =~ 'SelectByNavChar',
+Assert(empty(x_map) || get(x_map, 'rhs', '') =~ 'VprojKey\|SelectByNavChar',
       'x is NOT mapped to CloseBuffer (nav char or unmapped)')
 
 # ──────────────────────────────────────────────
@@ -269,19 +286,19 @@ echom '=== Ctrl alternatives for navigation ==='
 
 var ck_map = maparg('<C-K>', 'n', 0, 1)
 Assert(!empty(ck_map), '<C-K> is mapped')
-Assert(ck_map.rhs =~ 'NavigateUp', '<C-K> maps to NavigateUp')
+Assert(get(ck_map, 'rhs', '') =~ 'NavigateUp', '<C-K> maps to NavigateUp')
 
 var cj_map = maparg('<C-J>', 'n', 0, 1)
 Assert(!empty(cj_map), '<C-J> is mapped')
-Assert(cj_map.rhs =~ 'NavigateIntoFirstDir', '<C-J> maps to NavigateIntoFirstDir')
+Assert(get(cj_map, 'rhs', '') =~ 'NavigateIntoFirstDir', '<C-J> maps to NavigateIntoFirstDir')
 
 var ct_map = maparg('<C-T>', 'n', 0, 1)
 Assert(!empty(ct_map), '<C-T> is mapped')
-Assert(ct_map.rhs =~ 'SelectFirst', '<C-T> maps to SelectFirst')
+Assert(get(ct_map, 'rhs', '') =~ 'SelectFirst', '<C-T> maps to SelectFirst')
 
 var cb_map = maparg('<C-B>', 'n', 0, 1)
 Assert(!empty(cb_map), '<C-B> is mapped')
-Assert(cb_map.rhs =~ 'SelectLast', '<C-B> maps to SelectLast')
+Assert(get(cb_map, 'rhs', '') =~ 'SelectLast', '<C-B> maps to SelectLast')
 
 # ──────────────────────────────────────────────
 # Cleanup

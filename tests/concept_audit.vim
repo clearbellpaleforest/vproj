@@ -7,8 +7,22 @@ vim9script
 # rather than simulating keypresses — keypress-to-function mapping is covered
 # by tests/keybindings.vim.
 
-set rtp+=src
+# Hermetic setup (run_all.sh also isolates HOME/XDG_CACHE_HOME/TMPDIR):
+#  - session cache lives in a temp dir, never the real user cache
+#  - cwd is a temp fixture dir, so code-mode +/-/ToggleInclude can never write
+#    the repo's tracked vproj.vproj
+#  - runtimepath is absolute so autoload still resolves after any :cd
+$XDG_CACHE_HOME = tempname()
+execute 'set rtp+=' .. fnameescape(expand('<script>:p:h:h') .. '/src')
 runtime! plugin/vproj.vim
+set nomore
+const FIXTURE_DIR: string = tempname()
+mkdir(FIXTURE_DIR .. '/subdir_a', 'p')
+mkdir(FIXTURE_DIR .. '/subdir_b', 'p')
+writefile(['alpha'], FIXTURE_DIR .. '/alpha.txt')
+writefile(['beta'], FIXTURE_DIR .. '/beta.txt')
+writefile(['gamma'], FIXTURE_DIR .. '/gamma.txt')
+execute 'cd' fnameescape(FIXTURE_DIR)
 set nomore
 
 var failures: number = 0
@@ -42,6 +56,13 @@ def FocusPane(): void
   if wid > 0
     win_gotoid(wid)
   endif
+enddef
+
+# rhs of a normal-mode mapping in the current buffer, '' when unmapped.
+# Never index maparg()'s dict directly: an unmapped key returns {} and
+# `.rhs` aborts the whole script with E716.
+def MapRhs(lhs: string): string
+  return get(maparg(lhs, 'n', false, true), 'rhs', '')
 enddef
 
 echom '=== Concept Document Verification ==='
@@ -152,53 +173,43 @@ Assert(vproj#GetCurrentMode() == 'qfix', 'SwitchMode qfix → qfix mode')
 vproj#PaneClose()
 
 # ═══════════════════════════════════════════════════════════════════
-# SECTION 6: Navigation Keys (j, k, h, ., F1)
+# SECTION 6: Navigation Keys (<Down>/<Up>, ., F1; j/k/h are nav chars)
 # ═══════════════════════════════════════════════════════════════════
 echom '--- Section 6: Navigation Keys ---'
 
 vproj#PaneOpen()
 FocusPane()
 
-# j/k — move selection (mapped to SelectNext/SelectPrev)
-var j_map = maparg('j', 'n', 0, 1)
-Assert(!empty(j_map), 'j is mapped in pane buffer')
-Assert(j_map.rhs =~ 'SelectNext', 'j maps to SelectNext')
+# <Down>/<Up> move the selection. j/k/h are nav chars since 53f814c
+# (all lowercase a-z route through VprojKey).
+Assert(MapRhs('<Down>') =~ 'SelectNext', '<Down> maps to SelectNext')
+Assert(MapRhs('<Up>') =~ 'SelectPrev', '<Up> maps to SelectPrev')
+for ch in ['j', 'k', 'h']
+  Assert(MapRhs(ch) =~ 'VprojKey', ch .. ' is a nav char (maps to VprojKey)')
+endfor
 
-var k_map = maparg('k', 'n', 0, 1)
-Assert(!empty(k_map), 'k is mapped in pane buffer')
-Assert(k_map.rhs =~ 'SelectPrev', 'k maps to SelectPrev')
+# . — parent directory, routed through VprojKey for the file/code mode guard
+Assert(MapRhs('.') =~ 'VprojKey("\.")', '. maps to VprojKey(".") (parent dir)')
+# <C-K> — parent directory, direct
+Assert(MapRhs('<C-K>') =~ 'NavigateUp', '<C-K> maps to NavigateUp')
 
-# Up/Down arrows also move selection
-var down_map = maparg('<Down>', 'n', 0, 1)
-Assert(!empty(down_map), '<Down> is mapped in pane buffer')
-Assert(down_map.rhs =~ 'SelectNext', '<Down> maps to SelectNext')
-
-# h / . — parent directory (both mapped to NavigateUp)
-var h_map = maparg('h', 'n', 0, 1)
-Assert(!empty(h_map), 'h is mapped in pane buffer')
-Assert(h_map.rhs =~ 'NavigateUp', 'h maps to NavigateUp')
-
-var dot_map = maparg('.', 'n', 0, 1)
-Assert(!empty(dot_map), '. is mapped in pane buffer')
-Assert(dot_map.rhs =~ 'NavigateUp', '. maps to NavigateUp')
-
-# F1 — toggle info column
-var f1_map = maparg('<F1>', 'n', 0, 1)
-Assert(!empty(f1_map), '<F1> is mapped in pane buffer')
+# F1 — toggle info column (global <Plug>VprojF1 mapping, pane-aware handler)
+Assert(maparg('<F1>', 'n') =~ 'VprojF1', '<F1> maps to <Plug>VprojF1')
 
 vproj#PaneClose()
 
 # ═══════════════════════════════════════════════════════════════════
-# SECTION 7: Action Keys (r, T, /, *, x, Q)
+# SECTION 7: Action Keys (R, T, /, *, X, Q)
 # ═══════════════════════════════════════════════════════════════════
 echom '--- Section 7: Action Keys ---'
 
 vproj#PaneOpen()
 FocusPane()
 
-# r — refresh
-execute 'normal r'
-Assert(vproj#IsPaneVisible(), 'r (refresh) keeps pane visible')
+# R — refresh (lowercase r is a nav char)
+Assert(MapRhs('R') =~ 'Refresh', 'R maps to Refresh')
+execute 'normal R'
+Assert(vproj#IsPaneVisible(), 'R (refresh) keeps pane visible')
 
 # T — tree view toggle
 vproj#SwitchMode('file')
@@ -208,23 +219,26 @@ execute 'normal T'
 Assert(vproj#IsTreeViewActive() != tree_before, 'T toggles tree view')
 
 # / — filter prompt (mapped in pane buffer)
-var slash_map = maparg('/', 'n', 0, 1)
-Assert(!empty(slash_map), '/ is mapped in pane buffer')
+Assert(MapRhs('/') =~ 'PromptFilter', '/ maps to PromptFilter')
 
 # * — grep search
-var star_map = maparg('*', 'n', 0, 1)
-Assert(!empty(star_map), '* is mapped in pane buffer')
-Assert(star_map.rhs =~ 'GrepSearch', '* maps to GrepSearch')
+Assert(MapRhs('*') =~ 'GrepSearch', '* maps to GrepSearch')
 
-# x — close buffer (mapped in pane buffer, buf mode)
+# X — close buffer (buf mode; lowercase x is a nav char)
 vproj#SwitchMode('buf')
 FocusPane()
-var x_map = maparg('x', 'n', 0, 1)
-Assert(!empty(x_map), 'x is mapped in pane buffer')
+Assert(MapRhs('X') =~ 'CloseBuffer', 'X maps to CloseBuffer')
+Assert(MapRhs('x') =~ 'VprojKey', 'x is a nav char (maps to VprojKey)')
 
-# Q — close pane
+# Q — HandlePaneQ: temporary mode switches to qfix, permanent mode closes
+Assert(MapRhs('Q') =~ 'HandlePaneQ', 'Q maps to HandlePaneQ')
 execute 'normal Q'
-Assert(!vproj#IsPaneVisible(), 'Q closes pane')
+Assert(vproj#IsPaneVisible() && vproj#GetCurrentMode() == 'qfix',
+      'Q in temporary mode switches to qfix (pane stays open)')
+vproj#PaneTogglePermanent()
+FocusPane()
+execute 'normal Q'
+Assert(!vproj#IsPaneVisible(), 'Q in permanent mode closes pane')
 
 # ═══════════════════════════════════════════════════════════════════
 # SECTION 8: Git Actions (\ prefix)
@@ -249,17 +263,19 @@ var git_actions: list<list<string>> = [
 ]
 
 for [lhs, rhs_fragment] in git_actions
-  var m = maparg(lhs, 'n', 0, 1)
-  Assert(!empty(m), lhs .. ' is mapped in pane buffer')
-  Assert(m.rhs =~ rhs_fragment, lhs .. ' maps to ' .. rhs_fragment)
+  Assert(MapRhs(lhs) =~ rhs_fragment, lhs .. ' maps to ' .. rhs_fragment)
 endfor
 
-# Single-letter keys that concept doc listed as git actions are now nav chars
-for ch in ['s', 'd', 'c', 'b', 'z', 'a', 'D', 'P', 'U', 'Z']
-  var m = maparg(ch, 'n', 0, 1)
-  Assert(!empty(m), ch .. ' is mapped (nav char)')
-  Assert(m.rhs =~ 'SelectByNavChar', ch .. ' maps to SelectByNavChar')
+# Lowercase keys the concept doc listed as git actions are now nav chars
+for ch in ['s', 'd', 'c', 'b', 'z', 'a']
+  Assert(MapRhs(ch) =~ 'VprojKey', ch .. ' is a nav char (maps to VprojKey)')
 endfor
+# Uppercase D/U/Z are unmapped (git actions moved to \ prefix)
+for ch in ['D', 'U', 'Z']
+  Assert(empty(maparg(ch, 'n')), ch .. ' is unmapped (git action moved to \\ prefix)')
+endfor
+# P is Shift-P: preview toggle, not git push
+Assert(MapRhs('P') =~ 'TogglePreview', 'P maps to TogglePreview')
 
 vproj#PaneClose()
 

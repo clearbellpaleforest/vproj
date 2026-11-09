@@ -1,26 +1,28 @@
 vim9script
 
-# autoload/vproj_ai.vim — AI add-on for vproj.
+# autoload/vproj/ai.vim — AI add-on for vproj.
 # Requires vproj. Adds AI prompt (A key in pane) for natural-language
 # coding assistance via OpenAI-compatible API with streaming responses.
 #
 # Two modes:
-#   Code mode (default) — AI response applied directly to file at cursor
+#   Code mode (default) — the first fenced code block of the response is
+#     inserted into the file you were editing, after a confirm() prompt.
+#     A response without a ``` fenced block is never inserted.
 #   Question mode (?, what, how, why, etc.) — response in floating popup
 #
 # Force code mode with ! prefix. Force question mode with ? prefix.
+#
+# Secrets (API key, request body) never go on a command line or in the
+# environment. They go to tempname() files created with mode 0600 before
+# the secret is written, and every such file is deleted when its job ends
+# or when starting the job fails.
 
 # ── Script-level paths (expand('<sfile>') not available in def functions in Vim 9.2) ──
-var script_dir: string = expand('<sfile>:p:h')
-var chat_script_path: string = script_dir .. '/../bin/vproj-ai-chat'
+# This file is <repo>/src/autoload/vproj/ai.vim; the chat script is <repo>/bin/.
+var chat_script_path: string = expand('<sfile>:p:h:h:h:h') .. '/bin/vproj-ai-chat'
 var ai_api_url: string = ''
 var ai_api_key: string = ''
 var ai_model: string = ''
-
-def LogError(msg: string): void
-  var entry: dict<any> = {ts: strftime('%Y-%m-%dT%H:%M:%S'), event: 'error', msg: msg}
-  writefile([json_encode(entry)], '/tmp/vproj-ai-errors.log', 'a')
-enddef
 
 # ── Per-request State ──
 var ai_mode: string = 'code'
@@ -33,13 +35,94 @@ var stream_accumulated: string = ''
 var stream_cancelled: bool = false
 var stream_full_response: string = ''
 
-# Inject buffer-local A mapping into vproj pane.
-# Called via BufEnter + User VprojPaneReady autocmds.
-# VprojPaneReady is the guaranteed injection point — BufEnter fires
-# during :new before pane_bufnr is assigned, so OnBufEnter returns
+# Path of the terminal chat script (exported for tests).
+export def ChatScriptPath(): string
+  return chat_script_path
+enddef
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Secret temp files
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Create {path} empty, restrict it to 0600, then write {lines} (no trailing
+# newline). The secret is never on disk with wider permissions.
+# On any failure the file is removed and false is returned.
+def WriteSecretFile(path: string, lines: list<string>): bool
+  if empty(path)
+    return false
+  endif
+  if writefile([], path, 'b') != 0
+    return false
+  endif
+  if !setfperm(path, 'rw-------')
+    delete(path)
+    return false
+  endif
+  if writefile(lines, path, 'b') != 0
+    delete(path)
+    return false
+  endif
+  return true
+enddef
+
+def DeleteFiles(paths: list<string>): void
+  for p in paths
+    if !empty(p) && filereadable(p)
+      delete(p)
+    endif
+  endfor
+enddef
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Origin window — the file window the user was editing
+# ══════════════════════════════════════════════════════════════════════════════
+
+def PaneBufnr(): number
+  return exists('*vproj#GetPaneBufnr') ? vproj#GetPaneBufnr() : -1
+enddef
+
+# Window ID of the file window the user is working in: the current window,
+# or the previous window when the current one is the vproj pane.
+# Returns 0 when there is no normal file window to act on.
+def OriginWindow(): number
+  var pane: number = PaneBufnr()
+  var winid: number = win_getid()
+  if winbufnr(winid) == pane
+    var prev: number = winnr('#')
+    if prev <= 0
+      return 0
+    endif
+    winid = win_getid(prev)
+  endif
+  if winid <= 0
+    return 0
+  endif
+  var bufnr: number = winbufnr(winid)
+  if bufnr <= 0 || bufnr == pane || !empty(getbufvar(bufnr, '&buftype'))
+    return 0
+  endif
+  return winid
+enddef
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Terminal chat
+# ══════════════════════════════════════════════════════════════════════════════
+
 export def AiTerminalChat(): void
   if !has('terminal')
     echohl ErrorMsg | echom 'vproj-ai: terminal support required (Vim 8.0+)' | echohl None
+    return
+  endif
+  if !filereadable(chat_script_path)
+    echohl ErrorMsg | echom 'vproj-ai: chat script not found at ' .. chat_script_path | echohl None
+    return
+  endif
+  if !executable('bash')
+    echohl ErrorMsg | echom 'vproj-ai: bash is required but not found' | echohl None
+    return
+  endif
+  if !executable('curl')
+    echohl ErrorMsg | echom 'vproj-ai: curl is required but not found' | echohl None
     return
   endif
 
@@ -48,65 +131,63 @@ export def AiTerminalChat(): void
     StreamCancel()
   endif
 
-  if !executable('curl')
-    return
-  endif
-
   AiConfigure()
   if empty(ai_api_key)
     echohl ErrorMsg | echom 'vproj-ai: no API key. Set g:vproj_ai_api_key or $DEEPSEEK_API_KEY.' | echohl None
     return
   endif
 
-  # Gather context and write to temp file for the chat script
-  var ctx: dict<any> = GatherContext()
-  var tmpfile: string = tempname()
-  var ctx_json: string = json_encode(ctx)
-  if writefile([ctx_json], tmpfile) != 0
+  # The chat script reads the system message (already JSON-encoded, one
+  # line) from VPROJ_AI_TMPFILE and the key from VPROJ_AI_KEYFILE. It
+  # deletes both; the exit_cb below deletes them again in case it did not.
+  var ctx: dict<any> = GatherContext(OriginWindow())
+  var sysfile: string = tempname()
+  if !WriteSecretFile(sysfile, [json_encode(BuildSystemMessage(ctx))])
     echohl ErrorMsg | echom 'vproj-ai: failed to write request (disk full?)' | echohl None
     return
   endif
-
-  # chat_script_path computed at script level (<sfile> not available in def functions)
-  if !filereadable(chat_script_path)
-    echohl ErrorMsg | echom 'vproj-ai: chat script not found at ' .. chat_script_path | echohl None
-    return
-  endif
-
-  # Use term_start() to create terminal with env vars in a dict.
-  # API key written to temp file (never in /proc/pid/environ) —
-  # bash script reads and immediately deletes it.
   var keyfile: string = tempname()
-  if writefile([ai_api_key], keyfile) != 0
+  if !WriteSecretFile(keyfile, [ai_api_key])
+    DeleteFiles([sysfile])
     echohl ErrorMsg | echom 'vproj-ai: failed to write key file' | echohl None
     return
   endif
-  var env_vars: dict<string> = {
-    VPROJ_AI_KEYFILE: keyfile,
-    VPROJ_AI_API_URL: ai_api_url,
-    VPROJ_AI_MODEL: ai_model,
-    VPROJ_AI_TMPFILE: tmpfile,
-  }
+
+  var files: list<string> = [keyfile, sysfile]
   var opts: dict<any> = {
+    curwin: true,
     term_finish: 'close',
-    env: env_vars,
+    # SIGTERM (not SIGKILL) if Vim exits while the chat runs, so the
+    # script's EXIT trap removes its auth-header and body temp files.
+    term_kill: 'term',
+    env: {
+      VPROJ_AI_KEYFILE: keyfile,
+      VPROJ_AI_API_URL: ai_api_url,
+      VPROJ_AI_MODEL: ai_model,
+      VPROJ_AI_TMPFILE: sysfile,
+      # The script's own mktemp files (auth header, body) go in Vim's
+      # private temp directory, which Vim removes on exit.
+      TMPDIR: fnamemodify(sysfile, ':h'),
+    },
+    exit_cb: (_, _) => DeleteFiles(files),
   }
+  # One 15-line window at the bottom; term_start() reuses it (curwin) and
+  # the placeholder buffer is wiped, so no empty window or buffer is left.
   botright new
-  execute 'resize 15'
+  setlocal bufhidden=wipe
+  resize 15
   var termbuf: number = term_start(['bash', chat_script_path], opts)
   if termbuf == 0
+    DeleteFiles(files)
+    if winnr('$') > 1
+      close
+    endif
     echohl ErrorMsg | echom 'vproj-ai: failed to start terminal' | echohl None
-    LogError('failed to start terminal')
-    close
     return
   endif
-  tnoremap <buffer> <nowait> <Esc> <C-\><C-n>:bdelete!<CR>
-
-  # Log terminal creation for diagnostic purposes
-  var diag_log: string = '/tmp/vproj-ai-errors.log'
-  var entry: dict<any> = {ts: strftime('%Y-%m-%dT%H:%M:%S'), event: 'terminal_created',
-    bufnr: termbuf, rows: 15, script: chat_script_path}
-  writefile([json_encode(entry)], diag_log, 'a')
+  # Esc ends the chat with SIGTERM; term_finish closes the window. (A
+  # :bdelete! would SIGKILL bash and skip its EXIT-trap cleanup.)
+  tnoremap <buffer> <nowait> <Esc> <Cmd>call job_stop(term_getjob(bufnr()), 'term')<CR>
 enddef
 
 def UrlValid(url: string): bool
@@ -163,54 +244,72 @@ export def AiConfigure(): void
   endif
 enddef
 
-def GatherContext(target_bufnr: number = -1): dict<any>
+# Context of the file shown in window {winid} (0 = no file): path,
+# filetype, cursor, and up to 100 lines either side of the cursor.
+def GatherContext(winid: number): dict<any>
   var ctx: dict<any> = {}
   ctx.cwd = getcwd()
-  if exists('*vproj#GetCurrentMode')
-    ctx.mode = vproj#GetCurrentMode()
-  else
-    ctx.mode = 'file'
+  ctx.mode = exists('*vproj#GetCurrentMode') ? vproj#GetCurrentMode() : 'file'
+  if winid <= 0
+    return ctx
   endif
-  var bufnr: number = target_bufnr > 0 ? target_bufnr : bufnr('%')
-  var pane: number = exists('*vproj#GetPaneBufnr') ? vproj#GetPaneBufnr() : -1
-  if bufnr > 0 && bufnr != pane
-    ctx.file = fnamemodify(bufname(bufnr), ':p')
-    ctx.filetype = getbufvar(bufnr, '&filetype', '')
-    var target_win: number = bufwinnr(bufnr)
-    if target_win > 0
-      ctx.cursor_line = win_execute(target_win, 'echo line(".")')->trim()->str2nr()
-      ctx.cursor_col = win_execute(target_win, 'echo col(".")')->trim()->str2nr()
-    else
-      ctx.cursor_line = 1
-      ctx.cursor_col = 1
-    endif
-    var total: number = get(getbufinfo(bufnr)[0], 'linecount', 0)
-    var ctx_start: number = max([1, ctx.cursor_line - 100])
-    var ctx_end: number = min([total, ctx.cursor_line + 100])
-    ctx.file_lines = getbufline(bufnr, ctx_start, ctx_end)
-    ctx.file_line_offset = ctx_start
-    ctx.file_total_lines = total
+  var bufnr: number = winbufnr(winid)
+  if bufnr <= 0 || bufnr == PaneBufnr()
+    return ctx
   endif
+  var pos: list<number> = getcurpos(winid)
+  ctx.file = fnamemodify(bufname(bufnr), ':p')
+  ctx.filetype = getbufvar(bufnr, '&filetype', '')
+  ctx.cursor_line = pos[1] > 0 ? pos[1] : 1
+  ctx.cursor_col = pos[2] > 0 ? pos[2] : 1
+  var total: number = get(getbufinfo(bufnr)[0], 'linecount', 0)
+  var ctx_start: number = max([1, ctx.cursor_line - 100])
+  var ctx_end: number = min([total, ctx.cursor_line + 100])
+  ctx.file_lines = getbufline(bufnr, ctx_start, ctx_end)
+  ctx.file_line_offset = ctx_start
+  ctx.file_total_lines = total
   return ctx
 enddef
 
-export def BuildRequestBody(prompt: string, ctx: dict<any>, stream: bool): string
-  var system_msg: string = 'You are a coding assistant embedded in Vim. '
+# System message text built from a GatherContext() dict, including the
+# gathered file lines.
+def BuildSystemMessage(ctx: dict<any>): string
+  var msg: string = 'You are a coding assistant embedded in Vim. '
   var ctx_file: string = get(ctx, 'file', '')
-  system_msg ..= 'The user is editing ' .. (empty(ctx_file) ? 'unknown' : fnamemodify(ctx_file, ':t'))
-  system_msg ..= ' (' .. get(ctx, 'filetype', 'text') .. '). '
-  system_msg ..= 'Current mode: ' .. get(ctx, 'mode', 'file') .. '. '
-  system_msg ..= 'Be concise. ALWAYS wrap code in ``` fences with a language tag (```python, ```vim, etc). '
-  system_msg ..= 'The user needs ``` fences to extract and apply your code. '
-  system_msg ..= 'Never output code without ``` fences.'
-  if has_key(ctx, 'file_lines')
-    system_msg ..= ' The file has ' .. get(ctx, 'file_total_lines', 0) .. ' lines.'
+  var ft: string = get(ctx, 'filetype', '')
+  if empty(ctx_file)
+    msg ..= 'No file is open. '
+  else
+    msg ..= 'The user is editing ' .. fnamemodify(ctx_file, ':t')
+    msg ..= empty(ft) ? '. ' : ' (' .. ft .. '). '
   endif
+  msg ..= 'Current mode: ' .. get(ctx, 'mode', 'file') .. '. '
+  msg ..= 'Be concise. ALWAYS wrap code in ``` fences with a language tag (```python, ```vim, etc). '
+  msg ..= 'The user needs ``` fences to extract and apply your code. '
+  msg ..= 'Never output code without ``` fences.'
 
-  var messages: string = '[{"role":"system","content":' .. JsonEscape(system_msg) .. '}'
-  messages ..= ',{"role":"user","content":' .. JsonEscape(prompt) .. '}]'
+  var lines: any = get(ctx, 'file_lines', [])
+  if type(lines) != v:t_list || empty(lines)
+    return msg
+  endif
+  var first: number = get(ctx, 'file_line_offset', 1)
+  var last: number = first + len(lines) - 1
+  msg ..= ' The file has ' .. get(ctx, 'file_total_lines', 0) .. ' lines;'
+  msg ..= ' the cursor is on line ' .. get(ctx, 'cursor_line', 1) .. '.'
+  msg ..= ' Lines ' .. first .. '-' .. last .. " of the file:\n"
+  msg ..= '```' .. ft .. "\n" .. join(lines, "\n") .. "\n```"
+  return msg
+enddef
 
-  return '{"model":' .. JsonEscape(ai_model) .. ',"messages":' .. messages .. ',"stream":' .. (stream ? 'true' : 'false') .. '}'
+export def BuildRequestBody(prompt: string, ctx: dict<any>, stream: bool): string
+  return json_encode({
+    model: ai_model,
+    messages: [
+      {role: 'system', content: BuildSystemMessage(ctx)},
+      {role: 'user', content: prompt},
+    ],
+    stream: stream ? v:true : v:false,
+  })
 enddef
 
 # ── Synchronous API call (fallback, used by tests) ──
@@ -226,48 +325,42 @@ export def AiCall(prompt: string, ctx: dict<any>): string
     return ''
   endif
 
-  var body: string = BuildRequestBody(prompt, ctx, false)
-
-  var result: string = ''
-  var tmpfile: string = tempname()
+  var bodyfile: string = tempname()
   var hdrfile: string = tempname()
+  var result: string = ''
   try
-    if writefile([body], tmpfile) != 0
+    if !WriteSecretFile(bodyfile, [BuildRequestBody(prompt, ctx, false)])
       echohl ErrorMsg | echom 'vproj-ai: failed to write request body (disk full? permissions?)' | echohl None
       return ''
     endif
-    if writefile(['Authorization: Bearer ' .. ai_api_key], hdrfile) != 0
+    if !WriteSecretFile(hdrfile, ['Authorization: Bearer ' .. ai_api_key])
       echohl ErrorMsg | echom 'vproj-ai: failed to write header file' | echohl None
       return ''
     endif
     var cmd: string = 'curl -s -f --connect-timeout 10 -m 60 -X POST ' .. shellescape(ai_api_url)
     cmd ..= ' -H ' .. shellescape('Content-Type: application/json')
     cmd ..= ' -H @' .. shellescape(hdrfile)
-    cmd ..= ' -d @' .. shellescape(tmpfile)
+    cmd ..= ' --data-binary @' .. shellescape(bodyfile)
 
     var output: string = system(cmd)
     var shell_err: number = v:shell_error
 
     if shell_err != 0
       var truncated: string = substitute(output, '\n', ' ', 'g')
-      if len(truncated) > 200
-        truncated = truncated[ : 199] .. '...'
+      if strchars(truncated) > 200
+        truncated = strcharpart(truncated, 0, 200) .. '...'
       endif
       echohl ErrorMsg | echom 'vproj-ai: curl error ' .. shell_err .. ' — ' .. truncated | echohl None
       return ''
     endif
 
-    const MAX_RESPONSE: number = 1048576
-    if len(output) > MAX_RESPONSE
-      output = output[ : MAX_RESPONSE - 1]
-    endif
-
-    var content: string = ExtractJsonField(output, 'content')
+    var decoded: any = DecodeJson(output)
+    var content: string = ResponseContent(decoded)
     if empty(content)
       var err: string = ExtractJsonField(output, 'message')
-      var err_truncated: string = empty(err) ? 'empty response' : err
-      if len(err_truncated) > 200
-        err_truncated = err_truncated[ : 199] .. '...'
+      var err_truncated: string = empty(err) ? 'empty or malformed response' : err
+      if strchars(err_truncated) > 200
+        err_truncated = strcharpart(err_truncated, 0, 200) .. '...'
       endif
       echohl ErrorMsg | echom 'vproj-ai: API error — ' .. err_truncated | echohl None
       return ''
@@ -276,188 +369,87 @@ export def AiCall(prompt: string, ctx: dict<any>): string
   catch
     echohl ErrorMsg | echom 'vproj-ai: request failed — ' .. v:exception | echohl None
   finally
-    delete(tmpfile)
-    delete(hdrfile)
+    DeleteFiles([bodyfile, hdrfile])
   endtry
   return result
 enddef
 
-export def JsonEscape(s: string): string
-  var result: string = ''
-  var ch: string
-  for pos in range(len(s))
-    ch = s[pos]
-    if ch == "\\"
-      result ..= "\\\\"
-    elseif ch == '"'
-      result ..= '\\"'
-    elseif ch == "\n"
-      result ..= '\\n'
-    elseif ch == "\r"
-      result ..= '\\r'
-    elseif ch == "\t"
-      result ..= '\\t'
-    elseif ch == "\b"
-      result ..= '\\b'
-    elseif ch == "\f"
-      result ..= '\\f'
-    elseif char2nr(ch) <= 0x1f
-      result ..= printf('\u%04X', char2nr(ch))
-    else
-      result ..= ch
-    endif
-  endfor
-  return '"' .. result .. '"'
-enddef
-
-def ParseJsonString(s: string): string
-  var result: string = ''
-  var i: number = 0
-  while i < len(s)
-    var ch: string = s[i]
-    if ch == '\\' && i + 1 < len(s)
-      var nextch: string = s[i + 1]
-      i += 2
-      if nextch == '"'
-        result ..= '"'
-      elseif nextch == '\\'
-        result ..= '\\'
-      elseif nextch == '/'
-        result ..= '/'
-      elseif nextch == 'n'
-        result ..= "\n"
-      elseif nextch == 'r'
-        result ..= "\r"
-      elseif nextch == 't'
-        result ..= "\t"
-      elseif nextch == 'b'
-        result ..= "\b"
-      elseif nextch == 'f'
-        result ..= "\f"
-      elseif nextch == 'u'
-        if i + 4 <= len(s)
-          var hex: string = s[i : i + 3]
-          if hex =~ '^[0-9a-fA-F]\{4\}$'
-            result ..= nr2char(str2nr(hex, 16))
-            i += 4
-            continue
-          endif
-        endif
-        result ..= '\u'
-      else
-        result ..= '\' .. nextch
-      endif
-      continue
-    elseif ch == '"'
-      return result
-    endif
-    result ..= ch
-    i += 1
-  endwhile
-  return result
-enddef
-
-def ParseJsonContainer(s: string): string
-  var open_ch: string = s[0]
-  var close_ch: string = (open_ch == '{') ? '}' : ']'
-  var depth: number = 1
-  var i: number = 1
-  var in_string: bool = false
-  while i < len(s) && depth > 0
-    var ch: string = s[i]
-    if in_string
-      if ch == '\\' && i + 1 < len(s)
-        i += 2
-        continue
-      endif
-      if ch == '"'
-        in_string = false
-      endif
-    else
-      if ch == '"'
-        in_string = true
-      elseif ch == open_ch
-        depth += 1
-      elseif ch == close_ch
-        depth -= 1
-      endif
-    endif
-    i += 1
-  endwhile
-  return s[ : i - 1]
-enddef
-
-def ParseJsonScalar(s: string): string
-  var end_chars: list<number> = [stridx(s, ','), stridx(s, '}'), stridx(s, ']'), stridx(s, "\n")]
-  var min_end: number = -1
-  for e in end_chars
-    if e >= 0 && (min_end < 0 || e < min_end)
-      min_end = e
-    endif
-  endfor
-  if min_end < 0
-    return s
-  elseif min_end == 0
+# choices[0].message.content of a decoded chat-completions response, or ''.
+def ResponseContent(decoded: any): string
+  if type(decoded) != v:t_dict
     return ''
-  else
-    return s[ : min_end - 1]
   endif
+  var choices: any = get(decoded, 'choices', [])
+  if type(choices) != v:t_list || empty(choices) || type(choices[0]) != v:t_dict
+    return ''
+  endif
+  var message: any = get(choices[0], 'message', {})
+  if type(message) != v:t_dict
+    return ''
+  endif
+  var content: any = get(message, 'content', '')
+  return type(content) == v:t_string ? content : ''
 enddef
 
+# JSON string literal for {s}, including the surrounding quotes.
+export def JsonEscape(s: string): string
+  return json_encode(s)
+enddef
+
+# json_decode() that returns v:none instead of throwing on malformed input.
+def DecodeJson(json: string): any
+  if empty(trim(json))
+    return v:none
+  endif
+  var decoded: any = v:none
+  try
+    decoded = json_decode(json)
+  catch /E474:\|E491:\|E938:/
+    decoded = v:none
+  endtry
+  return decoded
+enddef
+
+# Search {value} for key {field}: the dict's own key first, then nested
+# values depth-first. Returns [found, value].
+def FindField(value: any, field: string): list<any>
+  if type(value) == v:t_dict
+    if has_key(value, field)
+      return [true, value[field]]
+    endif
+    for v in values(value)
+      var hit: list<any> = FindField(v, field)
+      if hit[0]
+        return hit
+      endif
+    endfor
+  elseif type(value) == v:t_list
+    for v in value
+      var hit: list<any> = FindField(v, field)
+      if hit[0]
+        return hit
+      endif
+    endfor
+  endif
+  return [false, v:none]
+enddef
+
+# Value of the first {field} key in {json} as a string: strings as-is,
+# containers re-encoded as JSON, null as '', other scalars via json_encode.
+# Returns '' for a missing field or malformed JSON.
 export def ExtractJsonField(json: string, field: string): string
-  var target: string = '"' .. field .. '"'
-  var i: number = 0
-  var in_string: bool = false
-  var json_len: number = len(json)
-
-  while i < json_len
-    var quote_idx: number = stridx(json, '"', i)
-    if quote_idx < 0
-      break
-    endif
-
-    if in_string
-      var bs_count: number = 0
-      var j: number = quote_idx - 1
-      while j >= 0 && json[j] == '\\'
-        bs_count += 1
-        j -= 1
-      endwhile
-      if bs_count % 2 == 1
-        i = quote_idx + 1
-        continue
-      endif
-      in_string = false
-      i = quote_idx + 1
-      continue
-    endif
-
-    if quote_idx + len(target) <= json_len
-      if json[quote_idx : quote_idx + len(target) - 1] == target
-        var after: number = quote_idx + len(target)
-        while after < json_len && (json[after] == ' ' || json[after] == "\t" || json[after] == "\n" || json[after] == "\r")
-          after += 1
-        endwhile
-        if after < json_len && json[after] == ':'
-          var rest: string = substitute(json[after + 1 : ], '^\s*', '', '')
-          if empty(rest)
-            return ''
-          elseif rest[0] == '"'
-            return ParseJsonString(rest[1 : ])
-          elseif rest[0] == '{' || rest[0] == '['
-            return ParseJsonContainer(rest)
-          else
-            return ParseJsonScalar(rest)
-          endif
-        endif
-      endif
-    endif
-
-    in_string = true
-    i = quote_idx + 1
-  endwhile
-
-  return ''
+  var hit: list<any> = FindField(DecodeJson(json), field)
+  if !hit[0]
+    return ''
+  endif
+  var value: any = hit[1]
+  if type(value) == v:t_string
+    return value
+  endif
+  if type(value) == v:t_none
+    return ''
+  endif
+  return json_encode(value)
 enddef
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -465,7 +457,9 @@ enddef
 # ══════════════════════════════════════════════════════════════════════════════
 
 def ProcessStreamChunk(chan: channel, msg: string): void
-  if stream_cancelled
+  # Output from a cancelled or superseded job must not leak into the
+  # current request's response.
+  if stream_cancelled || stream_job == v:null || ch_getjob(chan) != stream_job
     return
   endif
   stream_accumulated ..= msg
@@ -483,74 +477,61 @@ def ProcessStreamChunk(chan: channel, msg: string): void
       if json_str == '[DONE]'
         return
       endif
-      try
-        var data: any = json_decode(json_str)
-        if type(data) == v:t_dict
-          var choices: any = get(data, 'choices', [])
-          if type(choices) == v:t_list && len(choices) > 0
-            var choice: any = choices[0]
-            if type(choice) == v:t_dict
-              var delta: any = get(choice, 'delta', {})
-              if type(delta) == v:t_dict
-                var content: string = get(delta, 'content', '')
-                if !empty(content)
-                  stream_full_response ..= content
-                endif
-              endif
-            endif
-          endif
-        endif
-      catch
-        # Malformed JSON or partial frame — skip, wait for more data
-      endtry
+      var data: any = DecodeJson(json_str)
+      if type(data) != v:t_dict
+        continue
+      endif
+      var choices: any = get(data, 'choices', [])
+      if type(choices) != v:t_list || empty(choices) || type(choices[0]) != v:t_dict
+        continue
+      endif
+      var delta: any = get(choices[0], 'delta', {})
+      if type(delta) != v:t_dict
+        continue
+      endif
+      var content: any = get(delta, 'content', '')
+      if type(content) == v:t_string && !empty(content)
+        stream_full_response ..= content
+      endif
     endfor
   endwhile
 enddef
 
-def StreamJobExit(job: job, status: number): void
-  if job != stream_job
+# exit_cb of one curl job. {files} are that job's secret temp files; they
+# are deleted first, whether or not the job is still the current one.
+def StreamJobExit(exited: job, status: number, files: list<string>): void
+  DeleteFiles(files)
+  if exited != stream_job
     return
   endif
 
-  if stream_cancelled
-    echom 'vproj-ai: cancelled'
-  elseif status != 0
-    echohl ErrorMsg | echom 'vproj-ai: API call failed — status ' .. status | echohl None
-  else
-    if ai_mode == 'question' || ai_target_bufnr <= 0 || !bufexists(ai_target_bufnr)
-      ShowPopup(stream_full_response)
-    else
-      var blocks: list<dict<any>> = ExtractCodeBlocks(stream_full_response)
-      ApplyCode(ai_target_bufnr, blocks, ai_target_cursor_line)
-    endif
-  endif
-
+  var response: string = stream_full_response
+  var cancelled: bool = stream_cancelled
   stream_job = v:null
   stream_accumulated = ''
   stream_full_response = ''
   stream_cancelled = false
-  # Clean up auth header temp file.
-  if !empty(stream_hdrfile)
-    delete(stream_hdrfile)
-    stream_hdrfile = ''
+
+  if cancelled
+    echom 'vproj-ai: cancelled'
+    return
   endif
-enddef
+  if status != 0
+    echohl ErrorMsg | echom 'vproj-ai: API call failed — status ' .. status | echohl None
+    return
+  endif
+  if ai_mode == 'question'
+    ShowPopup(response)
+    return
+  endif
 
-# Temp file for auth header (cleaned up in StreamJobExit).
-var stream_hdrfile: string = ''
-
-def BuildStreamCommand(prompt: string, ctx: dict<any>): list<string>
-  var body: string = BuildRequestBody(prompt, ctx, true)
-  # Write auth header to temp file so key is not visible in /proc/<pid>/cmdline.
-  stream_hdrfile = tempname()
-  writefile(['Authorization: Bearer ' .. ai_api_key], stream_hdrfile)
-  return ['curl', '--no-buffer', '-s', '-f',
-    '--connect-timeout', '10', '-m', '120',
-    '-X', 'POST',
-    '-H', 'Content-Type: application/json',
-    '-H', '@' .. stream_hdrfile,
-    '-d', body,
-    ai_api_url]
+  var blocks: list<dict<any>> = ExtractCodeBlocks(response)
+  if empty(blocks)
+    echohl WarningMsg | echom 'vproj-ai: response has no ``` fenced code block — nothing applied' | echohl None
+    ShowPopup(response)
+    return
+  endif
+  ApplyCode(ai_target_bufnr, blocks, ai_target_cursor_line)
 enddef
 
 export def AiCallStream(prompt: string, ctx: dict<any>): bool
@@ -570,7 +551,29 @@ export def AiCallStream(prompt: string, ctx: dict<any>): bool
     return false
   endif
 
-  var cmd: list<string> = BuildStreamCommand(prompt, ctx)
+  # Body and auth header go to 0600 files so neither the key nor the
+  # prompt is visible in /proc/<pid>/cmdline, and a long body cannot hit
+  # the argv size limit (E2BIG).
+  var bodyfile: string = tempname()
+  if !WriteSecretFile(bodyfile, [BuildRequestBody(prompt, ctx, true)])
+    echohl ErrorMsg | echom 'vproj-ai: failed to write request body' | echohl None
+    return false
+  endif
+  var hdrfile: string = tempname()
+  if !WriteSecretFile(hdrfile, ['Authorization: Bearer ' .. ai_api_key])
+    DeleteFiles([bodyfile])
+    echohl ErrorMsg | echom 'vproj-ai: failed to write header file' | echohl None
+    return false
+  endif
+  var files: list<string> = [bodyfile, hdrfile]
+
+  var cmd: list<string> = ['curl', '--no-buffer', '-s', '-f',
+    '--connect-timeout', '10', '-m', '120',
+    '-X', 'POST',
+    '-H', 'Content-Type: application/json',
+    '-H', '@' .. hdrfile,
+    '--data-binary', '@' .. bodyfile,
+    ai_api_url]
 
   stream_accumulated = ''
   stream_full_response = ''
@@ -579,16 +582,16 @@ export def AiCallStream(prompt: string, ctx: dict<any>): bool
   var opts: dict<any> = {}
   opts.mode = 'raw'
   opts.out_cb = (chan, msg) => ProcessStreamChunk(chan, msg)
-  opts.exit_cb = StreamJobExit
+  opts.exit_cb = (j, st) => StreamJobExit(j, st, files)
   opts.timeout = 120000
 
-  stream_job = job_start(cmd, opts)
-  if job_status(stream_job) == 'fail'
-    stream_job = v:null
+  var new_job: job = job_start(cmd, opts)
+  if job_status(new_job) == 'fail'
+    DeleteFiles(files)
     echohl ErrorMsg | echom 'vproj-ai: failed to start API request' | echohl None
     return false
   endif
-
+  stream_job = new_job
   return true
 enddef
 
@@ -676,41 +679,58 @@ export def ExtractCodeBlocks(text: string): list<dict<any>>
   return blocks
 enddef
 
+# Insert the first code block into {target_bufnr} below {cursor_line},
+# after the user confirms. Esc / Ctrl-C at the prompt mean No.
 def ApplyCode(target_bufnr: number, blocks: list<dict<any>>, cursor_line: number): void
-  var code: string = ''
-  var lang: string = 'code'
-
   if empty(blocks)
-    code = stream_full_response
-  else
-    code = blocks[0].code
-    lang = get(blocks[0], 'language', 'code')
-  endif
-
-  if empty(code)
     echom 'vproj-ai: no code in response'
     return
   endif
-
-  if !bufexists(target_bufnr)
+  if target_bufnr <= 0 || !bufexists(target_bufnr) || !bufloaded(target_bufnr)
     echohl ErrorMsg | echom 'vproj-ai: target buffer no longer exists' | echohl None
     return
   endif
-
+  if !empty(getbufvar(target_bufnr, '&buftype'))
+    echohl ErrorMsg | echom 'vproj-ai: target buffer is not a file buffer' | echohl None
+    return
+  endif
   if !getbufvar(target_bufnr, '&modifiable')
     echohl ErrorMsg | echom 'vproj-ai: target buffer not modifiable' | echohl None
     return
   endif
 
-  var code_lines: list<string> = split(code, "\n")
-  var insert_at: number = cursor_line > 0 ? cursor_line : 1
+  var code_lines: list<string> = split(blocks[0].code, "\n")
+  if empty(code_lines)
+    echom 'vproj-ai: no code in response'
+    return
+  endif
+  var lang: string = get(blocks[0], 'language', '')
+  var total: number = get(getbufinfo(target_bufnr)[0], 'linecount', 0)
+  var insert_at: number = min([max([cursor_line, 0]), total])
+  var name: string = bufname(target_bufnr)
+  var fname: string = empty(name) ? '[No Name] (buffer ' .. target_bufnr .. ')' : fnamemodify(name, ':t')
+  var label: string = empty(lang) ? '' : ' (' .. lang .. ')'
 
-  # Apply directly to target buffer — no window switch, stay in the pane
-  appendbufline(target_bufnr, insert_at, code_lines)
-  setbufvar(target_bufnr, '&modified', 1)
+  const PREVIEW_LINES: number = 8
+  var preview: list<string> = code_lines[: PREVIEW_LINES - 1]
+  if len(code_lines) > PREVIEW_LINES
+    preview->add('... (' .. (len(code_lines) - PREVIEW_LINES) .. ' more)')
+  endif
+  var question: string = printf('vproj-ai: insert %d line(s)%s into %s after line %d?',
+    len(code_lines), label, fname, insert_at)
+  if len(blocks) > 1
+    question ..= printf(' (first of %d code blocks)', len(blocks))
+  endif
+  question ..= "\n\n" .. join(preview, "\n")
+  if confirm(question, "&Yes\n&No", 2) != 1
+    echom 'vproj-ai: not applied'
+    return
+  endif
 
-  var fname: string = fnamemodify(bufname(target_bufnr), ':t')
-  var label: string = empty(lang) || lang == 'code' ? '' : ' (' .. lang .. ')'
+  if appendbufline(target_bufnr, insert_at, code_lines) != 0
+    echohl ErrorMsg | echom 'vproj-ai: failed to insert into ' .. fname | echohl None
+    return
+  endif
   echom 'vproj-ai: applied ' .. len(code_lines) .. ' lines to ' .. fname .. label .. ' (u to undo)'
 enddef
 
@@ -728,21 +748,15 @@ enddef
 
 def ShowPopup(text: string): void
   var lines: list<string> = split(text, "\n")
-  var max_width: number = 0
-  for l in lines
-    var w: number = strdisplaywidth(l)
-    if w > max_width
-      max_width = w
-    endif
-  endfor
-
-  var popup_width: number = min([max([max_width + 2, 40]), 80])
-  var popup_height: number = min([len(lines), 20])
+  if empty(lines)
+    echom 'vproj-ai: empty response'
+    return
+  endif
 
   var opts: dict<any> = {
     title: ' vproj_ai (q/Esc to close) ',
-    line: 'cursor',
-    col: 'center',
+    # pos 'center' centers on screen; line/col are ignored ('center' is
+    # not a valid col value and made popup_create() fail with E475).
     pos: 'center',
     wrap: true,
     close: 'button',
@@ -778,43 +792,38 @@ export def AiPromptFromKey(): void
 enddef
 
 export def AiPrompt(prompt_from_cmdline: string = ''): void
-  # Cancel any in-progress stream
-  if stream_job != v:null && job_status(stream_job) == 'run'
-    StreamCancel()
-  endif
-
-  # Reset state
-  stream_job = v:null
-  stream_accumulated = ''
-  stream_full_response = ''
-  stream_cancelled = false
-
   var prompt: string = prompt_from_cmdline
   if empty(prompt)
     return
   endif
 
   # Detect mode and strip prefix before sending to API
-  ai_mode = DetectMode(prompt)
+  var mode: string = DetectMode(prompt)
   prompt = StripPrefix(prompt)
   if empty(prompt)
     return
   endif
 
-  # Find target file buffer (the file being edited, not the pane)
-  var pane: number = exists('*vproj#GetPaneBufnr') ? vproj#GetPaneBufnr() : -1
-  var file_bufnr: number = bufnr('#')
-  if file_bufnr <= 0 || file_bufnr == pane
-    for info in getbufinfo({buflisted: true})
-      if info.bufnr != pane
-        file_bufnr = info.bufnr
-        break
-      endif
-    endfor
+  # Target: the file window the user is editing now (or came from, when
+  # the prompt is issued from the vproj pane) — never the alternate buffer.
+  var origin: number = OriginWindow()
+  if mode == 'code' && origin == 0
+    echohl ErrorMsg | echom 'vproj-ai: no file window to apply code to (use ?prompt to ask a question)' | echohl None
+    return
   endif
-  ai_target_bufnr = file_bufnr
 
-  var ctx: dict<any> = GatherContext(file_bufnr)
+  # Cancel any in-progress stream; its exit_cb still cleans up its files.
+  if stream_job != v:null && job_status(stream_job) == 'run'
+    StreamCancel()
+  endif
+  stream_job = v:null
+  stream_accumulated = ''
+  stream_full_response = ''
+  stream_cancelled = false
+
+  var ctx: dict<any> = GatherContext(origin)
+  ai_mode = mode
+  ai_target_bufnr = origin > 0 ? winbufnr(origin) : -1
   ai_target_cursor_line = get(ctx, 'cursor_line', 1)
 
   var ctx_file: string = get(ctx, 'file', '')
