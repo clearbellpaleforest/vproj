@@ -93,9 +93,15 @@ def CurlArgv(): string
   return text
 enddef
 
+# Clear the fake curl's records. One glob per prefix: a {a,b} pattern is
+# expanded by 'shell', and dash (/bin/sh on Debian/Ubuntu) has no brace
+# expansion, so it matched nothing there and stale records leaked between
+# sections.
 def ResetFake(): void
-  for f in glob(fake_dir .. '/{argv,perms,files,data}.*', 0, 1)
-    delete(f)
+  for prefix in ['argv', 'perms', 'files', 'data']
+    for f in glob(fake_dir .. '/' .. prefix .. '.*', 0, 1)
+      delete(f)
+    endfor
   endfor
 enddef
 

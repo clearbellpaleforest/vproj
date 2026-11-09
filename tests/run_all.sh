@@ -5,7 +5,9 @@
 #   tests/run_all.sh -v         # also print FAIL lines / Vim errors per failing file
 #
 # Each file runs as:
-#   vim -N -u NONE -i NONE -S <file> -c 'cquit!' </dev/null
+#   vim --not-a-term -N -u NONE -i NONE -S <file> -c 'cquit!' </dev/null
+# (--not-a-term: without it the vim-gtk3 build, which CI installs, makes
+# input() return '' for test_feedinput() keys; confirm() is unaffected)
 # with HOME, XDG_CACHE_HOME and TMPDIR pointed into a fresh temp dir, so a test
 # can never read or write the user's real ~/.cache/vproj/session or ~/.vim.
 #
@@ -88,7 +90,7 @@ for f in "${FILES[@]}"; do
   raw="$run_dir/out.raw"
 
   HOME="$run_dir/home" XDG_CACHE_HOME="$run_dir/cache" TMPDIR="$run_dir/tmp" \
-    timeout -k 5 120 vim -N -u NONE -i NONE -S "$f" -c 'cquit!' </dev/null >"$raw" 2>&1
+    timeout -k 5 120 vim --not-a-term -N -u NONE -i NONE -S "$f" -c 'cquit!' </dev/null >"$raw" 2>&1
   rc=$?
 
   out=$(strip_term <"$raw")
