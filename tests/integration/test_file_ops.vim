@@ -9,7 +9,9 @@ vim9script
 # a prompt reached by mistake reads EOF from stdin and the run fails.
 
 $XDG_CACHE_HOME = tempname()
-set rtp+=src
+# Absolute: a test that cd's away must still find autoload/ (the plugin no
+# longer sources it at load).
+execute 'set rtp+=' .. fnameescape(fnamemodify(expand('<script>:p'), ':h:h:h') .. '/src')
 runtime! plugin/vproj.vim
 set nomore
 

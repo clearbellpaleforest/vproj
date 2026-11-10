@@ -66,25 +66,51 @@ enddef
 
 # ── Context ──
 
+# Window ID of the file window the user is working in: the current window,
+# or the previous window when the current one is the vproj pane. 0 when
+# there is none, or when it shows a non-file buffer (nofile, terminal,
+# quickfix, help ...). ai.vim has the same rule (OriginWindow); it is kept
+# here so the two add-ons stay independent of each other.
+def OriginWindow(pane: number): number
+  var winid: number = win_getid()
+  if winbufnr(winid) == pane
+    var prev: number = winnr('#')
+    if prev <= 0
+      return 0
+    endif
+    winid = win_getid(prev)
+  endif
+  if winid <= 0
+    return 0
+  endif
+  var bufnr: number = winbufnr(winid)
+  if bufnr <= 0 || bufnr == pane || !empty(getbufvar(bufnr, '&buftype'))
+    return 0
+  endif
+  return winid
+enddef
+
 def GatherAgentContext(): dict<any>
   var ctx: dict<any> = {}
   ctx.cwd = getcwd()
 
-  var bufnr: number = bufnr('%')
   var pane: number = exists('*vproj#GetPaneBufnr') ? vproj#GetPaneBufnr() : -1
-  if bufnr > 0 && bufnr != pane
-    ctx.file = fnamemodify(bufname(bufnr), ':p')
-    ctx.filetype = getbufvar(bufnr, '&filetype', '')
-    ctx.cursor_line = line('.')
-    ctx.cursor_col = col('.')
-    var total: number = line('$')
-    var ctx_start: number = max([1, ctx.cursor_line - 50])
-    var ctx_end: number = min([total, ctx.cursor_line + 50])
-    ctx.file_lines = getbufline(bufnr, ctx_start, ctx_end)
-    ctx.file_line_offset = ctx_start
-    ctx.file_total_lines = total
+  var winid: number = OriginWindow(pane)
+  if winid == 0
+    return ctx
   endif
-
+  var bufnr: number = winbufnr(winid)
+  var pos: list<number> = getcurpos(winid)
+  ctx.file = fnamemodify(bufname(bufnr), ':p')
+  ctx.filetype = getbufvar(bufnr, '&filetype', '')
+  ctx.cursor_line = pos[1] > 0 ? pos[1] : 1
+  ctx.cursor_col = pos[2] > 0 ? pos[2] : 1
+  var total: number = get(getbufinfo(bufnr)[0], 'linecount', 0)
+  var ctx_start: number = max([1, ctx.cursor_line - 50])
+  var ctx_end: number = min([total, ctx.cursor_line + 50])
+  ctx.file_lines = getbufline(bufnr, ctx_start, ctx_end)
+  ctx.file_line_offset = ctx_start
+  ctx.file_total_lines = total
   return ctx
 enddef
 
@@ -156,5 +182,5 @@ export def AgentOpen(): void
     return
   endif
 
-  echom 'vproj-agent: ' .. bin .. ' running — the window closes when it exits'
+  echom 'vproj-agent: ' .. bin .. ' running -- the window closes when it exits'
 enddef

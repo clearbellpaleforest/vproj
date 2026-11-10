@@ -1,10 +1,16 @@
 # vproj_ai Streaming Integration — Design Spec
 
+> **Historical record (dated design spec, 2026-06-20).** Original wording is kept; it is not updated. Status notes (**Status (2026-11-10) ...**) mark what has since changed in the code. For the current behavior see `doc/design.md` and `src/doc/vproj.txt`.
+
+> **Status (2026-11-10): Partly superseded.** Only the streaming engine was built (as `AiCallStream()`); the mode-aware context and the side-car buffer were not. The document's own `Status: draft` line below is the 2026-06-20 state — see `src/autoload/vproj/ai.vim`.
+
 **Date:** 2026-06-20
 **Status:** draft
 **Scope:** Replace blocking `system()` with async `job_start` streaming, add mode-aware context extraction, add side-car response buffer.
 
 ## Motivation
+
+> **Status (2026-11-10): Partly superseded.** Streaming exists (`:VprojAiPrompt` and the pane flow call `AiCallStream()`; `vproj#ai#AiCall()`, the blocking `system()` call, still exists as an exported function but the prompt flow does not use it). Log mode was removed, so the Log-mode example no longer applies, and `tests/stream_mwe.vim` is not in the tree — see `src/autoload/vproj/ai.vim`.
 
 vproj_ai currently blocks Vim for 10–60 seconds during `AiCall()` via `system('curl ...')`.
 Users stare at a frozen editor. The previous streaming attempt was removed (Task #108)
@@ -19,9 +25,13 @@ the error entry. In Buf mode, the target buffer's content.
 
 ## Architecture
 
+> **Status (2026-11-10): Partly superseded.** The "2-file structure, no new files" premise is out of date: the AI code is the add-on `autoload/vproj/ai.vim` (`vproj#ai#`), and there is no `plugin/vproj_ai.vim` or `autoload/vproj_ai.vim`. Of the three changes below only the streaming engine was built, in a different shape — see CLAUDE.md rule 7 and the notes under each change.
+
 Three changes to the existing 2-file structure (no new files, no global remaps):
 
 ### 1. Mode-aware context extraction (`GatherContext` enhancement)
+
+> **Status (2026-11-10): Superseded.** Not built as specified. Log mode is removed, and `GatherContext(winid)` takes the window the pane was opened from (`OriginWindow()`), not a pane mode; it always sends the file in that window (path, filetype, cursor, +/-100 lines), the cwd and the mode name. There is no per-mode commit, quickfix-entry or buffer extraction — see `src/autoload/vproj/ai.vim` (`GatherContext`).
 
 | Pane Mode | Context captured |
 |-----------|-----------------|
@@ -37,6 +47,8 @@ line (7-char hex prefix). In Qfix mode, captures the entry filename, line number
 and text. In Buf mode, reads the target buffer instead of the alternate buffer.
 
 ### 2. Async streaming engine (new `StreamAiCall`, `AiCall` removed)
+
+> **Status (2026-11-10): Superseded.** The engine is `AiCallStream()` with `ProcessStreamChunk()` and `StreamJobExit()` (`job_start`, `mode: 'raw'`, lambda callbacks, 0600 temp files for body and key). State is `stream_job`, `stream_accumulated`, `stream_cancelled`, `stream_full_response`; the `stream_bufnr` / `stream_cur_line` / `stream_cur_text` variables were not built. Cancel is `StreamCancel()` / `StreamCancelCmd()`, not `S-Tab`. `AiCall` was not removed: `vproj#ai#AiCall()` still exists (exported, not used by the prompt flow) — see `src/autoload/vproj/ai.vim`.
 
 ```
 user prompt → BuildRequestBody → curl -N → job_start(mode:raw) → SSE accumulator → AppendToken → redraw
@@ -67,6 +79,8 @@ user prompt → BuildRequestBody → curl -N → job_start(mode:raw) → SSE acc
 
 ### 3. Side-car response buffer
 
+> **Status (2026-11-10): Superseded.** Not built: there is no `__AI_Response__` buffer, `PrepareResponseBuffer()` or side-car split. `A` in the pane opens a terminal chat (`vproj#ai#AiTerminalChat()`) running `bin/vproj-ai-chat`, and one-shot `:VprojAiPrompt` answers through `ApplyCode()` (code mode, after `confirm()`) or `ShowPopup()` (question mode) — see `src/autoload/vproj/ai.vim`.
+
 ```
 ┌──────────┬──────────────────────────────────────┐
 │  vproj   │                                      │
@@ -95,6 +109,8 @@ user prompt → BuildRequestBody → curl -N → job_start(mode:raw) → SSE acc
 
 ### Flow
 
+> **Status (2026-11-10): Superseded.** `AiPrompt` / `GatherContext(pane_mode)` / `PrepareResponseBuffer()` / `StreamApiCall()` / `RenderConversation()` do not exist. The current flow is `AiPrompt()` -> `GatherContext(winid)` -> `AiCallStream()` -> `ApplyCode()` or `ShowPopup()`; the chat path is a terminal whose bash script owns the conversation history — see `src/autoload/vproj/ai.vim`.
+
 ```
 A in pane → AiPrompt()
   → bwipeout! old conversation
@@ -114,6 +130,8 @@ A in pane → AiPrompt()
 
 ## What does NOT change
 
+> **Status (2026-11-10): Partly superseded.** The files are `autoload/vproj/ai.vim` and `src/plugin/vproj.vim` (no `plugin/vproj_ai.vim`, no `autoload/vproj_ai.vim`); `A` is mapped by the core pane mappings; `AiApplyCode()` is now `ApplyCode()`; `GatherContext()` now takes a window id; `ai_conversation_history` does not exist (the chat script holds the history); `BuildRequestBody()` gained a `stream` argument — see `doc/design.md` (AI section) and `src/autoload/vproj/ai.vim`.
+
 - Mappings: `A` in pane buffer only (buffer-local, not global)
 - File structure: plugin/vproj_ai.vim + autoload/vproj_ai.vim (no new files)
 - `AiApplyCode()`, `GatherContext()` (enhanced but same signature)
@@ -123,6 +141,8 @@ A in pane → AiPrompt()
 - Credential/config: `AiConfigure()` unchanged
 
 ## Streaming vs. non-streaming API call
+
+> **Status (2026-11-10): Partly superseded.** `stream: true` and a 120 s timeout hold. The command uses `--no-buffer` (the long form of `-N`), `-H @<hdrfile>` and `--data-binary @<bodyfile>` as an argv list, not a shell string; the temp files are 0600 and deleted when the job ends — see `AiCallStream()` in `src/autoload/vproj/ai.vim`.
 
 The streaming engine uses `stream: true` in the API request body (changed from
 `false`). The curl command changes from `-s -f` to `-N -s -f`:
@@ -139,6 +159,8 @@ to 120s since streaming responses take longer end-to-end.
 
 ## Error handling
 
+> **Status (2026-11-10): Partly superseded.** `job_start` failure reports an error and returns false; there is no fallback to blocking `system()`. Cancelling stops the job (`job_stop()`) with a stream-cancelled message; there is no side buffer to guard — see `AiCallStream()` and `StreamCancel()` in `src/autoload/vproj/ai.vim`.
+
 - `job_start` returns `-1` → `echoerr`, fall back to blocking `system()` as degraded mode
 - curl HTTP error → `exit_cb` status non-zero → append error message to buffer
 - Buffer wiped mid-stream → `bufexists()` guard in `AppendToken`, `job_stop()` in
@@ -147,6 +169,8 @@ to 120s since streaming responses take longer end-to-end.
 - Stalled stream → `timeout: 120000` in job options, `exit_cb` fires on timeout
 
 ## Test plan
+
+> **Status (2026-11-10): Superseded.** `tests/stream_mwe.vim`, `tests/integration/test_streaming.vim` and `tests/integration/test_ai_addon.vim` are not in the tree. AI tests are `tests/unit/test_ai.vim` (fake curl, no network), `tests/unit/test_ai_credentials.vim` and `tests/unit/test_agent.vim` — see `CLAUDE.md` (Testing).
 
 1. **Streaming engine unit test** (`tests/stream_mwe.vim` — already passing):
    mock SSE → verify token-by-token buffer output

@@ -9,7 +9,11 @@ vim9script
 # test_feedinput() queued before the call that prompts.
 
 $XDG_CACHE_HOME = tempname()
-set rtp+=src
+# Session saving is opt-in (CLAUDE.md rule 5); these tests exercise it.
+g:vproj_save_session = 1
+# Absolute: a test that cd's away must still find autoload/ (the plugin no
+# longer sources it at load).
+execute 'set rtp+=' .. fnameescape(fnamemodify(expand('<script>:p'), ':h:h:h') .. '/src')
 runtime! plugin/vproj.vim
 set nomore
 set columns=160 lines=40
@@ -258,6 +262,11 @@ endif
 
 # ── 14. Pane alone: files open in a vertical split, not inside the pane column ──
 Fresh(smalldir)
+# Permanent pane: Enter on a file closes a temporary one (2026-11d audit), and
+# this test is about the layout while the pane is open.
+vproj#PaneClose()
+vproj#PaneTogglePermanent()
+vproj#SwitchMode('file')
 win_gotoid(PaneWid())
 only
 SelectName('a.txt')
@@ -269,7 +278,7 @@ Fresh(smalldir)
 vproj#PaneClose()
 execute 'edit ' .. fnameescape(smalldir .. '/a.txt')
 execute 'badd ' .. fnameescape(smalldir .. '/b.txt')
-vproj#PaneOpen()
+vproj#PaneTogglePermanent()  # permanent: Enter would close a temporary pane (and its preview)
 vproj#TogglePreview()
 var prev_bufs: list<string> = map(range(1, winnr('$')), (_, w) => bufname(winbufnr(w)))
 vproj#SwitchMode('buf')

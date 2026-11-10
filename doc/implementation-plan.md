@@ -18,7 +18,7 @@ development.
 - Mode menu line (cycling via Enter)
 - Width control (`PaneGrow()`, `PaneShrink()`, `SetPaneWidth()`)
 - Selection movement (`SelectNext()`, `SelectPrev()`)
-- Nav indicator assignment and Tab/Shift-Tab relabeling (`nav_offset`)
+- Nav indicator assignment (a-z) and `>` / `<` block relabeling (`nav_offset`)
 - Paging (`current_page`, `items_per_page`, NextPage/PrevPage)
 - Info column toggle (`ToggleInfoColumn()`)
 
@@ -31,9 +31,9 @@ relabel. Paging works. All width/display options functional.
 - File size formatting (B/K/M/G)
 - Binary detection via `readblob()` null-byte check
 - Directory navigation (Enter on dir, ".." parent)
-- File opening (Enter on file opens buffer in previous window)
-- Status line showing current path with right-alignment
-- Parent navigation (Ctrl-K, ".", h)
+- File opening (Enter on file opens it in the edit window; a temporary pane then closes, a permanent one stays)
+- Status line (the pane window's `statusline`) showing current path with right-alignment
+- Parent navigation (Ctrl-K, `.`)
 - First-subdir navigation (Ctrl-J)
 
 **Gate:** Full file browsing. Open files. Navigate directory tree. Sizes and
@@ -41,11 +41,11 @@ binary detection work.
 
 ### Stage 3: Buffer Mode
 
-- `BufItems()` — buffer list from `getbufinfo()`
-- Buffer flag display (%, #, a, h, +)
+- `BufferList()` — buffer list from `getbufinfo({buflisted: 1})`
+- Buffer flag display (`%` shown in a window, `+` modified)
 - Line count for loaded buffers
 - Buffer switching (Enter)
-- Buffer closing (x, `CloseBuffer()`)
+- Buffer closing (Shift-X, `CloseBuffer()`)
 - `HandleBufWipeout()` for cleanup
 
 **Gate:** Switch between buffers. Close buffers. Flags display correctly.
@@ -57,14 +57,14 @@ binary detection work.
 - Project creation prompt flow
 - Upward search for .vproj files
 - `project` dict structure
-- `SaveProject()` — atomic overwrite
+- `WriteVprojFile()` — atomic overwrite (temp file + rename)
 
 **Gate:** Parse and write .vproj files. Create new projects. Upward search
 finds projects in parent directories.
 
 ### Stage 5: Code Mode
 
-- `GitItems()` — project tree from .vproj
+- `CodeItems()` — project tree from .vproj
 - Include/exclude (`ToggleInclude()`, `IncludeItem()`, `ExcludeItem()`)
 - Project renaming (`RenameProject()`)
 - Parenthetical display for non-included items
@@ -81,29 +81,43 @@ works. Tree displays correctly relative to current root.
 - Per-mode width overrides
 - Graceful fallbacks when vars are unset
 
-**Gate:** User can configure width and mode display position via .vimrc.
+**Gate:** User can configure width and dotfile visibility via .vimrc. (A mode-display-position option was dropped; the mode menu is always line 1.)
 
 ### Stage 7: Documentation
 
 - concept.md (source material)
-- docs/constraints.md
-- docs/architecture.md
-- docs/design.md
-- docs/implementation-plan.md
-- docs/test-plan.md
-- docs/test-cases.md
-- docs/decisions.md
+- doc/constraints.md
+- doc/architecture.md
+- doc/design.md
+- doc/implementation-plan.md
+- doc/test-plan.md
+- doc/test-cases.md
+- doc/decisions.md
 - README.md (user-facing)
 
 **Gate:** Complete documentation covering all subsystems, modes, and APIs.
 
-### Stage 8: Advanced Features (Future)
+### Stage 8: Advanced Features
 
-- Source control integration
-- Semantic search
-- Project metrics
-- Code analysis
-- Workspace history
+- Source control integration — **built**: git status column, `\s \d \D \c \p
+  \u \b \z \Z \a`, Ctrl-G changed-only filter (file and code modes)
+- Semantic search — future
+- Project metrics — future
+- Code analysis — future
+- Workspace history — future
 
-All implemented by wiring into the named event points defined in the
-architecture.
+The remaining items are to be implemented by wiring into the named event points
+defined in the architecture.
+
+### Built beyond the original stages
+
+- Tree view (Shift-T), file/buf preview (Shift-P), name filter (/), git grep
+  into quickfix (*)
+- File operations: `:VprojCopy` `:VprojDelete` `:VprojRename` `:VprojMove`
+  (aliases `:Copy` `:Delete` `:Rename` `:Move` when free) and the Delete key
+- Opt-in session saving (`$XDG_CACHE_HOME/vproj/session`, written only when `g:vproj_save_session = 1`)
+- AI add-on (`autoload/vproj/ai.vim`): terminal chat on `A` in the pane,
+  one-shot `:VprojAiPrompt` (see `implementation.md`, Stages 9-10)
+- Agent add-on (`autoload/vproj/agent.vim`): `:VprojAgent`
+- Log mode was built and later removed; there are four modes (File, Buf, Code,
+  Qfix)

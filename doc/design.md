@@ -2,15 +2,22 @@
 
 ## State
 
-All runtime state is script-local in `autoload/vproj_ai.vim`:
+All runtime state is script-local in `autoload/vproj.vim`:
 
 ```
-pane_bufnr, pane_width, current_mode, selected_line, current_dir, items
-project, git_root, match_ids, show_info_column, current_page
-items_per_page, paging_active, nav_offset, original_cwd, saved_shortmess, cursor_match_id
+pane_bufnr, pane_width, current_mode, pane_open_mode, selected_line,
+current_dir, items, show_info_column, current_page, items_per_page,
+paging_active, nav_offset, filter_pattern, git_filter_active,
+saved_origin_wid, project, code_root, tree_view_active, expanded_dirs,
+preview_active, preview_bufnr, match_ids, cursor_match_id,
+git_status_map / git_status_xy / git_status_orig, git_branch_cache,
+git_root_cache, session_error
 ```
 
-The state block is the workspace. No state lives outside it.
+`current_mode` is one of `file`, `buf`, `code`, `qfix`; `pane_open_mode` is
+`temporary` or `permanent`. `nav_offset` is a block number (block 0 letters
+items 0-25, block 1 items 26-51, ...). The state block is the workspace. No
+state lives outside it.
 
 ## Control Flow
 
@@ -24,44 +31,80 @@ no partial re-renders. Clear buffer, rebuild from scratch.
 
 ## AI State
 
-AI-specific script-local state:
+The AI add-on (`autoload/vproj/ai.vim`, namespace `vproj#ai#`) keeps its own
+script-local state:
 
 ```
-ai_api_url, ai_api_key, ai_last_prompt, ai_last_response, ai_history
+ai_api_url, ai_api_key, ai_model, ai_url_rejected          (resolved settings)
+ai_mode, ai_target_bufnr, ai_target_cursor_line            (per request)
+stream_job, stream_accumulated, stream_cancelled, stream_full_response
 ```
 
-`ai_history` is a list of {prompt, response} dicts, bounded at 5 entries,
-providing conversation continuity within a session.
+There is no conversation history in Vimscript: the terminal chat's bash script
+owns it (see Terminal Chat below), and `:VprojAiPrompt` is one-shot.
 
 ## AI Control Flow
 
+Two entry points:
+
 ```
-User presses A -> GatherContext() -> input() prompt -> AiCall(prompt, context)
--> RouteResponse(text) -> cmdline | diff split | preview split | quickfix
+A in the pane   -> AiTerminalChat() -> bash chat script in a 15-line terminal
+:VprojAiPrompt  -> AiPrompt(prompt) -> DetectMode() -> AiCallStream() (curl job)
+                -> code: ApplyCode() after confirm()  |  question: ShowPopup()
 ```
 
-Unlike the main Render path, AI calls are not idempotent (network side effects).
-The flow is:
-1. Gather context (read-only, never modifies state)
-2. Prompt user for natural language query
-3. Send to API (blocking `system()` call with timeout)
-4. Route response to appropriate Vim surface
-5. Append to ai_history
+Unlike the main Render path, AI calls are not idempotent (network side
+effects). For `:VprojAiPrompt`:
+1. `DetectMode()` classifies the prompt as code or question; a `!` or `?`
+   prefix forces it.
+2. `GatherContext()` reads the origin window's file, cursor and up to 100 lines
+   either side (read-only, never modifies state).
+3. `AiCallStream()` runs `curl` as a Vim job; the key and request body go to
+   mode-0600 temp files, never the command line.
+4. Code mode inserts the first fenced block below the cursor only after
+   `confirm()` (Esc = No); a response with no fenced block is shown in a popup.
+   Question mode shows a popup.
 
-AI functions read workspace state but do not modify it. AI responses that
-produce code changes go through existing commands (diff preview, buffer
-modification) rather than writing directly.
+AI functions read workspace state but do not modify it. Code changes go into
+the user's buffer through the normal buffer, so Vim's undo preserves the
+pre-apply state.
 
 ## Pane Lifecycle
 
-1. `PaneToggle()` — opens or closes the pane.
-2. On open: determine mode (last used, or file mode on first open).
-3. `InitPane()` — create scratch buffer, set buffer-local options, apply
-   keybindings via `MapKeys()`.
+1. Entry points. Each opens the pane in a mode, 'temporary' or 'permanent',
+   tracked in `pane_open_mode`:
+   - `Tab` (`<Plug>VprojToggle`, `:VprojToggle`, `vproj#PaneToggle()`) is the
+     temporary toggle. Pane closed: open in temporary mode. Temporary pane
+     open: close it. Permanent pane open: switch it to temporary without
+     closing.
+   - `Shift-Tab` (`<Plug>VprojTogglePermanent`,
+     `vproj#PaneTogglePermanent()`) is the permanent toggle. Pane closed: open
+     in permanent mode. Permanent pane open: close it. Temporary pane open:
+     switch it to permanent without closing. There is no ex command for it.
+   - `:VprojOpen` / `vproj#PaneOpen()` open the pane (temporary mode) and do
+     nothing if it is already visible; `:VprojClose` / `vproj#PaneClose()`
+     close it in either mode.
+   - `Tab` and `Shift-Tab` are only the defaults: they are mapped unless the
+     user already maps the matching `<Plug>` name.
+   - Mode difference: a temporary pane closes after a file is opened from it
+     and on `Esc`. A permanent pane stays open after a file opens (focus
+     returns to the pane) and `Esc` does nothing; `Shift-Q` in the pane closes
+     a permanent pane (in a temporary pane it switches to qfix mode).
+   - `User VprojPaneOpenedTemporary` / `VprojPaneOpenedPermanent` fire on each
+     open or mode switch; `VprojPaneReady` fires when the pane is built.
+2. On open: determine mode (from the session file if one exists, else file mode).
+3. `PaneOpen()` creates the scratch buffer, sets buffer-local options and
+   applies keybindings via `SetupPaneMappings()`; a session file is read first
+   (`LoadSession()`) if one exists (reading needs no opt-in).
 4. `Render()` — populate buffer contents.
-5. `PaneClose()` / `HandleBufWipeout()` — cleanup, restore window layout, restore
-   `shortmess`.
-6. `OnDirChanged()` — auto-refresh when Vim changes directory.
+5. `PaneClose()` / `HandleBufWipeout()` — if the user opted in with
+   `g:vproj_save_session = 1`, save the session (mode, directory, width, info
+   column, git filter to `$XDG_CACHE_HOME/vproj/session`; with the option off
+   nothing is written); then clean up, restore window layout and `shortmess`.
+6. `OnDirChanged()` — on `DirChanged` (global, tabpage, window) the git cache
+   is invalidated and, in file/buf/qfix mode, the listing follows the new
+   directory; code mode ignores it. A window-local change from another window
+   is ignored.
 7. `HandleF1()` — global F1 handler: toggles info column inside pane, opens
    `:help` elsewhere.
 
@@ -77,74 +120,75 @@ For each item:
 - Info column (file size, 5 chars right-aligned: " 324K", "  45M")
 
 Special lines:
-- Line 1: mode menu ("F/D/C")
-- Line 2: separator (dashes)
-- Line 3: status line showing current path
-- Parent directory ".." always present
+- Line 1: mode menu (`[F]ile  [B]uf  [C]ode  [q]fix`)
+- Line 2: separator (dashes); the current path and counts are in the pane's
+  statusline
+- Parent directory ".." always present (nav key `.`), except at filesystem root
 - Paging row if items exceed pane height
 
 Binary detection: `getftype()` identifies non-files. Non-regular files (FIFOs,
 sockets, devices) are excluded from the listing. Binary files identified by
 presence of null bytes in first 8KB (`readblob()` + `stridx()`).
 
-Enter on file: open in right panel via `OpenInRightPanel()`, keep pane
-visible on the left (two-panel layout). The right panel is reused for
-subsequent file opens instead of stacking new splits.
+Enter on file: `OpenFile()` shows it in the edit window chosen by
+`EditTargetWindow()` (the window the user came from, else the first edit
+window, else a new `botright vnew`), reusing it for subsequent opens. A
+temporary pane then closes; a permanent pane stays open and keeps focus. An
+unsaved buffer asks Yes/No/Cancel first; Cancel keeps the pane.
 Enter on directory: navigate into it (change `current_dir`, re-render).
 Enter on "..": navigate up (parent of `current_dir`).
 
 ### Buf Mode (key: Shift-B)
 
-Items: open buffers from `getbufinfo()`. Listed buffers only.
+Items: listed, named buffers from `getbufinfo({buflisted: 1})`.
 
 For each buffer:
 - Nav indicator
 - Buffer name (relative path where possible)
-- Info column: flags from `getbufinfo()` — `%` (current), `#` (alternate),
-  `a` (active), `h` (hidden), `+` (modified), line count if loaded
+- Info column: `%` (shown in a window), `+` (modified), line count
 
-Enter on buffer: switch to it — uses `rightbelow split` if only pane window
-exists, then `buffer <nr>`, then closes pane (buf mode replaces the layout
-since the user is switching editing contexts).
-x on buffer: `CloseBuffer()` — `bdelete` the selected buffer.
+Enter on buffer: `OpenBuffer()` switches the edit window to it (same
+`EditTargetWindow()` rule as files); a temporary pane then closes, a permanent
+one stays. Nav characters only move the cursor in this mode.
+Shift-X on buffer: `CloseBuffer()` — closes the selected buffer (offers to
+save a modified one).
 
 ### Code Mode (key: Shift-C)
 
-Items derived from .vproj_ai project file.
+Items derived from the project file (`.vproj`, found by `FindVprojFile()`
+walking up from the current directory; a hand-named `*.vproj` is also accepted).
 
 Layout (top to bottom):
 1. Mode menu line
-2. Separator
-3. Project name line (nav indicator: `*`)
-4. ".. [current root]" parent navigation
-5. Included directories and files (project tree, shown relative to current
-   root)
-6. Non-included items in current root (shown in parentheses)
-7. Paging row if needed
+2. Status line: `* <project name>` (nav key none; `* (no project found)` when
+   absent); the current directory is appended when it is below the project root
+3. Separator
+4. ".. <root>" parent navigation (unless at project root or `/`)
+5. Included directories, then included files, then non-included directories
+   and files (shown in parentheses), all relative to the current root
+6. Paging row if needed
 
-No .vproj_ai found: status line shows `* (no project found)`, all items in
-parentheses. Enter on status line triggers project creation wizard: confirmation
-prompt ("Create one? y/N"), then name prompt, then .vproj_ai written to disk.
+Enter on the status line: `RenameProject()`. With no project it asks
+"Create one? (y/N)", then a name, and writes `<name>.vproj` in the current
+root. With a project it prompts for a new name; the new file is written
+before the old one is deleted (safe against write failures).
 
-Info column: code mode supports the F1 info column toggle. File sizes are shown
-for non-directory items (5-char right-aligned, same format as file mode).
+Info column: code mode supports the F1 info column toggle.
 
-Enter on project name: `RenameProject()` — inline prompt via `input()`. If
-renaming, new .vproj_ai is written before old file is deleted (safe against
-write failures).
-Enter on directory: navigate into it, changing `git_root`.
-Enter on file: open in right panel via `OpenInRightPanel()`, keep pane visible
-on the left (two-panel layout). Reuses existing right-side window.
-`+` on non-included item: `IncludeItem()` — add to .vproj_ai, rewrite file.
-`-` on included item: `ExcludeItem()` — remove from .vproj_ai, rewrite file.
+Enter on directory: navigate into it (`NavigateInto()`).
+Enter on file: `OpenFile()`, same edit-window and pane-closing rule as file
+mode.
+`+` on a non-included item: `IncludeItem()` — add to the project, rewrite the
+`.vproj` file. `-` on an included item: `ExcludeItem()` — remove it, rewrite.
+Git actions and `Ctrl-G` work in code mode.
 
-### Qfix Mode (key: q)
+### Qfix Mode (key: Shift-Q in temporary mode)
 
 Items: entries from `getqflist()`.
 
 For each entry:
 - Nav indicator (if within current nav window)
-- Filename (path relative to CWD — `fnamemodify(..., ':.')`)
+- Filename (path relative to CWD — `fnamemodify(..., ':.')`); entries with `valid` false are skipped
 - Line number
 - Entry text (truncated to fit)
 
@@ -153,156 +197,147 @@ Layout (top to bottom):
 2. Separator
 3. Qfix entries (or "(no quickfix items)")
 
-Enter on entry: jump to file:line in previous window, close pane.
-Quickfix list is populated externally — by `:make`, `:grep`, `:vimgrep`,
-`setqflist()`, or AI-driven analysis. VPROJ_AI reads it; it does not write it.
+Enter on entry: `OpenQfixEntry()` jumps to file:line in the edit window; a
+temporary pane then closes, a permanent one stays. Nav characters only move the
+cursor. The quickfix list is populated by `:make`, `:grep`, `:vimgrep`,
+`setqflist()`, or by the pane's own `*` grep. Qfix mode reads it; it does not
+write it.
 
-### Log Mode (key: L)
+### Log Mode
 
-Items: git commit log from `git -C <root> log --oneline -n 30`.
-
-For each commit:
-- Nav indicator (if within current nav window)
-- 7-char abbreviated hash
-- Commit message (truncated to fit)
-
-Layout (top to bottom):
-1. Mode menu line (cyan `L` label)
-2. Separator
-3. Commit entries (or "no commits" if outside a git repo or empty history)
-
-Enter on commit: opens a detailed diff split via `OpenCommitDetail()` showing
-`git show --stat --format=fuller`. The commit view uses a vertical split layout:
-log pane on the left, commit detail on the right. Both read-only, `q` closes the
-detail view.
+Removed. There is no Log mode, no `L` key, and no commit-detail view.
 
 ### Git Actions (file and code modes)
 
-In file, code, and log modes, single-key git operations work on the item under cursor
-or the whole repository:
+Git operations act on the item under the cursor or the whole repository. Every
+action uses a `\` prefix, because lowercase letters are nav characters:
 
-- `s` — Stage/unstage file via `git add` / `git reset HEAD`
-- `d` — Open diff preview in vertical split (`git diff` or `git diff --cached`)
-- `D` — Discard file changes with confirmation prompt
-- `c` — Commit with message prompt (`input()`)
-- `P` — Push to remote
-- `U` — Pull --ff-only from remote
-- `b` — Switch branch (prompt via `input()`)
-- `z` — Stash changes with optional message (`git stash push`)
-- `Z` — Pop a stash with list preview and index selection (`git stash pop`)
-- `a` — Git blame for file under cursor (split window, tracked files only)
-- `Ctrl-G` — Toggle showing only git-changed files (file mode)
+- `\s` — Stage (`git add`, including untracked files) / unstage a file whose
+  changes are only staged
+- `\d` — Diff preview in a read-only vertical split (staged, unstaged or both); `q` closes
+- `\D` — Discard, after a prompt that says what it will do: delete an untracked
+  file, unstage a newly added file (kept), or revert all changes to HEAD
+- `\c` — Commit with message prompt (`input()`)
+- `\p` — Push; `\u` — Pull `--ff-only` (neither stops to ask for credentials)
+- `\b` — Switch branch (prompt via `input()`)
+- `\z` — Stash changes with optional message (`git stash push`)
+- `\Z` — Pop a stash: lists stashes, prompts for an index (default top)
+- `\a` — Git blame (`git annotate`) for the file under cursor, tracked files only
+- `Ctrl-G` — Toggle showing only git-changed files
 
-### Tree View (key: T, file mode only)
+### File Operations (file mode)
+
+`:VprojCopy`, `:VprojDelete`, `:VprojRename`, `:VprojMove` (aliases `:Copy`
+`:Delete` `:Rename` `:Move`, defined only when no other plugin owns the name;
+the `<Delete>` key does Delete). They act on the selected regular file, not on
+directories. Copy writes `name_1.ext`, `name_2.ext`, ... in the same
+directory. Delete confirms (default No). Rename prompts for a new name in the
+same directory; Move prompts for a destination directory (with completion). Both
+refuse an existing target. Delete, Rename and Move refuse while a buffer for the
+file has unsaved changes; Rename and Move retarget windows showing it
+(`RetargetBuffer()`).
+
+### Tree View (key: Shift-T, file mode only)
 
 Indented directory tree with expand/collapse. T toggles between flat and tree
 presentation within file mode. Tree state is independent of mode — switching
 modes and returning to file mode restores the tree view state.
 
-### File Preview (key: p, file mode only)
+### File Preview (key: Shift-P, file and buf modes)
 
-Split preview that shows contents of the file under cursor. Updates
-automatically when the cursor moves. `botright vnew` creates the preview
-window. Preview closes when the pane closes or p is pressed again.
+Split preview that shows contents of the file (or directory listing) under the
+cursor. Updates automatically when the cursor moves. `botright vnew` creates the
+preview window. Preview closes when the pane closes, when switching to code or
+qfix mode, or when Shift-P is pressed again.
 
 ### Filter and Grep (/ and * keys)
 
 `/` prompts for a name pattern and filters the current listing to matching
 items. Clearing the pattern (empty `input()`) restores the full listing.
 
-`*` prompts for a grep pattern and runs `grep -rn` in the project root,
-populating the quickfix list. Qfix mode is then available to navigate results.
+`*` prompts for a grep pattern and runs `git grep` (case-insensitive) over the
+repository, or over the pane's directory outside a repository, populating the
+quickfix list; the pane then switches to Qfix mode to show the results. An empty pattern cancels; no match reports "no matches".
 
 ## Navigation Indicators
 
-Assigned dynamically: a-z, A-Z, 1-9, minus action keys (q/r/s/d/D/c/P/U/b/x/z/Z/a/ +/- /T/p/ / * / / ) and nav shift keys (< >).
+Assigned dynamically from `NAV_CHARS`: the 26 lowercase letters `a`-`z`. The
+parent entry is always `.`. All actions are therefore Shift, Ctrl, `\` or
+punctuation keys (see Keybindings).
 
-The `*` indicator is reserved for the project name in code mode.
-
-Nav offset (`nav_offset`) determines which block of items gets indicators.
-Tab increments the offset by the number of visible indicators. Shift-Tab
-decrements. Wrap at boundaries.
+Nav offset (`nav_offset`) is a block number: block 0 letters items 0-25, block
+1 items 26-51, and so on. `>` (`ShiftNavForward`) moves to the next block and
+`<` (`ShiftNavBackward`) to the previous one.
 
 Paging is separate: Ctrl-N / Ctrl-P change `current_page`. Paging switches
 which items are visible. Nav indicators relabel within the current page.
 
 ## Keybindings
 
-Buffer-local mappings applied in the pane buffer only:
+Buffer-local mappings applied in the pane buffer only (`SetupPaneMappings()`):
 
 | Key | Function |
 |-----|----------|
-| j, Down | SelectNext |
-| k, Up | SelectPrev |
-| h | NavigateUp |
-| l | SelectCurrent |
-| Left | PaneShrink |
-| Right | PaneGrow |
+| Down / Up | SelectNext / SelectPrev |
+| Left / Right | PaneShrink / PaneGrow |
 | Enter | SelectCurrent |
-| Shift-F | SwitchMode('file') |
-| Shift-B | SwitchMode('buf') |
-| Shift-C | SwitchMode('code') |
-| q | SwitchMode('qfix') |
-| L | SwitchMode('log') |
-| r | Refresh |
-| x | CloseBuffer |
-| + | IncludeItem |
-| - | ExcludeItem |
-| s | GitStageToggle |
-| d | OpenDiffPreview |
-| D | DiscardChanges |
-| c | GitCommit |
-| P | GitPush |
-| U | GitPull |
-| b | GitBranchSwitch |
+| Shift-F / Shift-B / Shift-C | SwitchMode('file' / 'buf' / 'code') |
+| Shift-Q | HandlePaneQ (temporary: Qfix mode; permanent: close pane) |
+| Esc | HandleEsc (closes a temporary pane; no-op in permanent) |
+| R | Refresh |
+| X | CloseBuffer (buf mode) |
+| + / - | IncludeItem / ExcludeItem (code mode) |
 | T | ToggleTreeView |
-| p | TogglePreview |
+| P | TogglePreview |
 | / | PromptFilter |
 | * | GrepSearch |
-| Q, F4 | PaneClose |
-| . | NavigateUp |
-| Ctrl-T | SelectFirst |
-| Ctrl-B | SelectLast |
+| ? | ShowHelp |
+| A | AI terminal chat (`vproj#ai#AiTerminalChat`) |
+| Delete | DeleteSelected |
+| . | parent directory (file and code mode, via VprojKey) |
+| Ctrl-T / Ctrl-B | SelectFirst / SelectLast |
 | Ctrl-K | NavigateUp |
 | Ctrl-J | NavigateIntoFirstDir |
 | Ctrl-G | ToggleGitFilter |
-| F1 | ToggleInfoColumn |
-| Ctrl-N | NextPage |
-| Ctrl-P | PrevPage |
-| Tab | ShiftNavForward |
-| Shift-Tab | ShiftNavBackward |
-| a-z, A-Z, 1-9 | SelectByNavChar |
+| Ctrl-N / Ctrl-P | NextPage / PrevPage |
+| > / < | ShiftNavForward / ShiftNavBackward |
+| \s \d \D \c \p \u \b \z \Z \a | git actions |
+| a-z | SelectByNavChar (via VprojKey) |
 
-Mappings use `<Cmd>` modifier to avoid command-line flicker, with `<nowait>` on
-q to prevent Vim prefix-key timeout (q<register>).
+Mappings use `<Cmd>` to avoid command-line flicker, with `<nowait>` on the
+single-character keys.
 
-Global `:call` mappings (not `<Cmd>`) for F1/Help — `<Cmd>` forbids
+Global mappings (`plugin/vproj.vim`): `<Tab>`, `<S-Tab>`, and `<F1>` / `<Help>`
+(via `<Plug>VprojF1`). F1 uses `:call`, not `<Cmd>`, because `<Cmd>` forbids
 window-changing commands like `:help` in the else branch.
 
 ## Highlight Groups
 
-Four mode-specific highlight groups with distinct colors:
+Four mode-specific highlight groups, defined by `DefineHighlights()` with
+`highlight default link` so colorschemes can override them:
 
-| Group | Color | Use |
-|-------|-------|-----|
-| `VprojAiModeFile` | yellow | File mode label (bold, underline) |
-| `VprojAiModeBuf` | green | Buf mode label (bold, underline) |
-| `VprojAiModeCode` | blue | Code mode label (bold, underline) |
-| `VprojAiModeQfix` | blue | Qfix mode label (bold, underline) |
-| `VprojAiModeLog` | cyan | Log mode label (bold, underline) |
-| `VprojAiCursorLine` | reverse | Selected line |
-| `VprojAiNavIndicator` | cyan | Nav characters |
-| `VprojAiInfoColumn` | green | File sizes / buffer info |
-| `VprojAiParentDir` | blue | Parent directory entry |
-| `VprojAiDirName` | bold | Directory names |
-| `VprojAiSeparator` | dark grey | Separator lines |
-| `VprojAiStatusLine` | reverse | Code mode status line |
+| Group | Links to | Use |
+|-------|----------|-----|
+| `VprojModeFile` | Title | File mode label |
+| `VprojModeBuf` | Directory | Buf mode label |
+| `VprojModeCode` | Special | Code mode label |
+| `VprojModeQfix` | Question | Qfix mode label |
+| `VprojCursorLine` | CursorLine | Selected line |
+| `VprojNavIndicator` | (blue `#569CD6`) | Nav characters |
+| `VprojInfoColumn` | Directory | File sizes / buffer info |
+| `VprojParentDir` | String | Parent directory entry |
+| `VprojDirName` | Directory | Directory names |
+| `VprojSeparator` | Comment | Separator lines |
+| `VprojStatusLine` | StatusLine | Code mode status line |
 
+Git status groups (`VprojGitModified`, `...Added`, `...Deleted`, `...Renamed`,
+`...Untracked`, `...Conflict`, `...Ignored`) link to diff/semantic groups.
 Applied via `matchadd()` with auto-assigned IDs (`-1`). Mode label highlight
 priority 10; nav indicators priority 11 (above cursor line at priority 9).
-Mode label group is selected dynamically based on `current_mode`.
+The mode label group is selected dynamically based on `current_mode`;
+`ColorScheme` re-runs `DefineHighlights()`.
 
-## .vproj_ai File Format
+## .vproj File Format
 
 ```
 Project Name: my-project
@@ -319,10 +354,14 @@ Excluded Files:
 ```
 
 Section headers end with `:`. Items are listed one per line below their
-header. Items are paths relative to the project root.
+header. Items are paths relative to the project root. `*` and `?` make a glob
+entry; a trailing `/` on a directory is ignored; `#` lines before the first
+section are comments and are kept on save. See `|vproj-file-format|` in the
+help file for the full rules.
 
-Parsing: read file lines, track current section, accumulate items per section.
-Writing: rebuild file from in-memory project state, overwrite atomically.
+Parsing: `ParseVprojFile()` reads lines, tracks the current section, accumulates
+items per section. Writing: `WriteVprojFile()` rebuilds the file from in-memory
+project state.
 
 ## Display Layout
 
@@ -334,39 +373,44 @@ Column layout (left to right):
  2ch    variable width            5ch
 ```
 
-Nav column: 2 characters (indicator + space). Blank if item outside nav window.
+Nav column: 2 characters (indicator + space). Blank if item outside nav block.
 Info column: 5 characters, right-aligned. Hidden when `show_info_column` is 0.
 
 Truncation: item name truncated to `pane_width - nav_column - info_column`.
 Use `strcharpart()` not `strpart()` for multi-byte safety.
 
-Separators: ASCII dash characters only. No Unicode box-drawing.
+All text vproj prints is ASCII (rules are `-`/`=`, no Unicode box-drawing, arrows or
+glyphs); comments may be UTF-8. See constraints.md "ASCII-Only Output".
 
 ## Edge Cases
 
-- Empty directory: show mode menu, separator, status, "..", and "(empty)".
+- Empty directory: show mode menu, separator, "..", and "(empty)".
 - No buffers: show mode menu, separator, and "(no open buffers)".
-- No .vproj_ai: code mode shows project prompt status.
+- No .vproj: code mode shows `* (no project found)`; Enter on it offers to create one.
 - No quickfix entries: qfix mode shows "(no quickfix items)".
-- Qfix entries with invalid bufnr: skip the entry.
-- Quickfix list populated by setqflist() externally — VPROJ_AI reads only.
+- Qfix entry whose buffer no longer exists: Enter reports "Cannot open".
+- Quickfix entries with `valid` false are skipped.
 - Buffer wipe while pane open: `HandleBufWipeout()` checks if wiped buffer is
   pane buffer, cleans up if so.
-- Directory change outside pane: `OnDirChanged()` refreshes current view.
+- Directory change outside pane: `OnDirChanged()` refreshes the file-mode view (code mode ignores it).
 - Very long filenames: truncated with no ellipsis (tight columns).
-- Binary files: detected, Enter shows status message, does not open.
+- Binary files: detected, Enter shows an error, does not open.
 - FIFOs/sockets/devices: filtered by `getftype()` in ReadDir, never listed.
 - Git stash: whole-repo operation, optional message. Stash pop lists stashes first.
-- Git blame: file-specific only (file mode, regular files, git-tracked). Opens split with `git annotate`.
+- Git blame: file-specific only (file and code mode, regular files, git-tracked). Opens split with `git annotate`.
 
 ## Terminal Chat
 
 ### Architecture
 
 The AI chat runs in a `:terminal` buffer via `bin/vproj-ai-chat`, a bash
-script. Vim passes context (API key, endpoint, model, file info) via
-environment variables in `term_start()`'s `env` dict. The bash script
-handles the chat loop, JSON building, SSE parsing, and error display.
+script. Vim passes the endpoint and model in environment variables, and the
+API key and a JSON-encoded system message (including up to 100 lines of the
+file around the cursor) as paths to mode-0600 temp files
+(`VPROJ_AI_KEYFILE`, `VPROJ_AI_TMPFILE`), so no secret is in the environment
+or on a command line. The bash script handles the chat loop, JSON building,
+SSE parsing, and error display, and deletes the temp files (Vim deletes them
+again on exit).
 
 Why bash instead of Vimscript: `job_start`+`ch_open`+raw channel SSE parsing
 is fragile and ~150 lines of complex Vimscript. A bash script with `curl` and
@@ -374,36 +418,31 @@ is fragile and ~150 lines of complex Vimscript. A bash script with `curl` and
 
 ### State
 
-Script-local variables in autoload/vproj_ai.vim:
-
-| Variable | Type | Purpose |
-|----------|------|---------|
-| ai_api_url | string | API endpoint URL |
-| ai_api_key | string | API authentication key |
-| ai_model | string | Model name (deepseek-chat, gpt-4o-mini, etc.) |
-
-No conversation state in Vimscript. The bash script owns the chat loop
-and conversation history entirely. Vim only knows about the terminal buffer.
+Resolved settings are script-local in `autoload/vproj/ai.vim`: `ai_api_url`,
+`ai_api_key`, `ai_model` (see AI State). No conversation state in Vimscript.
+The bash script owns the chat loop and conversation history entirely. Vim only
+knows about the terminal buffer.
 
 ### AiTerminalChat() Flow
 
-1. AiConfigure() — resolve API key, endpoint, model
-2. GatherContext() — capture file, filetype, mode, cursor position
-3. Write context dict as JSON to temp file
-4. `botright new` + `execute 'resize 15'` — create 15-line split
-5. `term_start(['bash', chat_script_path], {env: {...}})` — launch bash
-6. Map `<Esc>` in terminal mode to close buffer
-7. Log terminal creation to /tmp/vproj-ai-errors.log
+1. Check `has('terminal')`, the chat script, `bash` and `curl`.
+2. `ConfigureOrRefuse()` — resolve API key, endpoint (must be `https://`), model.
+3. `GatherContext(OriginWindow())` — file, filetype, cursor, surrounding lines.
+4. Write the system message and key to 0600 temp files.
+5. `botright new` + `resize 15` — a 15-line split, reused by `term_start()`.
+6. `term_start(['bash', chat_script_path], opts)` with `term_finish: 'close'`.
+7. Map `<Esc>` in the terminal to `job_stop(..., 'term')`, which ends the chat
+   and closes the window. `/exit`, `/q` or Ctrl-D also quit.
 
 ### Bash Script (bin/vproj-ai-chat)
 
-- Reads context from $VPROJ_AI_TMPFILE at startup
-- Builds system prompt from file, filetype, and mode
-- Loops: read prompt → json_escape() → build JSON messages → curl SSE →
-  extract_delta() → print token → append to history
+- Reads the system message from `$VPROJ_AI_TMPFILE` and the key from
+  `$VPROJ_AI_KEYFILE` at startup
+- Loops: read prompt -> json_escape() -> build JSON messages -> curl SSE ->
+  extract_delta() -> print token -> append to history
 - json_escape(): pure bash, handles all JSON control characters
 - extract_delta(): char-by-char parser for SSE `"content":"<value>"` extraction
-- Fault injection via $VPROJ_AI_TEST_FAIL for testing (api_401, api_500,
+- Fault injection via `$VPROJ_AI_TEST_FAIL` for testing (api_401, api_500,
   api_timeout, disk_full, empty_response, malformed_sse)
 
 ### Error Handling
@@ -420,6 +459,16 @@ and conversation history entirely. Vim only knows about the terminal buffer.
 
 ### Code Application
 
-When the AI responds with code fences (```), the user can apply that code
-via the `A` mapping in the response view. ApplyCodeToFile() extracts the
-code block and inserts it into the target file at the appropriate location.
+The terminal chat only displays the conversation. Applying code is done by
+`:VprojAiPrompt` (see AI Control Flow): in code mode `ApplyCode()` inserts the
+first fenced block of the response below the cursor in the origin window's
+buffer after a `confirm()`; `ExtractCodeBlocks()` finds the fences.
+
+## Agent Add-on
+
+`:VprojAgent` (`<Plug>VprojAgent`, no default key) calls `vproj#agent#AgentOpen()`,
+which opens a terminal split running `g:vproj_agent_cmd`, or else the first of
+`claude`, `codex` found on PATH. A configured command that cannot run is an
+error; nothing else is substituted. The agent gets file context through
+`$VPROJ_AGENT_CTX_FILE`, a private (0600) JSON file deleted when the agent
+exits. Esc goes to the agent; the split closes when the agent exits.

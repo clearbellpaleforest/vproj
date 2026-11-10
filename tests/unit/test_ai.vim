@@ -106,7 +106,9 @@ def ResetFake(): void
 enddef
 
 # Wait (processing callbacks) until a message containing {needle} appears.
-def WaitMessage(needle: string, ms: number = 5000): bool
+# These waits return the moment the condition holds; the 30 s ceiling only has
+# to outlast a loaded CI machine (a 5 s ceiling flaked under CPU starvation).
+def WaitMessage(needle: string, ms: number = 30000): bool
   var start: list<any> = reltime()
   while reltimefloat(reltime(start)) * 1000 < ms
     if stridx(execute('messages'), needle) >= 0
@@ -117,7 +119,7 @@ def WaitMessage(needle: string, ms: number = 5000): bool
   return false
 enddef
 
-def WaitGone(files: list<string>, ms: number = 5000): bool
+def WaitGone(files: list<string>, ms: number = 30000): bool
   var start: list<any> = reltime()
   while reltimefloat(reltime(start)) * 1000 < ms
     if empty(filter(copy(files), (_, f) => filereadable(f)))
@@ -183,9 +185,29 @@ def Section3(): void
   Assert(vproj#ai#ExtractJsonField('{"key":"value"}', 'missing') == '', 'ExtractJsonField: missing field')
   Assert(vproj#ai#ExtractJsonField('not json', 'key') == '', 'ExtractJsonField: non-JSON')
   Assert(vproj#ai#ExtractJsonField('', 'key') == '', 'ExtractJsonField: empty input')
-  # Defect 4: byte offsets vs char slicing — non-ASCII before the field
-  Assert(vproj#ai#ExtractJsonField('{"pre":"日本語éé","key":"vé日"}', 'key') == 'vé日', 'ExtractJsonField: non-ASCII before and in value')
-  Assert(vproj#ai#ExtractJsonField('{"choices":[{"message":{"content":"xé"}}]}', 'content') == 'xé', 'ExtractJsonField: nested field, \u escape decoded')
+  # Defect 4: byte offsets vs char slicing -- non-ASCII before the field.
+  # A real API response is UTF-8 bytes. json_decode converts them into
+  # 'encoding', so the input is built as UTF-8 (iconv is the identity when
+  # 'encoding' is utf-8) and the expected value is built with nr2char(), which is
+  # right under any 'encoding'. Literal UTF-8 text in this file is only
+  # meaningful when 'encoding' is utf-8: under LANG=C Vim runs with latin1 and
+  # characters outside Latin-1 cannot exist in a string at all.
+  var e_acute: string = nr2char(0xe9)
+  var n_tilde: string = nr2char(0xf1)
+  var pre: string = e_acute .. e_acute .. n_tilde
+  var wire: string = iconv('{"pre":"' .. pre .. '","key":"v' .. e_acute .. n_tilde .. '"}', &encoding, 'utf-8')
+  Assert(vproj#ai#ExtractJsonField(wire, 'key') == 'v' .. e_acute .. n_tilde,
+    'ExtractJsonField: non-ASCII (Latin-1 range) before and in value')
+  if &encoding == 'utf-8'
+    Assert(vproj#ai#ExtractJsonField('{"pre":"日本語éé","key":"vé日"}', 'key') == 'vé日', 'ExtractJsonField: non-ASCII before and in value (CJK)')
+  else
+    echom 'SKIP: ExtractJsonField CJK value needs encoding=utf-8 (encoding=' .. &encoding .. ')'
+  endif
+  # A real \u escape (the JSON text holds a backslash, not the character) ...
+  Assert(vproj#ai#ExtractJsonField('{"choices":[{"message":{"content":"x\u00e9"}}]}', 'content') == 'x' .. e_acute, 'ExtractJsonField: nested field, \u escape decoded')
+  # ... and the same character written literally.
+  var wire2: string = iconv('{"choices":[{"message":{"content":"x' .. e_acute .. '"}}]}', &encoding, 'utf-8')
+  Assert(vproj#ai#ExtractJsonField(wire2, 'content') == 'x' .. e_acute, 'ExtractJsonField: nested field, literal non-ASCII kept')
   Assert(vproj#ai#ExtractJsonField('{"key":"unterminated', 'key') == '', 'ExtractJsonField: truncated JSON')
 enddef
 RunSection('ExtractJsonField', Section3)
@@ -300,13 +322,13 @@ def Section8(): void
   messages clear
   vproj#ai#AiPrompt('?first question')
   var start: list<any> = reltime()
-  while len(glob(fake_dir .. '/files.*', 0, 1)) < 1 && reltimefloat(reltime(start)) < 5.0
+  while len(glob(fake_dir .. '/files.*', 0, 1)) < 1 && reltimefloat(reltime(start)) < 30.0
     sleep 20m
   endwhile
   vproj#ai#AiPrompt('?second question')
   Assert(WaitMessage('response in popup'), 'stale job: second request completes')
   start = reltime()
-  while len(CurlFiles()) < 4 && reltimefloat(reltime(start)) < 5.0
+  while len(CurlFiles()) < 4 && reltimefloat(reltime(start)) < 30.0
     sleep 20m
   endwhile
   var all_files: list<string> = CurlFiles()
@@ -334,12 +356,12 @@ def Section9(): void
   Assert(getftime(errlog) == errlog_time, 'AiTerminalChat: does not write ' .. errlog)
   var chat_job: job = term_getjob(termbuf)
   var start: list<any> = reltime()
-  while stridx(term_getline(termbuf, 1) .. term_getline(termbuf, 2), 'vproj_ai') < 0 && reltimefloat(reltime(start)) < 5.0
+  while stridx(term_getline(termbuf, 1) .. term_getline(termbuf, 2), 'vproj_ai') < 0 && reltimefloat(reltime(start)) < 30.0
     sleep 20m
   endwhile
   term_sendkeys(termbuf, "/exit\r")
   start = reltime()
-  while job_status(chat_job) == 'run' && reltimefloat(reltime(start)) < 5.0
+  while job_status(chat_job) == 'run' && reltimefloat(reltime(start)) < 30.0
     sleep 20m
   endwhile
   sleep 100m
@@ -355,12 +377,12 @@ def Section9(): void
   Assert(stridx(esc_rhs, "job_stop(term_getjob(bufnr()), 'term')") >= 0, 'AiTerminalChat: Esc mapped to SIGTERM job_stop (' .. esc_rhs .. ')')
   chat_job = term_getjob(termbuf)
   start = reltime()
-  while len(filter(readdir(vim_tmpdir), (_, f) => index(tmp_before, f) < 0)) < 4 && reltimefloat(reltime(start)) < 5.0
+  while len(filter(readdir(vim_tmpdir), (_, f) => index(tmp_before, f) < 0)) < 4 && reltimefloat(reltime(start)) < 30.0
     sleep 20m
   endwhile
   job_stop(term_getjob(bufnr()), 'term')
   start = reltime()
-  while job_status(chat_job) == 'run' && reltimefloat(reltime(start)) < 5.0
+  while job_status(chat_job) == 'run' && reltimefloat(reltime(start)) < 30.0
     sleep 20m
   endwhile
   sleep 100m
@@ -369,6 +391,76 @@ def Section9(): void
   Assert(winnr('$') == wins_before, 'AiTerminalChat: window closed after Esc')
 enddef
 RunSection('Defects 5 / 9: terminal chat opens ONE 15-line window, no log write', Section9)
+
+# ── Mode detection: leading intent decides, a mid-text ? is not a question ──
+# DetectMode is script-local; the mode is observable in the status line
+# AiPrompt echoes ("streaming (question) for" vs "streaming for") before the
+# request starts. The stream is cancelled at once; no reply is consumed.
+def ModeOf(prompt: string): string
+  messages clear
+  vproj#ai#AiPrompt(prompt)
+  var m: string = execute('messages')
+  vproj#ai#StreamCancelCmd()
+  if stridx(m, 'vproj-ai: streaming (question) for') >= 0
+    return 'question'
+  elseif stridx(m, 'vproj-ai: streaming for') >= 0
+    return 'code'
+  endif
+  return 'none'
+enddef
+
+def Section11(): void
+  # A fresh file: re-editing file_a, rewritten on disk by an earlier
+  # section, would raise a "changed since editing" prompt.
+  var file_m: string = tempname() .. '_m.txt'
+  writefile(['m1', 'm2'], file_m)
+  execute 'edit ' .. fnameescape(file_m)
+  ResetFake()
+  SetReply('prose')
+  # Positive control: the probe can tell the two modes apart and no-request.
+  Assert(ModeOf('!x') == 'code', 'mode probe: ! prefix reads as code')
+  Assert(ModeOf('?x') == 'question', 'mode probe: ? prefix reads as question')
+
+  # The three audited code requests.
+  Assert(ModeOf('add a retry when the request times out') == 'code', 'mode: leading verb beats a later question word')
+  Assert(ModeOf('write a loop where x is even') == 'code', 'mode: "write ... where" is code')
+  Assert(ModeOf('regex for /a?/') == 'code', 'mode: ? inside a pattern is not a question')
+
+  # Leading verb wins even over a trailing ?.
+  Assert(ModeOf('add a retry on timeout?') == 'code', 'mode: leading verb beats trailing ?')
+  Assert(ModeOf('  Refactor this when you can') == 'code', 'mode: leading whitespace and case ignored for the verb')
+  Assert(ModeOf('fix the off-by-one why does it loop') == 'code', 'mode: verb first, question word later is code')
+
+  # Genuine questions.
+  Assert(ModeOf('how do I reverse a list?') == 'question', 'mode: how ... ? is a question')
+  Assert(ModeOf('what does this function do') == 'question', 'mode: what ... is a question')
+  Assert(ModeOf('Explain this loop') == 'question', 'mode: explain is a question')
+  Assert(ModeOf('Why is x even') == 'question', 'mode: leading why, capitalised')
+  Assert(ModeOf('show me the callers') == 'question', 'mode: show me is a question')
+  Assert(ModeOf('is this loop correct?') == 'question', 'mode: trailing ? with no verb is a question')
+  Assert(ModeOf('regex for a?') == 'question', 'mode: only a trailing ? counts, after trimming')
+  Assert(ModeOf('regex for a?   ') == 'question', 'mode: trailing ? after trailing spaces')
+
+  # A leading word is a whole word: "however"/"address" are not how/add.
+  Assert(ModeOf('however the loop works, add a break') == 'code', 'mode: "however" is not "how"')
+  Assert(ModeOf('address the nil case') == 'code', 'mode: "address" is not the verb "add"')
+  Assert(ModeOf('sort the list') == 'code', 'mode: plain imperative with no marker is code')
+
+  # ! is the explicit override, ? the explicit question.
+  Assert(ModeOf('!what does this do') == 'code', 'mode: ! forces code over a question word')
+  Assert(ModeOf('!how do I do this?') == 'code', 'mode: ! forces code over a trailing ?')
+  Assert(ModeOf('?add a retry') == 'question', 'mode: ? forces question over a verb')
+
+  # Empty / whitespace: nothing is sent.
+  ResetFake()
+  Assert(ModeOf('') == 'none', 'mode: empty prompt sends nothing')
+  Assert(ModeOf('   ') == 'none', 'mode: whitespace-only prompt sends nothing')
+  Assert(ModeOf('!') == 'none', 'mode: bare ! sends nothing')
+  Assert(ModeOf('?') == 'none', 'mode: bare ? sends nothing')
+  popup_clear()
+  delete(file_m)
+enddef
+RunSection('Mode detection: leading intent decides', Section11)
 
 # ── Function existence checks ──
 def Section10(): void

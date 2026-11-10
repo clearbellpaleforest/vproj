@@ -9,6 +9,8 @@ vim9script
 #    the repo's tracked vproj.vproj
 #  - runtimepath is absolute so autoload still resolves after any :cd
 $XDG_CACHE_HOME = tempname()
+# Session saving is opt-in (CLAUDE.md rule 5); these tests exercise it.
+g:vproj_save_session = 1
 execute 'set rtp+=' .. fnameescape(expand('<script>:p:h:h') .. '/src')
 runtime! plugin/vproj.vim
 set nomore

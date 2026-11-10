@@ -78,7 +78,9 @@ writefile(['nested'], tmpdir .. '/dir with spaces/nested.txt')
 
 # ── Open pane in temp dir ──
 execute 'cd' tmpdir
-vproj#PaneOpen()
+# Permanent: these tests press Enter on files and keep using the pane, and
+# Enter closes a temporary pane (2026-11d audit).
+vproj#PaneTogglePermanent()
 vproj#SwitchMode('file')
 
 Assert(vproj#IsPaneVisible(), 'pane visible in special-char directory')

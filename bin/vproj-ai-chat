@@ -216,19 +216,19 @@ printf 'Authorization: Bearer %s' "$API_KEY" > "$AUTH_HDR"
 # ── Conversation history (JSON message array, closing ] added per request) ──
 MESSAGES="[{\"role\":\"system\",\"content\":$SYSTEM_JSON}"
 
-echo "╭─ vproj_ai chat ──────────────────────────────╮"
-echo "│ model: $MODEL"
-echo "│ endpoint: $API_URL"
+echo "+- vproj_ai chat ------------------------------+"
+echo "| model: $MODEL"
+echo "| endpoint: $API_URL"
 if [ "${VPROJ_AI_TEST:-0}" = "1" ]; then
-  echo "│ [test mode -- no API calls]                    │"
+  echo "| [test mode -- no API calls]                    |"
 fi
-echo "│ Type /exit or Ctrl-D to quit                 │"
-echo "╰──────────────────────────────────────────────╯"
+echo "| Type /exit or Ctrl-D to quit                 |"
+echo "+----------------------------------------------+"
 echo ""
 
 # ── Main chat loop ──
 while true; do
-  printf "▸ "
+  printf "> "
   IFS= read -r PROMPT || { echo ""; break; }
   if [ -z "$PROMPT" ]; then
     continue
@@ -304,7 +304,7 @@ while true; do
       printf '\033[31m[API returned non-SSE response (curl exit %s, endpoint %s):]\033[0m\n' "$CURL_EXIT" "$API_URL"
       printf '%s' "$RAW_RESPONSE" | head -20 || true
     else
-      printf '\033[31m[no response — curl exit %s, endpoint: %s, model: %s]\033[0m\n' "$CURL_EXIT" "$API_URL" "$MODEL"
+      printf '\033[31m[no response -- curl exit %s, endpoint: %s, model: %s]\033[0m\n' "$CURL_EXIT" "$API_URL" "$MODEL"
     fi
   fi
 done

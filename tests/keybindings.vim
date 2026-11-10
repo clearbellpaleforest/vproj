@@ -400,14 +400,15 @@ endif
 	if attempts_9a < 100
 	  try
 	    execute "normal \<CR>"
-	    # Must stay at exactly 2 windows — pane + file (not 3)
-	    Assert(winnr('$') == wins_before_9a, 'Two-panel Enter on file: window count unchanged')
-	    wincmd l
+	    # Must not create a 3rd window. Since the 2026-11d audit Enter on a file
+	    # closes a TEMPORARY pane (doc: "auto-closes when you open a file"), so
+	    # the pane's window goes away and the file stays in the existing right
+	    # panel: one window fewer, not one more. (These three assertions used to
+	    # expect the pane to stay open; Setup() opens it in temporary mode.)
+	    Assert(winnr('$') == wins_before_9a - 1, 'Two-panel Enter on file: no third window; temp pane closed')
 	    var right_buf = bufname('%')
-	    Assert(right_buf != 'VPROJ', 'Two-panel Enter: right panel shows opened file, not pane')
-	    FocusPane()
-	    Assert(vproj#IsPaneVisible(), 'Two-panel Enter: pane stays visible')
-	    Assert(bufname('%') == 'VPROJ', 'Two-panel Enter: cursor returns to pane')
+	    Assert(right_buf != 'VPROJ', 'Two-panel Enter: remaining window shows opened file, not pane')
+	    Assert(!vproj#IsPaneVisible(), 'Two-panel Enter: temporary pane closed')
 	  catch
 	    Assert(false, 'Two-panel Enter error: ' .. v:exception)
 	  endtry

@@ -9,6 +9,8 @@ vim9script
 #    the repo's tracked vproj.vproj
 #  - runtimepath is absolute so autoload still resolves after any :cd
 $XDG_CACHE_HOME = tempname()
+# Session saving is opt-in (CLAUDE.md rule 5); these tests exercise it.
+g:vproj_save_session = 1
 execute 'set rtp+=' .. fnameescape(expand('<script>:p:h:h') .. '/src')
 runtime! plugin/vproj.vim
 set nomore
@@ -844,7 +846,9 @@ Assert(hits == 1, 'qfix skips invalid entry, shows 1 valid')
 try
   vproj#SelectCurrent()
   Assert(winnr('$') >= 2, 'qfix column-jump: entry opened file window')
-  Assert(vproj#IsPaneVisible(), 'qfix column-jump: pane still visible')
+  # Since the 2026-11d audit Enter on an entry closes a TEMPORARY pane
+  # (documented auto-close); this pane is temporary, so it is gone.
+  Assert(!vproj#IsPaneVisible(), 'qfix column-jump: temporary pane closed after the jump')
 catch
   Assert(false, 'qfix column-jump error: ' .. v:exception)
 endtry

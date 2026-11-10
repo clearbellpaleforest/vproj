@@ -10,7 +10,11 @@ vim9script
 # test_feedinput() queued before the call that prompts.
 
 $XDG_CACHE_HOME = tempname()
-set rtp+=src
+# Session saving is opt-in (CLAUDE.md rule 5); these tests exercise it.
+g:vproj_save_session = 1
+# Absolute: a test that cd's away must still find autoload/ (the plugin no
+# longer sources it at load).
+execute 'set rtp+=' .. fnameescape(fnamemodify(expand('<script>:p'), ':h:h:h') .. '/src')
 runtime! plugin/vproj.vim
 set nomore
 set columns=160 lines=40

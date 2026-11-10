@@ -31,7 +31,10 @@ def RunSection(name: string, F: func(): void): void
   endtry
 enddef
 
-def WaitFor(F: func(): bool, ms: number = 5000): bool
+# Polls until F() holds. It returns the moment it does, so the ceiling costs
+# nothing in a passing run; it only has to outlast a loaded CI machine, where
+# starting the fake agent can take much longer than on an idle one.
+def WaitFor(F: func(): bool, ms: number = 30000): bool
   var start: list<any> = reltime()
   while reltimefloat(reltime(start)) * 1000 < ms
     if F()
@@ -51,12 +54,21 @@ log->add('=== test_agent.vim ===')
 # ── Fake agent CLIs: every name DetectAgent() tries, first on PATH ──
 var fake_dir: string = tempname()
 mkdir(fake_dir, 'p')
+# Each artifact is written to a .tmp name and published with mv (atomic), so a
+# file the test can see is always complete. Without that the test could read
+# agent.name or agent.ctx after the shell created it but before it held its
+# content, which failed about 1 run in 6 under CPU starvation. agent.ctx is
+# published before agent.meta: the test waits for meta and then reads ctx.
 var fake_lines: list<string> = [
   '#!/bin/bash',
   'f="${VPROJ_AGENT_CTX_FILE:-}"',
-  '{ echo "ctxfile=$f"; stat -c %a "$f"; echo "inline=${VPROJ_AGENT_CTX:-unset}"; } > "$FAKE_DIR/agent.meta"',
-  'cp "$f" "$FAKE_DIR/agent.ctx"',
-  'basename "$0" > "$FAKE_DIR/agent.name"',
+  'd="$FAKE_DIR"',
+  '{ echo "ctxfile=$f"; stat -c %a "$f"; echo "inline=${VPROJ_AGENT_CTX:-unset}"; } > "$d/agent.meta.tmp"',
+  'cp "$f" "$d/agent.ctx.tmp"',
+  'basename "$0" > "$d/agent.name.tmp"',
+  'mv "$d/agent.ctx.tmp" "$d/agent.ctx"',
+  'mv "$d/agent.meta.tmp" "$d/agent.meta"',
+  'mv "$d/agent.name.tmp" "$d/agent.name"',
   'echo FAKE-AGENT-READY',
   'IFS= read -r line',
 ]

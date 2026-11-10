@@ -1,9 +1,13 @@
 :VprojAgent	vproj.txt	/*:VprojAgent*
 :VprojAiPrompt	vproj.txt	/*:VprojAiPrompt*
 :VprojClose	vproj.txt	/*:VprojClose*
+:VprojCopy	vproj.txt	/*:VprojCopy*
+:VprojDelete	vproj.txt	/*:VprojDelete*
 :VprojDiag	vproj.txt	/*:VprojDiag*
+:VprojMove	vproj.txt	/*:VprojMove*
 :VprojOpen	vproj.txt	/*:VprojOpen*
 :VprojRefresh	vproj.txt	/*:VprojRefresh*
+:VprojRename	vproj.txt	/*:VprojRename*
 :VprojToggle	vproj.txt	/*:VprojToggle*
 g:vproj_agent_cmd	vproj.txt	/*g:vproj_agent_cmd*
 g:vproj_ai_api_key	vproj.txt	/*g:vproj_ai_api_key*
@@ -13,6 +17,7 @@ g:vproj_pane_width_code	vproj.txt	/*g:vproj_pane_width_code*
 g:vproj_pane_width_default	vproj.txt	/*g:vproj_pane_width_default*
 g:vproj_pane_width_file	vproj.txt	/*g:vproj_pane_width_file*
 g:vproj_pane_width_qfix	vproj.txt	/*g:vproj_pane_width_qfix*
+g:vproj_save_session	vproj.txt	/*g:vproj_save_session*
 g:vproj_show_dotfiles	vproj.txt	/*g:vproj_show_dotfiles*
 vproj-:Copy	vproj.txt	/*vproj-:Copy*
 vproj-:Delete	vproj.txt	/*vproj-:Delete*

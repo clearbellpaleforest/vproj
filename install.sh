@@ -21,11 +21,39 @@ else
 fi
 
 mkdir -p "$TARGET_DIR"
-ln -sf "$SRC_DIR/src/plugin" "$TARGET_DIR/plugin"
-ln -sf "$SRC_DIR/src/autoload" "$TARGET_DIR/autoload"
-ln -sf "$SRC_DIR/src/doc" "$TARGET_DIR/doc"
-ln -sf "$SRC_DIR/bin" "$TARGET_DIR/bin"
-vim --cmd "helptags $TARGET_DIR/doc" --cmd "q" 2>/dev/null || true
+
+# Link one directory of the repo into the install directory. Safe to re-run:
+# an existing symlink is replaced in place (-n: do not follow it into the
+# repo directory it points at, which would put a link inside the repo). An
+# existing real file or directory is the user's, so refuse instead of
+# writing into it.
+link_dir() {
+  local src="$1" name="$2"
+  local dest="$TARGET_DIR/$name"
+  if [ -e "$dest" ] && [ ! -L "$dest" ]; then
+    echo "install.sh: $dest exists and is not a symlink; move it away and re-run." >&2
+    exit 1
+  fi
+  ln -sfn "$src" "$dest"
+}
+
+link_dir "$SRC_DIR/src/plugin" plugin
+link_dir "$SRC_DIR/src/autoload" autoload
+link_dir "$SRC_DIR/src/doc" doc
+link_dir "$SRC_DIR/bin" bin
+
+# Build the help tags. $TARGET_DIR/doc links to src/doc, so this rewrites
+# src/doc/tags in the repo.
+if ! command -v vim >/dev/null 2>&1; then
+  echo "install.sh: vim not found; links are in place but :help vproj has no tags." >&2
+  exit 1
+fi
+VPROJ_DOC_DIR="$TARGET_DIR/doc" vim -N -u NONE -i NONE -es \
+  -c "try | execute 'helptags ' . fnameescape(\$VPROJ_DOC_DIR) | catch | cquit | endtry" \
+  -c 'qa!' </dev/null || {
+  echo "install.sh: helptags failed for $TARGET_DIR/doc; :help vproj may not work." >&2
+  exit 1
+}
 
 echo "vproj installed. Start Vim and press Tab to open the project pane."
 echo "Run :help vproj for documentation."

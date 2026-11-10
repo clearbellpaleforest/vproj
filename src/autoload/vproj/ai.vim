@@ -23,6 +23,7 @@ var chat_script_path: string = expand('<sfile>:p:h:h:h:h') .. '/bin/vproj-ai-cha
 var ai_api_url: string = ''
 var ai_api_key: string = ''
 var ai_model: string = ''
+var ai_url_rejected: bool = false
 
 # ── Per-request State ──
 var ai_mode: string = 'code'
@@ -131,9 +132,7 @@ export def AiTerminalChat(): void
     StreamCancel()
   endif
 
-  AiConfigure()
-  if empty(ai_api_key)
-    echohl ErrorMsg | echom 'vproj-ai: no API key. Set g:vproj_ai_api_key or $DEEPSEEK_API_KEY.' | echohl None
+  if !ConfigureOrRefuse()
     return
   endif
 
@@ -194,54 +193,87 @@ def UrlValid(url: string): bool
   return url =~# '^https://'
 enddef
 
+# Resolve the key, endpoint and default model from the settings and the
+# environment. Both ai_api_key and ai_api_url are cleared first and set only
+# when a complete, valid pair was found, so a key or URL the user has since
+# unset or broken is never reused: callers check ConfigureOrRefuse().
 export def AiConfigure(): void
+  ai_api_key = ''
+  ai_api_url = ''
+  ai_url_rejected = false
   var g_key: any = get(g:, 'vproj_ai_api_key', '')
   var g_url: any = get(g:, 'vproj_ai_api_url', '')
 
   # Validate URL before use (prevent SSRF/credential forwarding)
   if type(g_url) == v:t_string && !empty(g_url) && !UrlValid(g_url)
+    ai_url_rejected = true
     echohl ErrorMsg | echom 'vproj-ai: only HTTPS URLs allowed for API endpoint' | echohl None
     return
   endif
+
+  # The default model follows the source that was selected.
+  var key: string = ''
+  var url: string = ''
+  var default_model: string = 'deepseek-chat'
   if type(g_key) == v:t_string && !empty(g_key)
-    ai_api_key = g_key
-    ai_api_url = (type(g_url) == v:t_string && !empty(g_url)) ? g_url : 'https://api.deepseek.com/v1/chat/completions'
+    key = g_key
+    url = (type(g_url) == v:t_string && !empty(g_url)) ? g_url : 'https://api.deepseek.com/v1/chat/completions'
+    if url =~# '^https://api\.openai\.com/'
+      default_model = 'gpt-4o-mini'
+    endif
   else
     var dk: any = getenv('DEEPSEEK_API_KEY')
     if type(dk) == v:t_string && !empty(dk)
-      ai_api_key = dk
-      ai_api_url = 'https://api.deepseek.com/v1/chat/completions'
+      key = dk
+      url = 'https://api.deepseek.com/v1/chat/completions'
     else
       var ok: any = getenv('OPENAI_API_KEY')
       if type(ok) == v:t_string && !empty(ok)
-        ai_api_key = ok
+        key = ok
+        default_model = 'gpt-4o-mini'
         var base: any = getenv('OPENAI_API_BASE')
         if type(base) == v:t_string && !empty(base)
           var base_str: string = base
           if !UrlValid(base_str)
+            ai_url_rejected = true
             echohl ErrorMsg | echom 'vproj-ai: only HTTPS URLs allowed for OPENAI_API_BASE' | echohl None
             return
           endif
           if base_str !~ '/chat/completions$'
             base_str = substitute(base_str, '/$', '', '') .. '/chat/completions'
           endif
-          ai_api_url = base_str
+          url = base_str
         else
-          ai_api_url = 'https://api.openai.com/v1/chat/completions'
+          url = 'https://api.openai.com/v1/chat/completions'
         endif
       endif
     endif
   endif
+  ai_api_key = key
+  ai_api_url = url
 
-  # Select model: explicit override > provider inference > hardcoded default
+  # Select model: explicit override > source-based default
   var g_model: any = get(g:, 'vproj_ai_model', '')
   if type(g_model) == v:t_string && !empty(g_model)
     ai_model = g_model
-  elseif !empty(getenv('OPENAI_API_KEY')) && empty(getenv('DEEPSEEK_API_KEY'))
-    ai_model = 'gpt-4o-mini'
   else
-    ai_model = 'deepseek-chat'
+    ai_model = default_model
   endif
+enddef
+
+# Configure, then check that a key and an endpoint were both found. Prints
+# why not and returns false: the caller must not send anything.
+def ConfigureOrRefuse(): bool
+  AiConfigure()
+  if ai_url_rejected
+    echohl ErrorMsg | echom 'vproj-ai: request not sent -- fix the API endpoint (see the message above)' | echohl None
+    return false
+  endif
+  if empty(ai_api_key) || empty(ai_api_url)
+    echohl ErrorMsg | echom 'vproj-ai: no API key. Set g:vproj_ai_api_key or $DEEPSEEK_API_KEY.' | echohl None
+    return false
+  endif
+  return true
 enddef
 
 # Context of the file shown in window {winid} (0 = no file): path,
@@ -319,9 +351,7 @@ export def AiCall(prompt: string, ctx: dict<any>): string
     return ''
   endif
 
-  AiConfigure()
-  if empty(ai_api_key)
-    echohl ErrorMsg | echom 'vproj-ai: no API key. Set g:vproj_ai_api_key or $DEEPSEEK_API_KEY.' | echohl None
+  if !ConfigureOrRefuse()
     return ''
   endif
 
@@ -350,7 +380,7 @@ export def AiCall(prompt: string, ctx: dict<any>): string
       if strchars(truncated) > 200
         truncated = strcharpart(truncated, 0, 200) .. '...'
       endif
-      echohl ErrorMsg | echom 'vproj-ai: curl error ' .. shell_err .. ' — ' .. truncated | echohl None
+      echohl ErrorMsg | echom 'vproj-ai: curl error ' .. shell_err .. ' -- ' .. truncated | echohl None
       return ''
     endif
 
@@ -362,12 +392,12 @@ export def AiCall(prompt: string, ctx: dict<any>): string
       if strchars(err_truncated) > 200
         err_truncated = strcharpart(err_truncated, 0, 200) .. '...'
       endif
-      echohl ErrorMsg | echom 'vproj-ai: API error — ' .. err_truncated | echohl None
+      echohl ErrorMsg | echom 'vproj-ai: API error -- ' .. err_truncated | echohl None
       return ''
     endif
     result = content
   catch
-    echohl ErrorMsg | echom 'vproj-ai: request failed — ' .. v:exception | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: request failed -- ' .. v:exception | echohl None
   finally
     DeleteFiles([bodyfile, hdrfile])
   endtry
@@ -462,7 +492,10 @@ def ProcessStreamChunk(chan: channel, msg: string): void
   if stream_cancelled || stream_job == v:null || ch_getjob(chan) != stream_job
     return
   endif
-  stream_accumulated ..= msg
+  # Servers may frame with CRLF. Normalize the whole buffer, not just {msg}:
+  # a CR at the end of one read and its LF at the start of the next must
+  # still be joined.
+  stream_accumulated = substitute(stream_accumulated .. msg, "\r\n", "\n", 'g')
 
   while stridx(stream_accumulated, "\n\n") >= 0
     var parts: list<string> = split(stream_accumulated, "\n\n", 1)
@@ -517,7 +550,7 @@ def StreamJobExit(exited: job, status: number, files: list<string>): void
     return
   endif
   if status != 0
-    echohl ErrorMsg | echom 'vproj-ai: API call failed — status ' .. status | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: API call failed -- status ' .. status | echohl None
     return
   endif
   if ai_mode == 'question'
@@ -527,7 +560,7 @@ def StreamJobExit(exited: job, status: number, files: list<string>): void
 
   var blocks: list<dict<any>> = ExtractCodeBlocks(response)
   if empty(blocks)
-    echohl WarningMsg | echom 'vproj-ai: response has no ``` fenced code block — nothing applied' | echohl None
+    echohl WarningMsg | echom 'vproj-ai: response has no ``` fenced code block -- nothing applied' | echohl None
     ShowPopup(response)
     return
   endif
@@ -537,13 +570,11 @@ enddef
 export def AiCallStream(prompt: string, ctx: dict<any>): bool
   # Guard: reject if a stream is already running
   if stream_job != v:null && job_status(stream_job) == 'run'
-    echohl ErrorMsg | echom 'vproj-ai: a request is already in progress — wait or press Ctrl-C to cancel' | echohl None
+    echohl ErrorMsg | echom 'vproj-ai: a request is already in progress -- wait or press Ctrl-C to cancel' | echohl None
     return false
   endif
 
-  AiConfigure()
-  if empty(ai_api_key)
-    echohl ErrorMsg | echom 'vproj-ai: no API key' | echohl None
+  if !ConfigureOrRefuse()
     return false
   endif
   if !executable('curl')
@@ -614,8 +645,21 @@ enddef
 # Mode Detection
 # ══════════════════════════════════════════════════════════════════════════════
 
+# Classify a prompt as 'code' (apply to the file) or 'question' (popup).
+# The LEADING intent decides, in this order:
+#   1. empty / whitespace-only            -> code
+#   2. first char '!'                     -> code      (explicit override)
+#   3. first char '?'                     -> question  (explicit override)
+#   4. begins with a code verb            -> code      (even if a question
+#      word or a '?' appears later: "add a retry when it times out")
+#   5. begins with a question word/phrase -> question
+#   6. ends with '?' (after trimming)     -> question
+#   7. anything else                      -> code
+# A '?' inside the text (a regex such as /a?/) never counts by itself.
+# Leading words match whole words only ("however" is not "how").
 def DetectMode(prompt: string): string
-  if empty(prompt)
+  var text: string = trim(prompt)
+  if empty(text)
     return 'code'
   endif
   if prompt[0] == '!'
@@ -624,14 +668,20 @@ def DetectMode(prompt: string): string
   if prompt[0] == '?'
     return 'question'
   endif
-  var lower: string = tolower(prompt)
-  var question_words: list<string> = ['what', 'how', 'why', 'explain', 'describe', 'where', 'when', 'who', 'which', 'can you', 'could you', 'would you', 'is it', 'are there', 'does ', 'do you', 'show me', 'tell me', 'find ']
+  var lower: string = tolower(text)
+  var code_verbs: list<string> = ['add', 'write', 'create', 'make', 'implement', 'fix', 'refactor', 'rename', 'remove', 'delete', 'convert', 'generate', 'insert', 'replace', 'change', 'update', 'modify', 'extract', 'rewrite', 'append', 'wrap', 'move', 'simplify', 'optimize', 'optimise', 'sort', 'build', 'turn', 'put', 'use', 'apply', 'edit', 'comment', 'document', 'format', 'reformat', 'split', 'merge', 'inline', 'swap', 'reverse', 'complete', 'finish', 'port', 'translate', 'type', 'test']
+  for v in code_verbs
+    if lower =~# '^' .. v .. '\>'
+      return 'code'
+    endif
+  endfor
+  var question_words: list<string> = ['what', 'how', 'why', 'explain', 'describe', 'where', 'when', 'who', 'which', 'can you', 'could you', 'would you', 'is it', 'are there', 'does', 'do you', 'show me', 'tell me', 'find']
   for w in question_words
-    if lower =~ '^' .. w || lower =~ '\s' .. w
+    if lower =~# '^' .. w .. '\>'
       return 'question'
     endif
   endfor
-  if stridx(prompt, '?') >= 0
+  if text[strlen(text) - 1] == '?'
     return 'question'
   endif
   return 'code'
@@ -793,7 +843,7 @@ enddef
 
 export def AiPrompt(prompt_from_cmdline: string = ''): void
   var prompt: string = prompt_from_cmdline
-  if empty(prompt)
+  if empty(trim(prompt))
     return
   endif
 

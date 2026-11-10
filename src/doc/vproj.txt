@@ -18,7 +18,7 @@ CONTENTS                                           *vproj-contents*
 vproj is a project manager sidebar for Vim. Browse files, switch buffers,
 and manage project structure from a vertical pane.
 
-Press |Tab| to toggle the pane (temporary mode), |Shift-Tab| for permanent
+Press Tab to toggle the pane (temporary mode), Shift-Tab for permanent
 mode, or use |:VprojToggle|. In temporary mode, the pane auto-closes when
 you open a file, press ESC, or press Tab again. In permanent mode, the
 pane stays open until you press Shift-Tab again or run |:VprojClose|.
@@ -85,12 +85,12 @@ File Mode  ([F]ile)                                 *vproj-mode-file*
     Browse the filesystem. Directories listed first, then files.
     File sizes shown for regular files. Press Enter on a
     directory to navigate into it, on a file to open it. Press
-    |.| or |<C-K>| to go to the parent directory.
+    . or <C-K> to go to the parent directory.
 
-    Press |T| to toggle tree view (indented with expand/collapse).
-    Press |P| to toggle a file preview split that updates on cursor move.
-    Press |/| to filter by name pattern. Press |*| to grep the project
-    and populate quickfix. Press |<C-G>| to toggle showing only
+    Press T to toggle tree view (indented with expand/collapse).
+    Press P to toggle a file preview split that updates on cursor move.
+    Press / to filter by name pattern. Press * to grep the project
+    and populate quickfix. Press <C-G> to toggle showing only
     git-changed files.
 
                                                *vproj-tree-view*
@@ -99,52 +99,52 @@ File Mode  ([F]ile)                                 *vproj-mode-file*
 
                                                *vproj-preview*
     File preview shows file contents in a split that updates as the
-    cursor moves. Press |P| again to close.
+    cursor moves. Press P again to close.
 
                                                *vproj-filter*
                                                *vproj-grep*
-    Filter (|/|) narrows the listing by name pattern. Grep (|*|) runs
+    Filter (/) narrows the listing by name pattern. Grep (*) runs
     `git grep` (case-insensitive) over the repository, or over the
     pane's directory outside a repository, and fills the quickfix
     list for |vproj-mode-qfix|.
 
 Buf Mode  ([B]uf)                                   *vproj-mode-buf*
     Switch between open buffers. Modified buffers marked with +,
-    current buffer marked with %. Press |X| to close a buffer.
+    current buffer marked with %. Press X to close a buffer.
     Line counts shown.
 
 Code Mode  ([C]ode)                                 *vproj-mode-code*
     Project-aware file tree from a .vproj file. Included items
     shown normally; excluded items shown in parentheses.
-    Press |+| or |-| to toggle inclusion. Press Enter on the
+    Press + or - to toggle inclusion. Press Enter on the
     status line to rename or create the project.
 
-    Git actions (|\s|, |\d|, |\D|, |\c|, |\p|, |\u|, |\b|, |\z|,
-    |\Z|, |\a|, |<C-G>|) use a backslash prefix in both File and Code modes.
+    Git actions (\s, \d, \D, \c, \p, \u, \b, \z,
+    \Z, \a, <C-G>) use a backslash prefix in both File and Code modes.
 
                                                *vproj-git-actions*
     Git actions work in file and code modes via \(bslash) prefix.
-    Stage (|\s|) stages worktree changes and untracked files
+    Stage (\s) stages worktree changes and untracked files
     (`git add`); on a file whose changes are only staged it unstages
-    them. Diff preview (|\d|) opens a vertical split with the file's
+    them. Diff preview (\d) opens a vertical split with the file's
     diff (staged, unstaged or both); press q to close it. Discard
-    (|\D|) asks first and says what it will do: delete an untracked
+    (\D) asks first and says what it will do: delete an untracked
     file, unstage a newly added file (the file is kept), or revert
-    every staged and unstaged change to HEAD. Commit (|\c|) prompts
-    for a message. Push (|\p|), pull (|\u|), and branch switch (|\b|)
+    every staged and unstaged change to HEAD. Commit (\c) prompts
+    for a message. Push (\p), pull (\u), and branch switch (\b)
     use prompts for target/confirmation; push and pull never stop to
     ask for credentials (they fail instead).
 
                                                *vproj-git-stash*
-    Stash (|\z|) pushes current changes with an optional message via
-    `git stash push`. Stash pop (|\Z|) lists all stashes first, then
+    Stash (\z) pushes current changes with an optional message via
+    `git stash push`. Stash pop (\Z) lists all stashes first, then
     prompts for which to pop (default: top). Both operate on the
     whole repository.
 
                                                *vproj-git-blame*
-    Blame (|\a|) opens a vertical split showing `git annotate` output
+    Blame (\a) opens a vertical split showing `git annotate` output
     for the file under cursor. Requires the file be tracked by git.
-    Press |q| in the blame window to close it.
+    Press q in the blame window to close it.
 
 Qfix Mode  ([Q]fix)                                 *vproj-mode-qfix*
     Displays the Vim quickfix list. Press Enter to open the
@@ -152,8 +152,8 @@ Qfix Mode  ([Q]fix)                                 *vproj-mode-qfix*
 
 Press <Up> on the first item to reach the mode menu line (line 1),
 then Enter to cycle through modes.
-Press |Shift-F|, |Shift-B|, or |Shift-C| inside the pane to switch
-directly. Press |Q| in temporary mode to switch to qfix; in permanent
+Press Shift-F, Shift-B, or Shift-C inside the pane to switch
+directly. Press Q in temporary mode to switch to qfix; in permanent
 mode to close the pane.
 
 ==============================================================================
@@ -165,47 +165,48 @@ other buffers.
 Navigation:
     <Down> / <Up>       Move selection down / up
     Enter               Open file or enter directory
-    |.|                  Go to parent directory (file and code mode)
+    .                    Go to parent directory (file and code mode)
     <C-K>               Go to parent directory
     <C-J>               Enter first subdirectory
     <C-T>               Jump to first item
     <C-B>               Jump to last item
 
 Mode switching:
-    |Shift-F|            File mode
-    |Shift-B|            Buf mode
-    |Shift-C|            Code mode
-    |Q|                  Qfix mode (temporary) / Close pane (permanent)
+    Shift-F              File mode
+    Shift-B              Buf mode
+    Shift-C              Code mode
+    Q                    Qfix mode (temporary) / Close pane (permanent)
 
 Git actions — backslash prefix (file and code modes):
-    |\s|                Stage / unstage file under cursor
-    |\d|                Open diff preview in vertical split
-    |\D|                Discard file changes (with confirmation)
-    |\c|                Commit with message prompt
-    |\p|                Push to remote
-    |\u|                Pull --ff-only from remote
-    |\b|                Switch branch (with prompt)
-    |\z|                Stash changes (optional message)
-    |\Z|                Pop a stash (shows list, select by index)
-    |\a|                Blame file under cursor (git annotate)
+    \s                  Stage / unstage file under cursor
+    \d                  Open diff preview in vertical split
+    \D                  Discard file changes (with confirmation)
+    \c                  Commit with message prompt
+    \p                  Push to remote
+    \u                  Pull --ff-only from remote
+    \b                  Switch branch (with prompt)
+    \z                  Stash changes (optional message)
+    \Z                  Pop a stash (shows list, select by index)
+    \a                  Blame file under cursor (git annotate)
     <C-G>               Toggle showing only git-changed files
 
 Actions:
-    |Shift-R|            Refresh listing
-    |Shift-X|            Close selected buffer (buf mode)
+    Shift-R              Refresh listing
+    Shift-X              Close selected buffer (buf mode)
     <Delete>            Delete selected file (file mode, confirms)
-    |+| / |-|           Include / exclude item (code mode)
-    |Shift-T|            Toggle tree view (file mode)
-    |Shift-P|            Toggle file preview split
-    |/|                 Filter files by name pattern
-    |*|                 Grep project and populate quickfix
+    + / -               Include / exclude item (code mode)
+    Shift-T              Toggle tree view (file mode)
+    Shift-P              Toggle file preview split
+    /                   Filter files by name pattern
+    *                   Grep project and populate quickfix
     <Left> / <Right>    Shrink / grow pane width
     <F1>                Toggle info column
+    ?                   Show a key reference in a help window (q closes it)
 
 Quick Nav:                                       *vproj-nav-char*
     >                   Letter the next 26 items (more than 26 shown)
     <                   Letter the previous 26 items
-    |a|–|z|             Jump to item by nav character
+    a–z                 Jump to item by nav character
 
     Nav characters are the colored single letters on each line.
     Press the matching letter to jump directly to that item. In
@@ -219,8 +220,8 @@ Paging:
     <C-P>               Previous page
 
 Close:
-    |Q| (perm mode)      Close pane
-    |Esc|               Close pane (temporary mode only)
+    Q (perm mode)        Close pane
+    Esc                 Close pane (temporary mode only)
 
 Global (outside pane):
     <Tab>               Open pane (temporary mode, auto-closes)
@@ -228,11 +229,11 @@ Global (outside pane):
 
 Pane Modes:                                      *vproj-pane-modes*
     Temporary mode (Tab): The pane auto-closes when you open a file,
-    press |Esc| in the pane, or press |Tab| again. This mode is for
+    press Esc in the pane, or press Tab again. This mode is for
     quick file/buffer access — no extra keystroke to dismiss.
 
     Permanent mode (Shift-Tab): The pane stays open until you press
-    |Shift-Tab| again, press |Q| (with the pane focused), or close
+    Shift-Tab again, press Q (with the pane focused), or close
     the pane buffer via |:bdelete|. This mode is for extended project
     management sessions.
 
@@ -241,10 +242,13 @@ Pane Modes:                                      *vproj-pane-modes*
 
                                                  *vproj-session*
 Session:
-    When the pane closes, vproj saves its mode, directory, width,
+    Off by default: vproj writes no files on its own. With
+    g:vproj_save_session = 1 it saves its mode, directory, width,
     info column and git filter to $XDG_CACHE_HOME/vproj/session
-    (~/.cache/vproj/session when unset) and restores them the next
-    time the pane opens. The previous file is kept as session.bak.
+    (~/.cache/vproj/session when unset) when the pane closes, and
+    restores them the next time the pane opens. The previous file is
+    kept as session.bak. An existing session file is read on open
+    whether or not saving is on.
 
 ==============================================================================
 5. CONFIGURATION                                   *vproj-config*
@@ -253,6 +257,12 @@ Session:
     g:vproj_show_dotfiles
         Set to 1 to show dotfiles (hidden files starting with ".").
         Default: hidden.
+
+                                               *g:vproj_save_session*
+    g:vproj_save_session
+        Set to 1 to save the session (mode, directory, width, info
+        column, git filter) when the pane closes. See |vproj-session|.
+        Default: 0, nothing is written.
 
                                                *g:vproj_pane_width_default*
     g:vproj_pane_width_default
@@ -416,7 +426,11 @@ Usage ~
 - Code mode (default) inserts the first fenced code block of the response
   into your file below the cursor, only after you confirm (Esc = No). A
   response without a fenced block is shown in a popup, never inserted.
-- Question mode (what, how, why, etc.) shows the response in a popup
+- Question mode shows the response in a popup. A prompt is a question when
+  it starts with a question word (what, how, why, explain, ...) or ends with
+  ?; a prompt that starts with a code verb (add, write, fix, ...) is code
+  even if it contains a question word or ? later. Start the prompt with !
+  to force code mode, or with ? to force question mode.
 - Ctrl-D or /exit to quit the chat
 - Ctrl-C to cancel a streaming response
 

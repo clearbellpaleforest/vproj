@@ -48,10 +48,14 @@ to it.
 
 ## Key distinction
 
-- `doc/` in this repo → design docs, pipelined to the wiki
-- `doc_manual.txt` in this repo → Vim help file (`:help vproj`), installed with the plugin
+- `doc/` in this repo → design and reference docs, pipelined to the wiki
+- `src/doc/vproj.txt` → the Vim help file (`:help vproj`), installed with the
+  plugin (`install.sh` links `src/doc/` and builds the tags)
 
-They started as copies of each other but diverge unless manually synced.
+`doc_manual.txt` at the repository root is a separate plain-text user manual;
+it is not the installed help file and is not published. The wiki pages and
+the help file are written separately and diverge unless manually synced. The
+help file is the accurate reference for keys and commands.
 
 ## Backup
 

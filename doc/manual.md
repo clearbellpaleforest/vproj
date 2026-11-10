@@ -22,7 +22,6 @@ TABLE OF CONTENTS
       <li><a href="#42-buffer-mode-press-shift-b">4.2 Buffer Mode</a></li>
       <li><a href="#43-code-mode-press-shift-c">4.3 Code Mode</a></li>
       <li><a href="#44-quickfix-mode-cycle-to-it-via-enter-on-menu-line">4.4 Quickfix Mode</a></li>
-      <li><a href="#45-log-mode-press-shift-l">4.5 Log Mode</a></li>
     </ul>
   </li>
   <li><a href="#5-key-reference">Key Reference</a>
@@ -127,7 +126,7 @@ mode and stays open.
 4. MODES
 ========
 
-vproj has five modes.  Press the mode key (Shift-F, Shift-B, Shift-C, q, or Shift-L) to switch,
+vproj has four modes.  Press the mode key (Shift-F, Shift-B, Shift-C, or q) to switch,
 or press Enter on the mode menu line at the top of the pane to cycle
 through modes in order.  Note: in permanent mode, `q` closes the pane
 instead of switching to Qfix mode — use Enter on the menu line to cycle
@@ -138,7 +137,6 @@ Each mode has a distinct color on the menu line:
     Buf   — Green
     Code  — Blue
     Qfix  — Blue
-    Log   — Cyan
 
 
 4.1 FILE MODE  (press Shift-F)
@@ -224,18 +222,6 @@ results are populated.  You can also cycle to Qfix mode by pressing Enter
 on the mode menu line.
 
 
-4.5 LOG MODE  (press Shift-L)
--------------------------
-
-Log mode shows git commit history (`git log --oneline` output).  Nav
-characters let you jump to any commit.
-
-    Enter  — Open detailed diff for selected commit in a split
-
-Use this to review recent changes and inspect individual commits while
-staying in the editor.
-
-
 5. KEY REFERENCE
 ================
 
@@ -263,7 +249,6 @@ They do not affect other Vim buffers.
     Shift-B          Buffer mode
     Shift-C          Code mode
     q                Quickfix mode (temp mode only; closes pane in permanent mode)
-    Shift-L          Log mode
     Enter on menu    Cycle to next mode
 
 
@@ -352,9 +337,6 @@ the plugin after setting them.
 
     g:vproj_pane_width_qfix
         Pane width for Qfix mode (20-80).  Default: 0.
-
-    g:vproj_pane_width_log
-        Pane width for Log mode (20-80).   Default: 0.
 
 Example .vimrc:
 
@@ -548,7 +530,6 @@ is created automatically and Code mode becomes active.
     Shift-B             Buffer mode (open buffers)
     Shift-C             Code mode (project tree + source control)
     q                   Quickfix mode (temp mode; closes pane in permanent)
-    Shift-L             Log mode (git commit history)
 
     GIT
     ---

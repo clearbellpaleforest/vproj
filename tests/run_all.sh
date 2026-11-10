@@ -22,8 +22,9 @@
 # Not run: tests/demo.vim (interactive walkthrough, no assertions) and
 # tests/test_helpers.vim (unused helper library, not a test).
 #
-# Guard: the repo's tracked vproj.vproj must be byte-identical before and after
-# the run (git status + sha256). Any change fails the run.
+# Guard: the repo-root vproj.vproj (per-user, untracked, gitignored) must be
+# byte-identical before and after the run (sha256, or present/absent). Any
+# change fails the run. Does not depend on git or on the file being tracked.
 
 set -u
 
@@ -57,18 +58,11 @@ done
 
 # ── vproj.vproj guard: snapshot ──
 vproj_state() {
-  local st sum
-  if [ -d .git ] || git rev-parse --git-dir >/dev/null 2>&1; then
-    st=$(git status --porcelain -- vproj.vproj 2>&1)
-  else
-    st='(not a git checkout)'
-  fi
   if [ -e vproj.vproj ]; then
-    sum=$(sha256sum vproj.vproj | cut -d' ' -f1)
+    sha256sum vproj.vproj | cut -d' ' -f1
   else
-    sum='(absent)'
+    printf '(absent)'
   fi
-  printf '%s|%s' "$st" "$sum"
 }
 GUARD_BEFORE=$(vproj_state)
 

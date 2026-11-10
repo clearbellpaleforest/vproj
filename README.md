@@ -14,7 +14,7 @@ bash install.sh
 ```
 
 The script creates `~/.vim/pack/bundle/start/vproj/` with symlinks to `plugin/`,
-`autoload/`, and `doc/`. Vim's native package system loads the plugin automatically.
+`autoload/`, `doc/`, and `bin/`. Vim's native package system loads the plugin automatically.
 
 **Option 2 — Manual symlinks:**
 
@@ -25,13 +25,14 @@ mkdir -p ~/.vim/pack/bundle/start/vproj
 ln -s ~/dev/vproj/src/plugin   ~/.vim/pack/bundle/start/vproj/plugin
 ln -s ~/dev/vproj/src/autoload ~/.vim/pack/bundle/start/vproj/autoload
 ln -s ~/dev/vproj/src/doc      ~/.vim/pack/bundle/start/vproj/doc
+ln -s ~/dev/vproj/bin          ~/.vim/pack/bundle/start/vproj/bin
 vim -c "helptags ~/.vim/pack/bundle/start/vproj/doc" -c q
 ```
 
 **Option 3 — Plugin manager (vim-plug):**
 
 ```vim
-Plug 'clearbellpaleforest/vproj'
+Plug 'clearbellpaleforest/vproj', {'rtp': 'src'}
 ```
 
 ## Key Map
@@ -107,6 +108,7 @@ All git actions use the `\` prefix (file and code mode).
 | `*` | Grep project and populate quickfix |
 | `<Left>` / `<Right>` | Shrink / grow pane width |
 | `F1` | Toggle info column (inside pane) |
+| `?` | Show a key reference in a help window (`q` closes it) |
 
 ### Close
 
@@ -125,13 +127,21 @@ These standard Vim keys work as usual inside the pane:
 
 ## Commands
 
-`:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`, `:VprojDiag`
+`:VprojToggle`, `:VprojOpen`, `:VprojClose`, `:VprojRefresh`, `:VprojDiag`,
+`:VprojAiPrompt`, `:VprojAgent`
+
+File operations on the file selected in the pane (file mode):
+`:VprojCopy`, `:VprojDelete`, `:VprojRename`, `:VprojMove`
 
 ## Configuration
 
 ```vim
 " Show hidden files (starting with .). Default: hidden.
 let g:vproj_show_dotfiles = 1
+
+" Save and restore pane state (mode, directory, width) between sessions.
+" Default: 0 -- vproj writes no files unless you turn this on.
+let g:vproj_save_session = 1
 
 " Initial pane width in columns (20–80). Default: 40.
 let g:vproj_pane_width_default = 40

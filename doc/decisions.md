@@ -1,15 +1,21 @@
 # Design Decisions
 
+> **Historical record (dated decision log).** Original wording is kept; it is not updated. Status notes (**Status (2026-11-10) ...**) mark what has since changed in the code. For the current behavior see `doc/design.md` and `src/doc/vproj.txt`.
+
 Rationale for key design choices and documented divergences from the original
 concept.
 
 ## Vim9Script Over Legacy Vimscript
+
+> **Status (2026-11-10): Current.** Still matches the code.
 
 Vim9Script provides type checking, `def` functions with strict semantics, and
 better performance. The trade-off: `def` functions have stricter rules (lambda
 vars must start with capital, `readdir()` requires explicit filter arguments).
 
 ## Explicit Render Over Event Bus
+
+> **Status (2026-11-10): Current.** Still matches the code.
 
 concept.md specifies event-driven display: commands emit events, display
 rebuilds in response. The current implementation uses direct `Render()` calls
@@ -23,6 +29,8 @@ multiple consumers exist (e.g., source control integration, history log).
 
 ## Script-Local State Over Object Model
 
+> **Status (2026-11-10): Current.** Still matches the code.
+
 concept.md specifies a Workspace Domain Model. The current implementation
 uses flat script-local variables.
 
@@ -34,6 +42,8 @@ serving as a visible schema.
 
 ## Two Source Files
 
+> **Status (2026-11-10): Partly superseded.** The core is still two files (`plugin/vproj.vim`, `autoload/vproj.vim`), but two approved add-ons now exist, each loaded on demand: `autoload/vproj/ai.vim` (`vproj#ai#`) and `autoload/vproj/agent.vim` (`vproj#agent#`, approved 2026-11-09) — see CLAUDE.md rule 7 and the Architecture section of `doc/design.md`.
+
 `plugin/vproj.vim` and `autoload/vproj.vim`. No additional files.
 
 **Rationale:** Vim's autoload mechanism provides lazy loading — functions in
@@ -44,12 +54,16 @@ boundary.
 
 ## No External Dependencies
 
+> **Status (2026-11-10): Current.** Still matches the code.
+
 **Rationale:** A project manager should load instantly. Dependencies add
 startup cost, version compatibility risk, and installation friction. Vim's
 built-in functions (`getbufinfo()`, `readdir()`, `readblob()`) provide
 everything needed.
 
 ## Pane Width: 40 Columns Default, 20-80 Range
+
+> **Status (2026-11-10): Current.** Still matches the code.
 
 **Rationale:** 40 columns balances file path visibility against screen real
 estate. The user's primary work happens in the editing window, not the project
@@ -58,11 +72,18 @@ preference.
 
 ## ASCII-Only Separators
 
+> **Status (2026-11-10): Partly superseded.** The rule was widened from
+> separators to all text vproj prints (rows, status line, messages, help text,
+> chat banner), and is now tested -- see constraints.md "ASCII-Only Output" and
+> `tests/unit/test_ascii_ui.vim`.
+
 **Rationale:** Unicode box-drawing characters render inconsistently across
 terminals and fonts. ASCII dashes are unambiguous everywhere. The display
 should never depend on a specific terminal emulator or font configuration.
 
 ## `<Cmd>` Mappings
+
+> **Status (2026-11-10): Current.** Still matches the code.
 
 All buffer-local mappings use `<Cmd>` instead of `:`.
 
@@ -71,6 +92,8 @@ command-line mode, avoiding visual flicker and mode-change side effects.
 Available in Vim 8.2+ and Neovim.
 
 ## Nav Indicators: Dynamic Assignment Over Fixed
+
+> **Status (2026-11-10): Partly superseded.** Indicators are still assigned dynamically to visible items, but there are now 26 (lowercase `a`-`z`) and the shift key is `>` / `<`, not Tab — see the Nav Indicators section of `doc/design.md`.
 
 Each item does not have a permanent nav letter. Indicators are assigned to
 visible items in the current page, starting from `nav_offset`.
@@ -82,12 +105,16 @@ not the letter.
 
 ## Paging vs. Tab Relabeling
 
+> **Status (2026-11-10): Partly superseded.** Paging (Ctrl-N/Ctrl-P) is unchanged. Tab relabeling is gone: `>` / `<` shift the lettering by a block of 26, and there are 26 indicators, not 58 (Tab is the pane toggle) — see the Nav Indicators section of `doc/design.md`.
+
 Paging (Ctrl-N/Ctrl-P) changes which items are visible. Tab relabeling changes
 which visible items get nav indicators. They are independent features solving
 different problems: paging handles too many items to display; Tab handles too
 many items to label with the available 58 indicators.
 
 ## getftype() Filtering
+
+> **Status (2026-11-10): Current.** Still matches the code.
 
 `getftype()` is used to exclude FIFOs, sockets, and devices from directory
 listings and code mode.
@@ -98,6 +125,8 @@ not contain FIFOs, but when they do, the program must not freeze.
 
 ## Info Column: File Sizes Over Modification Times
 
+> **Status (2026-11-10): Current.** Still matches the code.
+
 File mode shows sizes, not modification dates.
 
 **Rationale:** File size is the more actionable piece of information when
@@ -105,6 +134,8 @@ scanning a project — large files vs. small files is immediately useful. Dates
 add visual noise for little navigation benefit.
 
 ## Shift Mode Keys
+
+> **Status (2026-11-10): Partly superseded.** Shift-F, Shift-B and Shift-C are unchanged. Qfix is now Shift-Q in a temporary pane (`HandlePaneQ()`); in a permanent pane Shift-Q closes the pane. The unmodified `q` is not a pane key — see `doc/key-bindings.md`.
 
 Modes are selected with Shift-modified keys: `Shift-F` (file), `Shift-B` (buf),
 `Shift-C` (code). Quickfix uses `q` (unmodified, since it toggles close in
@@ -120,6 +151,8 @@ mnemonics are preserved: Shift-F = File, Shift-B = Buffer, Shift-C = Code.
 
 ## Qfix Mode
 
+> **Status (2026-11-10): Partly superseded.** Qfix mode is unchanged, but Enter on an entry closes the pane only when it is temporary; a permanent pane stays open (`FinishOpen()`) — see the Pane Lifecycle section of `doc/design.md`.
+
 A fourth mode displays the Vim quickfix list. `getqflist()` provides entries;
 Enter jumps to file:line and closes the pane.
 
@@ -131,6 +164,8 @@ Standard Vim tooling populates the list; VPROJ displays it.
 
 ## constraints.md Over requirements.md
 
+> **Status (2026-11-10): Partly superseded.** The split into constraints.md and concept.md stands, but the "two source files" constraint is now two files plus two add-ons — see `doc/constraints.md`.
+
 Hard constraints (cross-platform, no dependencies, two source files,
 ASCII-only) live in a separate `constraints.md` file. Features live in
 concept.md.
@@ -141,6 +176,8 @@ confused with non-negotiable boundaries. When a new feature is proposed, you
 check it against constraints.md, not a merged wishlist.
 
 ## DirChanged Autocommand for `:cd` Tracking
+
+> **Status (2026-11-10): Partly superseded.** The autocommands cover `global`, `tabpage` and `window` scopes (not only `global` and `window`), the git cache is invalidated on every event, and a window-local change from another window is ignored; code mode is still skipped — see `OnDirChanged()` in `src/autoload/vproj.vim` and the Pane Lifecycle section of `doc/design.md`.
 
 Vim's `DirChanged` event triggers an automatic refresh of the file pane when
 the user changes directories with `:cd`, `:lcd`, or `:tcd`. Both `global` and
@@ -161,6 +198,8 @@ project root, not the CWD.
 
 ## Color-Coded Mode Indicators
 
+> **Status (2026-11-10): Current.** Still matches the code.
+
 Four mode-specific highlight groups replace a single generic group:
 `VprojModeFile` (yellow), `VprojModeBuf` (green), `VprojModeCode` (blue),
 `VprojModeQfix` (blue). Each uses `cterm=bold,underline` plus its distinct
@@ -176,6 +215,8 @@ single color to avoid ambiguity.
 
 ## Shift Mode Keys Eliminate `<nowait>`
 
+> **Status (2026-11-10): Partly superseded.** Shift-F/B/C still need no `<nowait>`, but `<nowait>` is now used on the nav letters, `.`, `A`, `T`, `+`, `-`, `>`, `<`, `?`, `/` and `*` so the `\` git prefix and Vim's own `g`/`f`/`q` do not wait `timeoutlen` — see `SetupPaneMappings()` in `src/autoload/vproj.vim`.
+
 Mode-switch keys `Shift-F`, `Shift-B`, and `Shift-C` do not need `<nowait>`
 because Shift-modified keys are not Vim prefix keys. The prefix-key timeout
 conflict (`f<char>`, `gg`/`G`, `q` macro record) is eliminated entirely —
@@ -188,6 +229,8 @@ conventions and buffer-local single-key mappings. Shift keys sidestep the
 conflict instead of working around it.
 
 ## Shortmess S Flag Save/Restore
+
+> **Status (2026-11-10): Partly superseded.** The save/restore is unchanged, but there is no F4 mapping and `Q` no longer simply closes the pane; closing is Tab, Shift-Tab, Esc (temporary pane) or Shift-Q (permanent pane) — see `doc/key-bindings.md`.
 
 The pane temporarily adds the `S` flag to Vim's `shortmess` option to suppress
 "search hit BOTTOM, continuing at TOP" messages that appear during matchadd
@@ -203,6 +246,8 @@ with `Q` or `F4`.
 
 ## Global F1/Help Mapping (HandleF1)
 
+> **Status (2026-11-10): Current.** Still matches the code.
+
 F1 and Help are Vim built-in keys that cannot be overridden by buffer-local
 mappings. A global `:call vproj#HandleF1()<CR>` mapping checks the context:
 inside the pane, it toggles the info column; outside, it calls `:help`.
@@ -217,6 +262,8 @@ forbids any command that changes window or buffer — the else branch calls
 
 ## matchadd() ID Auto-Assignment
 
+> **Status (2026-11-10): Current.** Still matches the code.
+
 All `matchadd()` calls pass `-1` as the 4th argument for automatic match ID
 assignment.
 
@@ -229,6 +276,8 @@ separate from the match ID — conflating the two was the root cause.
 
 ## Log Mode (L key, 5th Pane Mode)
 
+> **Status (2026-11-10): Removed.** Log mode no longer exists; there are four modes (File, Buf, Code, Qfix), and an old session file that names `log` loads as file mode — see the Modes section of `doc/design.md`.
+
 A fifth pane mode displays git commit history using `git log --oneline`.
 Enter on a commit opens a detailed diff split.
 
@@ -238,6 +287,8 @@ natural next step — it turns the pane into a lightweight git history browser
 without leaving Vim. The `Shift-L` key was chosen because it's unused in the pane.
 
 ## Git Actions in Pane (s, d, D, C, P, U, B)
+
+> **Status (2026-11-10): Partly superseded.** The keys are now backslash-prefixed (`\s \d \D \c \p \u \b`, plus `\z \Z \a`) so lowercase letters can be nav characters; Ctrl-G toggles the git filter; they work in file and code modes — see `doc/key-bindings.md`.
 
 Single-key git operations work directly from the pane: stage, diff, discard,
 commit, push, pull, branch switch. No need to drop to a terminal or use Vim's
@@ -250,6 +301,8 @@ tree (discard, commit, push) use confirmation prompts or `input()`.
 
 ## Tree View Toggle (T key)
 
+> **Status (2026-11-10): Partly superseded.** The key is Shift-T (`vproj#ToggleTreeView()`), so lowercase `t` stays a nav character — see `doc/key-bindings.md`.
+
 Flat file listing can be toggled to an indented directory tree with T.
 Individual directories can be expanded/collapsed. Tree state is preserved
 within file mode across mode switches.
@@ -259,6 +312,8 @@ structure. The user toggles between them depending on the task. T is unused
 in the pane (upper-case, distinct from mode keys).
 
 ## File Preview (p key)
+
+> **Status (2026-11-10): Partly superseded.** The key is Shift-P (`vproj#TogglePreview()`), and the preview works in buf mode as well as file mode — see `doc/key-bindings.md`.
 
 Pressing p opens a split showing the contents of the file under cursor.
 The preview updates on cursor movement. Pressing p again closes it.
@@ -270,6 +325,8 @@ of the pane.
 
 ## Filter by Name (/ key) and Grep (* key)
 
+> **Status (2026-11-10): Partly superseded.** `*` runs `git grep -i` (case-insensitive; in the pane's directory with `--no-index` outside a repository), fills the quickfix list and switches the pane to Qfix mode; it no longer runs `grep -rn` — see `GrepSearch()` in `src/autoload/vproj.vim`.
+
 `/` prompts for a name filter and reduces the listing to matching items.
 Clearing the filter restores the full listing. `*` prompts for a grep pattern,
 runs `grep -rn` in the project root, and populates the quickfix list.
@@ -280,6 +337,8 @@ operations. `/` filters the current listing; `*` populates quickfix for qfix
 mode navigation.
 
 ## cmdheight Lowering Before Splits (E36 Guard)
+
+> **Status (2026-11-10): Partly superseded.** The guard stands and is implemented by `LowerCmdheight()` / `RestoreCmdheight()` with a nesting counter. `OpenCommitDetail` was removed with Log mode; the other split functions named still exist — see `src/autoload/vproj.vim`.
 
 Before any `:split`, `:vnew`, or `:vsplit` operation, the code temporarily
 lowers `cmdheight` to 1 (if above 2) and `winminwidth`/`winminheight` to 1,
@@ -303,6 +362,8 @@ executes before the return takes effect.)
 
 ## OpenInRightPanel: Centralized Right-Panel Window Management
 
+> **Status (2026-11-10): Superseded.** `OpenInRightPanel()` no longer exists; `EditTargetWindow()` picks the window the user came from if it is still an edit window, else the first edit window in the tab, else a new `botright vnew` split — see the Opening Files section of `doc/index.md`.
+
 `OpenInRightPanel()` finds or creates a window to the right of the VPROJ
 pane. It iterates `getwininfo()` to find an existing non-pane window, reusing
 it if found. If only the pane window exists, it creates a new vertical split
@@ -318,6 +379,8 @@ and ensures consistent window layout.
 
 ## Two-Panel Layout: Pane Stays Open After Opening Files
 
+> **Status (2026-11-10): Partly superseded.** A temporary pane (Tab) closes after a file opens and a permanent pane (Shift-Tab) stays open with focus (`FinishOpen()`); `OpenInRightPanel()` was replaced by `EditTargetWindow()` — see the Pane Lifecycle section of `doc/design.md`.
+
 When the user presses Enter on a file, the file opens in a window to the
 right of the pane. The pane stays visible on the left. The user can continue
 browsing and open another file — the right-side window is reused, replacing
@@ -331,6 +394,8 @@ file managers. `OpenFile`, `GitBlame`, and `OpenDiffPreview` all use
 `OpenInRightPanel()` for consistent window behavior.
 
 ## Defensive Dict Access: get() Over Dot Notation
+
+> **Status (2026-11-10): Partly superseded.** The rule stands. `LogItems` was removed with Log mode, and the 3286-line figure is the size of the codebase at the 2026-06-18 audit — see `CLAUDE.md` (Vim9Script Notes).
 
 All dict key access on items from external sources (user input, filesystem
 listings, git output, quickfix entries) uses `get(dict, 'key', default)`
@@ -354,6 +419,8 @@ the entire 3286-line codebase: `item.name`, `item.path`, `item.is_dir`,
 
 ## Git Stash Keys (z/Z)
 
+> **Status (2026-11-10): Partly superseded.** The keys are `\z` (stash push) and `\Z` (stash pop); bare `z`/`Z` are no longer mapped, and `z` is a nav letter again — see `doc/key-bindings.md`.
+
 `z` pushes a stash with an optional message via `git stash push`. `Z` pops a
 stash after listing all stashes and prompting for which to pop (default: top).
 
@@ -367,6 +434,8 @@ with different confirmation requirements.
 
 ## Git Blame Key (a)
 
+> **Status (2026-11-10): Partly superseded.** The key is `\a`, and it works in file and code modes; `a` is a nav letter — see `doc/key-bindings.md`.
+
 `a` opens a split showing `git annotate` output for the file under cursor.
 Only in file mode, only for regular tracked files.
 
@@ -379,6 +448,8 @@ for all split operations. Untracked files are rejected because `git annotate`
 fails on them — the `git ls-files` guard prevents a confusing error.
 
 ## Tab/Shift-Tab: Temporary vs. Permanent Pane Mode
+
+> **Status (2026-11-10): Current.** Still matches the code.
 
 `Tab` opens the pane in temporary mode (auto-closes on file-open, ESC, or Tab).
 `Shift-Tab` opens in permanent mode (stays until explicit close). Pressing the
@@ -397,6 +468,8 @@ at toggle time.
 
 ### Pane Events
 
+> **Status (2026-11-10): Partly superseded.** `VprojPaneReady` fires from `PaneOpen()`, before `VprojPaneOpenedTemporary` / `VprojPaneOpenedPermanent`, not after them. The `A` key is mapped by the core (`SetupPaneMappings()`), not injected by a `vproj_ai` listener — see `src/autoload/vproj.vim` and the Add-on Support section of `CLAUDE.md`.
+
 The plugin fires `User VprojPaneOpenedTemporary`, `User VprojPaneOpenedPermanent`,
 and `User VprojPaneClosed` events. Add-ons (e.g., vproj_ai) listen for
 `VprojPaneReady` (which fires after both open events) to inject buffer-local
@@ -408,6 +481,8 @@ injection. The `BufEnter` autocommand fires before split layout stabilizes;
 and is in normal mode.
 
 ## `<Cmd>` Override: When `:call` Is Required
+
+> **Status (2026-11-10): Current.** Still matches the code.
 
 The `<Cmd>` mapping modifier is preferred for its lack of mode-change side
 effects, but it forbids any command that changes window or buffer — including
@@ -422,6 +497,8 @@ Any mapping whose call chain creates a window or buffer must use `:call`.
 
 ### `<Cmd>` and Insert Mode in Secondary Buffers
 
+> **Status (2026-11-10): Superseded.** The `vproj_ai` plugin and its six `nnoremap` mappings are gone. `A` is mapped by the core with `<Cmd>` and opens a terminal chat (`vproj#ai#AiTerminalChat()`), so no conversation buffer exists. The `<Cmd>` window-creation rule above still applies to `HandleF1` — see `src/autoload/vproj/ai.vim`.
+
 When `<Cmd>` maps create a window inside their callback (e.g., `botright new`),
 Vim can lose track of what mode the originating buffer should return to. The
 pane buffer would end up in insert mode after the AI conversation flow
@@ -433,6 +510,8 @@ to `:call ...<CR>`. Defensive `stopinsert` calls guard the conversation buffer
 and pane buffer at exit points.
 
 ## Edge Test: PaneGrow/PaneShrink in While Loops
+
+> **Status (2026-11-10): Current.** Still matches the code.
 
 The edge test originally used while loops (`while w < 80 | PaneGrow() | endwhile`)
 to test width clamping. These loops caused test hangs because `PaneGrow()` and
@@ -446,6 +525,8 @@ past max, PaneShrink past min) are tested with a single call each after setting
 the boundary value.
 
 ## setwinvar for Window-Local Options
+
+> **Status (2026-11-10): Current.** Still matches the code.
 
 Options like `number`, `relativenumber`, `signcolumn`, `cursorline`,
 `winfixwidth`, `foldenable`, and `wrap` are window-local in Vim.

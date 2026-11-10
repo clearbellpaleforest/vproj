@@ -2,11 +2,20 @@ VPROJ_AI
 Vim project manager with AI assistance. An add-on for VPROJ that adds
 language model integration directly into the editing workflow.
 
-Status (2026-06-23)
+Status (2026-06-23; AI context details updated 2026-11)
 Currently: terminal-based chat via `:terminal` + bash SSE streaming script.
 `A` key opens a 15-line `botright new` terminal running `bin/vproj-ai-chat`.
 Streaming SSE responses, multi-turn conversation, curl-based API calls.
 No job_start, no conversation buffer, no Vimscript-side SSE parsing.
+
+Note on key names (2026-11). This file is the original specification; the
+shipped keys differ in these places (see key-bindings.md and decisions.md):
+the pane toggles with Tab (temporary) and Shift-Tab (permanent), not F4;
+mode keys are Shift-F, Shift-B, Shift-C and Q (not lowercase q); nav
+characters are lowercase a-z only (26 per block, no A-Z or 1-9), relabelled
+with > and < (Tab no longer relabels); include and exclude are + and - (not
+Shift-I and Shift-X; Shift-X closes a buffer in Buf mode); Up on the first
+item reaches the mode menu line.
 
 AI Integration
 The AI feature is accessed through a single key: A in the vproj pane. There
@@ -16,22 +25,26 @@ handles the rest.
 
 Pressing A opens a `:terminal` buffer running `bin/vproj-ai-chat`, a bash
 script that:
-- Receives context (file, filetype, mode) from Vim via $VPROJ_AI_TMPFILE env var
+- Receives context (file, filetype, mode) from Vim via the file named by $VPROJ_AI_TMPFILE
 - Reads user prompts in a read loop
 - Calls the OpenAI-compatible API (DeepSeek by default) with SSE streaming
 - Renders token-by-token responses inline
 - Maintains conversation history for multi-turn interaction
 - Exits on /exit or Ctrl-D
 
-Context is automatic and mode-aware. When A is pressed, the system gathers:
-- File mode: absolute path under cursor + file ±100 lines
-- Code mode: absolute path under cursor + file ±100 lines
-- Log mode: commit hash under cursor + `git log --stat <hash>` output
-- Qfix mode: filename:lnum + entry text from quickfix item
-- Buf mode: target buffer's full text (capped)
+Context is automatic. When A is pressed, the system gathers (in every mode)
+the cwd, the pane's current mode, and, for the file open in the window the
+pane was opened from: its absolute path, filetype, cursor line and column,
+and the lines within 100 of the cursor.
+(The earlier design gathered mode-specific context: a commit hash in Log
+mode, the entry under the cursor in Qfix mode, the target buffer in Buf mode.
+Log mode has been removed and the other mode-specific context is not
+implemented.)
 
-The context is written to a temp file as JSON. The bash script reads it
-and includes it in the system prompt sent to the API.
+The system message, including that file text, is written to a private
+(0600) temp file; the API key goes to a second one. The bash script reads
+and deletes them. Neither the key nor the request goes on a command line or
+into the environment.
 
 The AI backend is provider-agnostic (OpenAI-compatible API). Configured via
 g:vproj_ai_api_key and g:vproj_ai_api_url. No external dependencies beyond curl.
@@ -39,7 +52,9 @@ g:vproj_ai_api_key and g:vproj_ai_api_url. No external dependencies beyond curl.
 VPROJ
 Vim project manager for software development. (Base project — vproj_ai is a fork.)
 
-Folder Structure:
+Folder Structure (original sketch; the current tree is `src/plugin/vproj.vim`,
+`src/autoload/vproj.vim`, `src/autoload/vproj/ai.vim`, `src/autoload/vproj/agent.vim`,
+`src/doc/vproj.txt`, `bin/vproj-ai-chat`, `doc/`, `tests/`):
 ~/dev/vproj
 ├── vproj.vproj
 ├── doc
@@ -421,6 +436,14 @@ The primary objective shall remain fast keyboard-based project navigation.
 Features which compromise simplicity or responsiveness should be avoided.
 
 ## Conversation Model
+
+> **Superseded.** This section and "Code Application Model" describe an
+> earlier in-Vim conversation buffer (`ai_history`, a `> ` prompt line, `a` to
+> apply code). That design is not implemented. The `A` key opens the terminal
+> chat described at the top of this file. The one-shot `:VprojAiPrompt`
+> inserts the first fenced code block of the response into the file after a
+> confirm prompt (or shows a popup for a question). The text below is kept as
+> design material.
 
 ### Lifecycle
 

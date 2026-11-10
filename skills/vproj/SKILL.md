@@ -21,7 +21,7 @@ vim -N -u NONE -i NONE -S tests/smoke.vim -c 'cquit!'
 ```
 src/
 ├── plugin/vproj.vim         # Entry point — commands, default Tab mapping, load guard
-├── autoload/vproj.vim        # All logic — ~3,700 lines Vim9Script
+├── autoload/vproj.vim        # All logic — ~4,300 lines Vim9Script
 │   ├── State (script-local vars at top)
 │   ├── Pane lifecycle (PaneOpen, PaneClose, Render)
 │   ├── Mode dispatch (VprojKey → FileModeKey/BufModeKey/CodeModeKey/QfixModeKey)
@@ -29,6 +29,7 @@ src/
 │   ├── Git (ToggleGitFilter, stage, diff, blame, commit, push, stash)
 │   └── AI dispatch (VprojKey("A") → vproj#ai#AiTerminalChat)
 ├── autoload/vproj/ai.vim     # AI subsystem — streaming, chat, code extraction
+├── autoload/vproj/agent.vim  # Agent add-on — external coding-agent CLI in a terminal split (:VprojAgent)
 └── doc/vproj.txt              # Help file
 bin/
 └── vproj-ai-chat             # Terminal chat bash script
@@ -118,9 +119,9 @@ bin/
 | File | Shift-F (default) | Directory tree, file sizes, nav chars |
 | Buf | Shift-B | Open buffers with flags + line counts |
 | Code | Shift-C | Project tree from .vproj config |
-| Qfix | Enter on `[Q]fix` in mode menu | Quickfix list entries |
+| Qfix | Shift-Q in temporary mode (closes the pane in permanent mode); or Enter on the mode menu line to cycle | Quickfix list entries |
 
-Mode switching is via Shift-F/B/C keys OR pressing Enter on the mode menu line.
+Mode switching is via Shift-F/B/C keys, Shift-Q (temporary mode only), OR pressing Enter on the mode menu line.
 The mode menu line shows `[F]ile [B]uf [C]ode [Q]fix`.
 
 ## Key System

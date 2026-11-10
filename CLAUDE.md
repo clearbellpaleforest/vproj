@@ -75,20 +75,22 @@ write legacy `function!` or `let`/`const` in these files.
 
 ## Documentation Structure
 
-CONCEPT.MD is the source material living in docs/. Each docs/ file extracts
-and elaborates one dimension. The docs/ directory is gitignored — design
-documents are living references, not shipped artifacts.
+concept.md is the source material living in doc/. Each doc/ file extracts
+and elaborates one dimension. The doc/ directory is tracked in git — it holds
+the design and reference documents, which are not shipped with the plugin
+(the shipped plugin is `src/`).
 
 ```
-docs/
-├── CONCEPT.MD                 # Source material — vision, modes, navigation, architecture
+doc/
+├── concept.md                 # Source material — vision, modes, navigation, architecture
 ├── constraints.md             # Hard boundaries — cross-platform, no deps, ASCII-only
 ├── architecture.md            # How the parts fit together — subsystems, data flow
 ├── design.md                  # Detailed behavioral spec — state, events, edge cases
 ├── implementation-plan.md     # Build order, staged milestones, stage gates
 ├── test-plan.md               # Testing strategy, coverage targets, categories
 ├── test-cases.md              # Concrete test vectors (TC001-N)
-└── decisions.md               # Design decisions + rationale, especially divergences
+├── decisions.md               # Design decisions + rationale, especially divergences
+└── ...                        # Plus index, manual, key-bindings, install, etc.
 ```
 
 ## .gitignore
@@ -98,11 +100,13 @@ docs/
 *.swo
 *~
 .claude/
-docs/
+/vproj.vproj
 ```
 
 Swap files and backups are editor noise. `.claude/` is Claude Code internal
-state. `docs/` is design reference material — not shipped with the plugin.
+state. `/vproj.vproj` is the per-user project file code mode reads and writes
+at the repo root (absolute paths; not shipped). The tracked `doc/` directory
+is not ignored.
 
 ## Codebase
 
@@ -115,13 +119,15 @@ src/
 └── doc/
     ├── vproj.txt               # Help file
     └── tags                    # Help tag index
-docs/                          # Per the 7-doc structure above
+doc/                           # Design and reference docs (tracked)
 tests/
 ├── run_all.sh
 ├── unit/
 │   ├── test_first_selectable.vim
+│   ├── test_ascii_ui.vim
 │   ├── test_ai.vim
-│   └── test_agent.vim
+│   ├── test_agent.vim
+│   └── test_ai_credentials.vim
 ├── integration/
 │   ├── test_git_mode_full.vim
 │   ├── test_buf_mode.vim
@@ -131,7 +137,12 @@ tests/
 │   ├── test_git_full.vim
 │   ├── test_special_chars.vim
 │   ├── test_file_ops.vim
-│   └── test_audit_2026_11.vim
+│   ├── test_audit_2026_11.vim
+│   ├── test_audit_2026_11b.vim
+│   ├── test_audit_2026_11c.vim
+│   ├── test_audit_2026_11d_git.vim
+│   ├── test_audit_2026_11d_render.vim
+│   └── test_audit_2026_11d_session.vim
 ├── smoke.vim
 ├── concept_audit.vim
 ├── audit_fixes.vim
@@ -153,7 +164,9 @@ owns all logic and state. The two add-ons (rule 7) own only their own feature.
 
 vproj exports `GetPaneBufnr()` so add-ons (e.g. vproj_ai) can detect the pane
 buffer and inject buffer-local mappings via BufEnter autocommand. Add-ons call
-vproj# functions; vproj has no knowledge of add-ons. Keep it that way.
+vproj# functions. The one core-to-add-on call is `VprojKey('A')`, which calls the
+AI add-on's chat entry (`vproj#ai#AiTerminalChat()`). Add-ons never get called
+back by the core except through exported `vproj#` functions. Keep it that way.
 
 ## Architecture
 
@@ -207,7 +220,7 @@ When adding a feature, follow this sequence:
 | File | Shift-F | Directory browsing, file sizes, binary detection |
 | Buf | Shift-B | Open buffers with flags + line counts |
 | Code | Shift-C | Project tree from .vproj, include/exclude with +/- |
-| Qfix | Enter on `[Q]fix` in mode menu | Quickfix list — filename:lnum, entry text |
+| Qfix | Shift-Q in temporary mode (or cycle via Enter on the mode menu line) | Quickfix list — filename:lnum, entry text |
 
 Four modes. Log mode was removed. Mode switching
 is via Shift keys (B/C/F) or by pressing Enter on the mode menu line. `<Esc>`
@@ -375,8 +388,10 @@ tests/
 ├── run_all.sh                      # Runs every test hermetically; exit code decides
 ├── unit/
 │   ├── test_first_selectable.vim   # FirstSelectableLine mode-awareness
+│   ├── test_ascii_ui.vim           # ASCII-only output rule, scanned over the source
 │   ├── test_ai.vim                 # AI subsystem (fake curl, no network)
-│   └── test_agent.vim              # Agent terminal (fake agent CLI)
+│   ├── test_agent.vim              # Agent terminal (fake agent CLI)
+│   └── test_ai_credentials.vim     # AI credential handling
 ├── integration/
 │   ├── test_git_mode_full.vim     # Code mode layout, mode switching
 │   ├── test_pane_lifecycle.vim     # Preview, tree view, permanent mode, toggles
@@ -386,7 +401,12 @@ tests/
 │   ├── test_git_full.vim           # Git features: diff, blame, discard, symlink guards
 │   ├── test_special_chars.vim      # Special characters in filenames
 │   ├── test_file_ops.vim           # :Copy :Delete :Rename :Move, Delete key
-│   └── test_audit_2026_11.vim      # Regressions from the 2026-11 audit
+│   ├── test_audit_2026_11.vim      # Regressions from the 2026-11 audit
+│   ├── test_audit_2026_11b.vim     # 2026-11 audit, batch b
+│   ├── test_audit_2026_11c.vim     # 2026-11 audit, batch c
+│   ├── test_audit_2026_11d_git.vim # 2026-11 audit, batch d (git)
+│   ├── test_audit_2026_11d_render.vim # 2026-11 audit, batch d (render, Enter, lazy load)
+│   └── test_audit_2026_11d_session.vim # 2026-11 audit, batch d (session)
 ├── smoke.vim                       # Basic open/close
 ├── concept_audit.vim               # Mapping table vs the concept
 ├── audit_fixes.vim                 # Earlier audit fix verification
@@ -432,6 +452,8 @@ queued before the call; set `ttimeout ttimeoutlen=0` if you feed `<Esc>`.
 - Mappings use `<Cmd>` modifier to avoid command-line flicker; `<nowait>` on f/g/q to prevent prefix-key timeout
 - `matchadd()` 4th argument is match ID — pass `-1` for auto-assignment, never a window ID
 - Global `set shortmess+=S` suppresses search-wrap messages; restore original on pane close
-- ASCII-only for separator characters
+- ASCII-only for all text vproj prints (pane rows, status line, messages, help text,
+  chat banner); comments may be UTF-8, user file names pass through. Enforced by
+  `tests/unit/test_ascii_ui.vim`
 - `ItemIndex()` extracts the shared `(selected_line - FirstSelectableLine()) + (current_page * items_per_page)` formula used by SelectCurrent, CloseBuffer, and DoToggleInclude
 - `getftype()` filters FIFOs/sockets/devices in ReadDir and GitItems to prevent readblob hangs

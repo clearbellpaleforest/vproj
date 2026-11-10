@@ -17,10 +17,13 @@ The project manager consists of four major subsystems:
 4. **Display Management** — generates pane contents from workspace state. Reads
    state. Never modifies it.
 
-These subsystems should be kept logically separate where practical. The source
-code may initially be contained in a single Vimscript file but should be
-organized internally so that future separation into multiple source files is
-straightforward.
+These subsystems should be kept logically separate where practical. The core
+lives in one autoload file (`autoload/vproj.vim`), organized internally by
+subsystem, with `plugin/vproj.vim` as the public surface. Two add-ons are
+separate files loaded on demand: `autoload/vproj/ai.vim` (AI provider chat and
+prompt) and `autoload/vproj/agent.vim` (external coding-agent CLI in a
+terminal split). The add-ons call back into core only through its exported
+functions; plugin calls autoload, never the reverse.
 
 ## Architectural Principles
 
@@ -38,7 +41,7 @@ Display output shall be generated from the workspace. Display output shall not
 be treated as state.
 
 The workspace contains:
-- current mode (file, buf, code, qfix, log)
+- current mode (file, buf, code, qfix)
 - current project (.vproj name and root)
 - current root directory
 - selected line and item index
@@ -48,7 +51,7 @@ The workspace contains:
 - navigation indicator offset
 - filter pattern
 - preview state (active, file path)
-- session persistence (last mode and directory)
+- session persistence (last mode, directory, width, info column, git filter; written only when `g:vproj_save_session = 1`, read whenever a file exists)
 
 ### Command/Query Separation
 
@@ -125,12 +128,14 @@ model classes. Plain functions operating on script-local variables.
 
 ### Window Management
 
-`OpenInRightPanel()` is the central helper for all content that appears to the
-right of the pane. It finds an existing non-pane window (reusing it) or creates
-a new `botright vnew` if only the pane exists. Callers (`OpenFile`, `GitBlame`,
-`OpenDiffPreview`, `OpenPreview`) use it to get a consistent two-panel layout
-without duplicating window-finding logic. The pane stays visible on the left;
-content appears on the right.
+`EditTargetWindow()` is the central helper for all file and buffer opens from
+the pane. It returns the window the user came from if it is still an edit window,
+else the first edit window in the tab, else creates one with `botright vnew`
+(a vertical split to the right of the pane). `OpenFile`, `OpenBuffer` and
+`OpenQfixEntry` use it; `ShowScratchSplit` (diff and blame) uses it and opens a
+read-only vertical split beside it; `OpenPreview` creates its own split. The pane stays visible on the left. After a successful
+open, `FinishOpen()` closes the pane in temporary mode and returns focus to it in
+permanent mode.
 
 This is a deliberate simplification. The three principles above describe the
 logical structure that the code should be organized around, even when the

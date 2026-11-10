@@ -3,7 +3,7 @@ vim9script
 # plugin/vproj.vim — VPROJ entry point.
 #
 # Loads the project pane and registers commands and default key mappings.
-# Stage 1 (ADR-012): Pane Infrastructure — toggle, open, close via Tab.
+# Stage 1: Pane Infrastructure — toggle, open, close via Tab.
 #
 # Commands:
 #   :VprojToggle  — Toggle the project pane open/closed.
@@ -20,8 +20,9 @@ if exists('g:loaded_vproj')
 endif
 g:loaded_vproj = 1
 
-# Define highlight groups (idempotent — uses highlight default)
-vproj#DefineHighlights()
+# Highlight groups are defined by vproj#PaneOpen() (and re-defined by the
+# pane's own ColorScheme autocmd while it is open), so loading this file does
+# not source the autoload file. Nothing here calls into autoload at load time.
 
 # ---------------------------------------------------------------------------
 # Commands
