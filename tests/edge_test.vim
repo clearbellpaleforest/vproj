@@ -44,6 +44,9 @@ Assert(vproj#GetPaneWidth() == 40, 'SetPaneWidth(90) rejected (above max 80)')
 vproj#SetPaneWidth(30)
 Assert(vproj#GetPaneWidth() == 30, 'SetPaneWidth(30) accepted')
 
+	# A width the terminal cannot give is clamped now (SafeMaxWidth); an 80-wide
+	# pane needs a terminal wider than the default 80x24.
+	set columns=160 lines=40
 	vproj#SetPaneWidth(80)
 	Assert(vproj#GetPaneWidth() == 80, 'SetPaneWidth(80) accepted')
 

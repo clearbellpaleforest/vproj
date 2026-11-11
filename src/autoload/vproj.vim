@@ -13,6 +13,9 @@ var items: list<dict<any>> = []
 var show_info_column: bool = true
 var current_page: number = 0
 var items_per_page: number = 1
+# Width the user asked for while the terminal was too narrow to give it; 0
+# when pane_width is what was asked for. A resize back restores it.
+var pane_width_wanted: number = 0
 var paging_active: bool = false
 var nav_offset: number = 0
 # True while vproj has added 'S' to 'shortmess'; only that flag is removed
@@ -82,6 +85,12 @@ for ch in range(char2nr('a'), char2nr('z'))
 endfor
 const MIN_WIDTH: number = 20
 const MAX_WIDTH: number = 80
+# Columns an edit window must keep when vproj opens a split beside it, and
+# the width of the preview window.
+const MIN_EDIT_WIDTH: number = 20
+const PREVIEW_WIDTH: number = 40
+# Narrowest preview worth opening; a wider one is used when the room allows.
+const MIN_PREVIEW_WIDTH: number = 24
 const AUTOGROUP: string = 'VprojPane'
 var match_ids: list<number> = []
 var cursor_match_id: number = -1
@@ -109,10 +118,73 @@ def RestoreCmdheight(): void
   endif
 enddef
 
+# True for an absolute path. isabsolutepath() is newer than Vim 8.2.3995, and
+# a direct call fails to compile (E117) on a Vim without it, so it is called
+# by name when it exists.
+def IsAbsPath(path: string): bool
+  if exists('*isabsolutepath')
+    return !!call('isabsolutepath', [path])
+  endif
+  if has('win32')
+    return path =~ '^\a:[\\/]' || path =~ '^[\\/]'
+  endif
+  return path =~ '^/'
+enddef
+
 def Error(msg: string): void
   echohl ErrorMsg
   echom msg
   echohl None
+enddef
+
+# A per-action message ('Moved x -> /dir', 'No git changes for x') that must
+# fit the command line: a longer one wraps and raises a hit-enter prompt. A
+# too-long text keeps its start and its end, joined by '...', and that
+# shortened text is what :messages records too.
+def Info(msg: string): void
+  var max_w: number = max([&columns - 12, 20])
+  var text: string = msg
+  if strwidth(text) > max_w
+    var head_w: number = (max_w - 3 + 1) / 2
+    var tail_w: number = max_w - 3 - head_w
+    var head: string = ''
+    for ch in split(text, '\zs')
+      if strwidth(head .. ch) > head_w
+        break
+      endif
+      head ..= ch
+    endfor
+    var tail: string = ''
+    for ch in reverse(split(text, '\zs'))
+      if strwidth(ch .. tail) > tail_w
+        break
+      endif
+      tail = ch .. tail
+    endfor
+    text = head .. '...' .. tail
+  endif
+  if text ==# msg || msg !~# '^\(Deleted\|Reverted\|Moved\|Renamed\)\>'
+    echom text
+    return
+  endif
+  # A destructive action names what it changed: :messages must keep the FULL
+  # text, not the shortened one. `silent echom` records nothing (measured on
+  # Vim 9.2), so the full text is echom'd with enough command-line rows to
+  # hold it (no hit-enter prompt), then the shortened form is shown on its own.
+  var rows: number = (strwidth(msg) + &columns - 1) / &columns
+  var saved_rows: number = &cmdheight
+  if rows > saved_rows && rows <= &lines / 2
+    try
+      &cmdheight = rows
+      echom msg
+    finally
+      &cmdheight = saved_rows
+    endtry
+    redraw
+    echo text
+  else
+    echom text
+  endif
 enddef
 
 def SortByName(A: dict<any>, B: dict<any>): number
@@ -126,9 +198,10 @@ def SortByName(A: dict<any>, B: dict<any>): number
   return 0
 enddef
 
-# Widest the pane may be: leave at least 20 columns for editing.
+# Widest the pane may be: leave at least MIN_EDIT_WIDTH columns for editing
+# plus the one-column separator between the pane and the edit window.
 def SafeMaxWidth(): number
-  return max([MIN_WIDTH, &columns - 20])
+  return max([MIN_WIDTH, &columns - MIN_EDIT_WIDTH - 1])
 enddef
 
 # Width from g:{name}, clamped to MIN_WIDTH..MAX_WIDTH. A value that is not a
@@ -1100,11 +1173,29 @@ enddef
 # Width
 # ──────────────────────────────────────────────
 
+# Every width change goes through here: the pane never gets more than the
+# terminal can spare (SafeMaxWidth), and a width the terminal could not give
+# is remembered in pane_width_wanted so a later resize can restore it.
+def FitPaneWidth(want: number): void
+  pane_width = min([want, SafeMaxWidth()])
+  pane_width_wanted = pane_width < want ? want : 0
+  NoteTermSize()
+enddef
+
+# The terminal size the pane width was last fitted to. WinResized fires for
+# every window size change, the user's own :vertical resize or mouse drag
+# included; HandleResize tells that apart from a terminal resize by whether
+# this changed. [0, 0] = not noted yet.
+var fitted_term: list<number> = [0, 0]
+def NoteTermSize(): void
+  fitted_term = [&columns, &lines]
+enddef
+
 export def PaneGrow(): void
-  if pane_width >= MAX_WIDTH
+  if pane_width >= MAX_WIDTH || pane_width >= SafeMaxWidth()
     return
   endif
-  pane_width += 1
+  FitPaneWidth(pane_width + 1)
   ApplyWidth()
   Render()
 enddef
@@ -1113,7 +1204,7 @@ export def PaneShrink(): void
   if pane_width <= MIN_WIDTH
     return
   endif
-  pane_width -= 1
+  FitPaneWidth(pane_width - 1)
   ApplyWidth()
   Render()
 enddef
@@ -1122,9 +1213,57 @@ export def SetPaneWidth(w: number): void
   if w < MIN_WIDTH || w > MAX_WIDTH
     return
   endif
-  pane_width = w
+  FitPaneWidth(w)
   ApplyWidth()
   Render()
+enddef
+
+# The terminal did not change, so a pane width that differs from pane_width
+# is the user's doing (:vertical resize, a mouse drag): keep it. A width
+# outside MIN_WIDTH..SafeMaxWidth is clamped, and only then is it applied.
+def AdoptPaneWindowWidth(): void
+  var wnr: number = bufwinnr(pane_bufnr)
+  if wnr <= 0
+    return
+  endif
+  var actual: number = winwidth(wnr)
+  # A pane that has the whole row to itself (`:only`, `Ctrl-W o`, or every other
+  # window closed) got that width from the layout, not from the user: keep the
+  # configured width, so it is back at pane_width when an edit window returns.
+  if actual >= &columns
+    return
+  endif
+  var kept: number = min([max([actual, MIN_WIDTH]), min([MAX_WIDTH, SafeMaxWidth()])])
+  if kept == pane_width && actual == kept
+    return
+  endif
+  pane_width = kept
+  pane_width_wanted = 0
+  if actual != kept
+    ApplyWidth()
+  endif
+enddef
+
+# VimResized / WinResized: fit the pane to the terminal as it is now, then
+# redraw so paging and row widths follow the new size. A pane that is not
+# showing has nothing to fit.
+var in_resize: bool = false
+export def HandleResize(): void
+  if in_resize || !IsPaneVisible()
+    return
+  endif
+  in_resize = true
+  try
+    if fitted_term == [&columns, &lines]
+      AdoptPaneWindowWidth()
+    else
+      FitPaneWidth(pane_width_wanted > 0 ? pane_width_wanted : pane_width)
+      ApplyWidth()
+    endif
+    Render()
+  finally
+    in_resize = false
+  endtry
 enddef
 
 # ──────────────────────────────────────────────
@@ -1283,18 +1422,33 @@ def Render(): void
   UpdatePreview()
 enddef
 
+# Row 1 of the pane: the four mode labels plus the active-state markers
+# (' *' filter, ' [G]' git filter). The row is exactly pane_width cells and
+# the markers are never the part that is cut: when the full labels and the
+# markers do not fit, the labels shrink to '[F] [B] [C] [q]', then to bare
+# letters, and only then is the label text cut.
 def BuildModeMenu(): string
+  var markers: string = ''
+  if !empty(filter_pattern)
+    markers ..= ' *'
+  endif
+  if git_filter_active
+    markers ..= ' [G]'
+  endif
+  var avail: number = pane_width - strwidth(markers)
   var parts: list<string> = []
   for key in MODE_KEYS
     parts->add(MODE_LABELS[key])
   endfor
-  var line: string = join(parts, '  ')
-  if !empty(filter_pattern)
-    line = line .. ' *'
+  var base: string = join(parts, '  ')
+  if strwidth(base) > avail
+    base = join(MODE_KEYS->mapnew((_, k) => '[' .. MODE_LABELS[k][1] .. ']'), ' ')
   endif
-  if git_filter_active
-    line = line .. ' [G]'
+  if strwidth(base) > avail
+    base = join(MODE_KEYS->mapnew((_, k) => MODE_LABELS[k][1]), ' ')
   endif
+  base = TruncateToWidth(base, max([avail, 0]))
+  var line: string = base .. markers
   var w: number = strwidth(line)
   if w < pane_width
     line = line .. repeat(' ', pane_width - w)
@@ -1349,7 +1503,16 @@ def BuildStatusline(): string
   if current_mode != 'buf'
     var root: string = current_mode == 'code' ? code_root : current_dir
     if !empty(root)
-      add(parts, fnamemodify(root, ':~'))
+      # The useful part of a long directory is its END: keep the tail.
+      var full_root: string = fnamemodify(root, ':~')
+      var shown_root: string = full_root
+      var root_room: number = max([8, pane_width - strwidth(right) - 2])
+      var cut: number = 0
+      while strwidth(shown_root) > root_room && cut < strchars(full_root) - 1
+        cut += 1
+        shown_root = '...' .. strcharpart(full_root, cut)
+      endwhile
+      add(parts, shown_root)
     endif
   endif
 
@@ -1461,18 +1624,30 @@ def TruncateToWidth(text: string, cells: number): string
   if strwidth(text) <= cells
     return text
   endif
-  var out: string = ''
-  var used: number = 0
-  for i in range(strchars(text))
-    var ch: string = strcharpart(text, i, 1)
-    var cw: number = strwidth(ch)
-    if used + cw > cells
-      break
+  # Measure the prefix, not each character alone: a combining mark is one
+  # cell by itself but zero after its base character. The width of a prefix
+  # never shrinks as it grows, so binary-search the longest prefix that fits
+  # (O(n log n); a character-by-character scan was quadratic on a long run of
+  # zero-width characters). A wide character that would straddle the limit
+  # does not fit, so it is dropped whole.
+  var lo: number = 0
+  var hi: number = strchars(text)
+  while lo < hi
+    var mid: number = (lo + hi + 1) / 2
+    if strwidth(strcharpart(text, 0, mid)) <= cells
+      lo = mid
+    else
+      hi = mid - 1
     endif
-    out ..= ch
-    used += cw
-  endfor
-  return out
+  endwhile
+  return strcharpart(text, 0, lo)
+enddef
+
+# A file name as the pane shows it: control characters (and Tab, which the
+# display expands to the next tab stop) become '?' so a row is exactly as
+# wide as strwidth() says. For DISPLAY only; opening a file uses the real name.
+def DisplayName(name: string): string
+  return substitute(name, '[\x00-\x1f\x7f]', '?', 'g')
 enddef
 
 def BuildPageNavRow(): string
@@ -1510,12 +1685,75 @@ def SyncGitContext(): void
   endif
 enddef
 
+# Every git call goes through GitCmd and GitSystem / GitSystemList, so the two
+# rules below hold for all of them.
+#
+# 1. --literal-pathspecs: git reads a path argument as a PATHSPEC. A file named
+#   [ab].txt, * or :(top)x would also match other files, and `restore` or
+#   `add` would act on them too. With the option every path means itself.
+# 2. Environment that points git at another repository (GIT_DIR and the
+#   others below) is cleared for the call and always restored. Left set, it
+#   makes git report a different repository's state for the files on screen.
+const GIT_REDIRECT_ENV: list<string> = [
+  'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY',
+  'GIT_COMMON_DIR', 'GIT_NAMESPACE']
+
+# check-ignore is the one command that refuses the option ("pathspec magic not
+# supported by this command: 'literal'"). It takes plain paths and never
+# expands a glob, so it needs no protection.
+def GitCmd(root: string, args: string): string
+  var literal: string = args =~# '^check-ignore\>' ? '' : '--literal-pathspecs '
+  return 'git ' .. literal .. '-C ' .. shellescape(root) .. ' ' .. args
+enddef
+
+# Clear the repository-redirecting variables; saved receives every old value
+# (v:null for an unset one), filled as it goes so a restore is complete even
+# if this stops half way.
+def GitEnvIsolate(saved: dict<any>): void
+  for name in GIT_REDIRECT_ENV
+    saved[name] = getenv(name)
+    if saved[name] != v:null
+      setenv(name, v:null)
+    endif
+  endfor
+enddef
+
+def GitEnvRestore(saved: dict<any>): void
+  for [name, val] in items(saved)
+    setenv(name, val)
+  endfor
+enddef
+
+# Run git in root; the output as one string. v:shell_error is git's status.
+def GitSystem(root: string, args: string): string
+  var saved: dict<any> = {}
+  try
+    GitEnvIsolate(saved)
+    return system(GitCmd(root, args))
+  finally
+    GitEnvRestore(saved)
+  endtry
+  return ''
+enddef
+
+# Same, the output as a list of lines.
+def GitSystemList(root: string, args: string): list<string>
+  var saved: dict<any> = {}
+  try
+    GitEnvIsolate(saved)
+    return systemlist(GitCmd(root, args))
+  finally
+    GitEnvRestore(saved)
+  endtry
+  return []
+enddef
+
 def GitRoot(): string
   SyncGitContext()
   if git_root_known
     return git_root_cache
   endif
-  var root: string = trim(system('git -C ' .. shellescape(git_ctx_dir) .. ' rev-parse --show-toplevel 2>/dev/null'))
+  var root: string = trim(GitSystem(git_ctx_dir, 'rev-parse --show-toplevel 2>/dev/null'))
   git_root_cache = v:shell_error == 0 ? root : ''
   git_root_known = true
   return git_root_cache
@@ -1526,13 +1764,13 @@ def GitBranch(): string
   if git_branch_known
     return git_branch_cache
   endif
-  var branch: string = trim(system('git -C ' .. shellescape(git_ctx_dir) .. ' branch --show-current 2>/dev/null'))
+  var branch: string = trim(GitSystem(git_ctx_dir, 'branch --show-current 2>/dev/null'))
   if v:shell_error != 0
     branch = ''
   elseif empty(branch)
     # A detached HEAD has no branch name; name the commit instead of
     # reporting an empty branch as "not tracked".
-    var hash: string = trim(system('git -C ' .. shellescape(git_ctx_dir) .. ' rev-parse --short HEAD 2>/dev/null'))
+    var hash: string = trim(GitSystem(git_ctx_dir, 'rev-parse --short HEAD 2>/dev/null'))
     if v:shell_error == 0 && !empty(hash)
       branch = '(detached ' .. hash .. ')'
     endif
@@ -1574,7 +1812,7 @@ def LoadGitStatus(): void
   if empty(root)
     return
   endif
-  var output: string = system('git -C ' .. shellescape(root) .. ' status --porcelain -z 2>/dev/null')
+  var output: string = GitSystem(root, 'status --porcelain -z 2>/dev/null')
   if v:shell_error != 0
     return
   endif
@@ -1588,7 +1826,9 @@ def LoadGitStatus(): void
     endif
     var xy: string = field[0 : 1]
     var full: string = root .. '/' .. substitute(field[3 : ], '/$', '', '')
-    if xy[0] == 'R' || xy[0] == 'C'
+    # The source path follows when EITHER column is a rename/copy: ' R' and
+    # ' C' are an intent-to-add rename, with the same extra field.
+    if xy[0] == 'R' || xy[0] == 'C' || xy[1] == 'R' || xy[1] == 'C'
       if i < len(fields)
         git_status_orig[full] = root .. '/' .. fields[i]
       endif
@@ -1613,7 +1853,7 @@ enddef
 # ('?? dir/'), not its files. A path with no entry of its own is untracked when
 # one of its parent directories is. -uall would list every file, but walks the
 # whole untracked tree: slow on a large one.
-def LookupGitXY(path: string): string
+def LookupGitXY(path: string, verify_ignored: bool = false): string
   var xy: string = get(git_status_xy, path, '')
   if !empty(xy)
     return xy
@@ -1629,6 +1869,18 @@ def LookupGitXY(path: string): string
       return ''
     endif
     if get(git_status_xy, dir, '') == '??'
+      # git status omits ignored files, so a file under an untracked directory
+      # may be ignored (build.log under newdir/). Rendering must not fork git
+      # per file, so only actions ask (verify_ignored). Exit 0 = ignored; any
+      # other code (1 = not ignored, 128 = error) is not proof that the file
+      # is ignored, but an error is not proof that it is untracked either:
+      # 128 answers '' so that no action offers to delete it.
+      if verify_ignored
+        GitSystem(root, 'check-ignore -q -- ' .. shellescape(path) .. ' 2>/dev/null')
+        if v:shell_error == 0 || v:shell_error > 1
+          return ''
+        endif
+      endif
       return '??'
     endif
     dir = fnamemodify(dir, ':h')
@@ -1649,11 +1901,12 @@ enddef
 # changes" into delete(). The cache is refreshed for the whole repo, so the
 # pane the action returns to is current too.
 def FreshGitStatusXY(path: string): string
-  git_status_map = {}
-  git_status_xy = {}
-  git_status_orig = {}
+  # InvalidateGitCache also forgets the cached root and branch: Render caches
+  # "not a repository" so it does not fork git on every redraw, but an action
+  # must see a `git init` (or a nested repo) done outside Vim.
+  InvalidateGitCache()
   LoadGitStatus()
-  return LookupGitXY(path)
+  return LookupGitXY(path, true)
 enddef
 
 # Run a git command in the repo root. Returns {ok, lines}: lines holds the
@@ -1661,7 +1914,7 @@ enddef
 # that mean success (git diff --no-index exits 1 when the files differ).
 def GitLines(args: string, ok_codes: list<number> = [0]): dict<any>
   var root: string = GitRoot()
-  var out: list<string> = systemlist('git -C ' .. shellescape(root) .. ' ' .. args .. ' 2>&1')
+  var out: list<string> = GitSystemList(root, args .. ' 2>&1')
   return {ok: index(ok_codes, v:shell_error) >= 0, lines: out}
 enddef
 
@@ -1733,7 +1986,7 @@ export def GitStageToggle(): void
   var xy: string = FreshGitStatusXY(path)
   var name: string = get(item, 'name', path)
   if empty(xy)
-    echom 'vproj: No git changes for ' .. name
+    Info('vproj: No git changes for ' .. name)
     return
   endif
 
@@ -1743,7 +1996,7 @@ export def GitStageToggle(): void
   if xy == '??' || xy[1] != ' '
     res = GitLines('add -A -- ' .. shellescape(path))
     if res.ok
-      echom 'Staged: ' .. name
+      Info('Staged: ' .. name)
     else
       Error('vproj: Failed to stage ' .. name .. ': ' .. join(res.lines, ' '))
     endif
@@ -1751,14 +2004,14 @@ export def GitStageToggle(): void
     # A new file: drop it from the index, keep it on disk.
     res = GitLines('rm --cached -q -- ' .. shellescape(path))
     if res.ok
-      echom 'Unstaged: ' .. name
+      Info('Unstaged: ' .. name)
     else
       Error('vproj: Failed to unstage ' .. name .. ': ' .. join(res.lines, ' '))
     endif
   else
     res = GitLines('restore --staged -- ' .. shellescape(path))
     if res.ok
-      echom 'Unstaged: ' .. name
+      Info('Unstaged: ' .. name)
     else
       Error('vproj: Failed to unstage ' .. name .. ': ' .. join(res.lines, ' '))
     endif
@@ -1780,6 +2033,8 @@ export def OpenDiffPreview(): void
     return
   endif
 
+  # An action decides from live git state, not from a cached "not a repo".
+  InvalidateGitCache()
   var root: string = GitRoot()
   if empty(root)
     echom "vproj: Not in a git repository"
@@ -1795,7 +2050,7 @@ export def OpenDiffPreview(): void
   var name: string = get(item, "name", path)
   var res: dict<any>
   if empty(xy)
-    echom "vproj: No git changes for " .. name
+    Info("vproj: No git changes for " .. name)
     return
   elseif xy == "??"
     res = GitLines("diff --no-index -- /dev/null " .. shellescape(path), [0, 1])
@@ -1813,8 +2068,32 @@ export def OpenDiffPreview(): void
     return
   endif
   if ShowScratchSplit('vproj-diff:' .. name, res.lines, 'diff')
-    echom "Diff: " .. name
+    Info("Diff: " .. name)
   endif
+enddef
+
+# Columns each window of wid's row has after a vertical split of wid. With
+# 'equalalways' Vim spreads the room over every window of the row that is not
+# 'winfixwidth' (so two side-by-side edit windows share it); without, only wid
+# is halved. The separator the new window adds is taken off the total.
+def SplitShare(wid: number): number
+  var wnr: number = win_id2win(wid)
+  if wnr <= 0
+    return 0
+  endif
+  if !&equalalways || &eadirection ==# 'ver'
+    return (winwidth(wnr) - 1) / 2
+  endif
+  var row: number = win_screenpos(wnr)[0]
+  var count: number = 0
+  var total: number = 0
+  for k in range(1, winnr('$'))
+    if win_screenpos(k)[0] == row && !getwinvar(k, '&winfixwidth', 0)
+      count += 1
+      total += winwidth(k)
+    endif
+  endfor
+  return (total - 1) / (count + 1)
 enddef
 
 # Show lines read-only in a new vertical split beside the edit window;
@@ -1826,6 +2105,15 @@ def ShowScratchSplit(name: string, lines: list<string>, ftype: string): bool
   if target_wid == 0
     return false
   endif
+  # Refuse when the windows left after the split would be narrower than
+  # MIN_EDIT_WIDTH, instead of squeezing windows to 1 column.
+  if SplitShare(target_wid) < MIN_EDIT_WIDTH
+    Error('vproj: terminal too narrow for the ' .. (ftype == 'diff' ? 'diff' : 'blame'))
+    return false
+  endif
+  # The pane must not give up columns to the new split, whatever the
+  # user's global 'winfixwidth' is.
+  setwinvar(pane_wid, '&winfixwidth', 1)
   win_gotoid(target_wid)
   LowerCmdheight()
   var saved_minwidth: number = &winminwidth
@@ -1860,6 +2148,7 @@ def ShowScratchSplit(name: string, lines: list<string>, ftype: string): bool
   nnoremap <buffer> <silent> q <Cmd>close<CR>
   cursor(1, 1)
   win_gotoid(pane_wid)
+  ApplyWidth()
   return true
 enddef
 
@@ -1879,7 +2168,14 @@ export def DiscardChanges(): void
   var xy: string = FreshGitStatusXY(path)
   var name: string = get(item, "name", path)
   if empty(xy)
-    echom "vproj: No git changes for " .. name
+    Info("vproj: No git changes for " .. name)
+    return
+  endif
+
+  # An unmerged file: every discard below would drop conflict stages (AA ran
+  # `rm --cached` and staged the deletion of a file that exists in HEAD).
+  if xy[0] == "U" || xy[1] == "U" || xy == "AA" || xy == "DD"
+    Error("vproj: " .. name .. " has a merge conflict -- resolve it first")
     return
   endif
 
@@ -1887,8 +2183,14 @@ export def DiscardChanges(): void
   # A staged rename: restoring only the new path would delete it and leave
   # the source staged as deleted. Restore both together. A copy's source
   # is untouched by the copy, so only the new path is restored.
-  var orig: string = xy[0] == "R" ? get(git_status_orig, path, '') : ''
-  var copy_of: string = xy[0] == "C" ? get(git_status_orig, path, '') : ''
+  # LoadGitStatus stores the source path when EITHER column is R/C, so the
+  # source is read once here and the re-check after the prompt compares the
+  # same value. ' R' (`git mv a b; git reset; git add -N b`) is an
+  # intent-to-add of the new path: it is handled like ' A' below.
+  var src: string = get(git_status_orig, path, '')
+  var orig: string = xy[0] == "R" ? src : ''
+  var copy_of: string = xy[0] == "C" ? src : ''
+  var ita: bool = xy[0] == " " && (xy[1] == "A" || xy[1] == "R" || xy[1] == "C")
   var question: string
   if xy == "??"
     question = "Delete untracked file " .. name .. "?"
@@ -1900,6 +2202,12 @@ export def DiscardChanges(): void
       .. fnamemodify(copy_of, ':t') .. ")?"
   elseif xy[0] == "A"
     question = "Unstage new file " .. name .. "? (the file is kept)"
+  elseif ita
+    # Intent-to-add (`git add -N`): the content was never in git, so
+    # restoring from HEAD would delete the only copy. For ' R' the old path
+    # stays as it is (deleted in the worktree, still tracked).
+    question = "Remove " .. name .. " from the index? (the file is kept"
+      .. (xy[1] == "A" ? ")" : "; the old path is not touched)")
   else
     question = "Discard all changes to " .. name .. " (staged and unstaged)?"
   endif
@@ -1915,7 +2223,7 @@ export def DiscardChanges(): void
   # file changed while the prompt was open, the action it approved is not the
   # action that would run: do nothing and say so.
   var xy_now: string = FreshGitStatusXY(path)
-  if xy_now != xy || get(git_status_orig, path, '') != (empty(orig) ? copy_of : orig)
+  if xy_now != xy || get(git_status_orig, path, '') != src
     Error("vproj: " .. name .. " changed while asking -- nothing was done")
     Render()
     return
@@ -1923,17 +2231,26 @@ export def DiscardChanges(): void
 
   var res: dict<any>
   if xy == "??"
+    # Last look before delete(): the file must still be untracked and not
+    # ignored, whatever the status cache or the directory inheritance said.
+    var root_now: string = GitRoot()
+    var listed: list<string> = split(GitSystem(root_now,
+      'ls-files -z --others --exclude-standard -- ' .. shellescape(path) .. ' 2>/dev/null'), "\x01")
+    if v:shell_error != 0 || empty(root_now) || index(listed, strpart(path, strlen(root_now) + 1)) < 0
+      Error("vproj: " .. name .. " is not an untracked, unignored file -- nothing was deleted")
+      return
+    endif
     if delete(path) == 0
-      echom "Deleted: " .. name
+      Info("Deleted: " .. name)
     else
       Error("vproj: Failed to delete " .. name)
     endif
-  elseif xy[0] == "A"
+  elseif xy[0] == "A" || ita
     # -f: with later edits in the worktree (AM) git refuses a plain
     # `rm --cached`. --cached keeps the file on disk either way.
     res = GitLines("rm --cached -f -q -- " .. shellescape(path))
     if res.ok
-      echom "Unstaged: " .. name
+      Info("Unstaged: " .. name)
     else
       Error("vproj: Failed to unstage " .. name .. ": " .. join(res.lines, " "))
     endif
@@ -1941,14 +2258,14 @@ export def DiscardChanges(): void
     res = GitLines("restore --source=HEAD --staged --worktree -- "
       .. shellescape(orig) .. " " .. shellescape(path))
     if res.ok
-      echom "Reverted to HEAD: " .. fnamemodify(orig, ':t') .. " (and removed " .. name .. ")"
+      Info("Reverted to HEAD: " .. fnamemodify(orig, ':t') .. " (and removed " .. name .. ")")
     else
       Error("vproj: Failed to revert " .. name .. ": " .. join(res.lines, " "))
     endif
   else
     res = GitLines("restore --source=HEAD --staged --worktree -- " .. shellescape(path))
     if res.ok
-      echom "Reverted to HEAD: " .. name
+      Info("Reverted to HEAD: " .. name)
     else
       Error("vproj: Failed to revert " .. name .. ": " .. join(res.lines, " "))
     endif
@@ -1993,7 +2310,7 @@ export def GitBlame(): void
     return
   endif
   if ShowScratchSplit('vproj-blame:' .. name, res.lines, '')
-    echom 'Blame: ' .. name
+    Info('Blame: ' .. name)
   endif
 enddef
 
@@ -2011,12 +2328,42 @@ export def TogglePreview(): void
   endif
 enddef
 
+# Width of the edit window the preview will take its columns from: the
+# rightmost window that is not the pane (the preview opens at the far right,
+# so that window gives the columns up). With no edit window at all, what the
+# pane leaves of the terminal.
+def PreviewRoom(pane_wid: number): number
+  var room: number = &columns - pane_width - 1
+  var best_col: number = -1
+  for k in range(1, winnr('$'))
+    if win_getid(k) == pane_wid
+      continue
+    endif
+    var col: number = win_screenpos(k)[1]
+    if col > best_col
+      best_col = col
+      room = winwidth(k)
+    endif
+  endfor
+  return room
+enddef
+
 def OpenPreview(): void
   # If a preview window already exists, close it first
   if preview_bufnr > 0 && bufexists(preview_bufnr) && bufwinnr(preview_bufnr) > 0
     ClosePreview()
   endif
   var pane_wid: number = win_getid()
+  # The preview is up to PREVIEW_WIDTH columns wide, less when the room
+  # beside the pane is short: the pane keeps pane_width and the edit window
+  # keeps MIN_EDIT_WIDTH. If even MIN_PREVIEW_WIDTH does not fit, open
+  # nothing rather than squeeze windows down to 1 column.
+  var preview_width: number = min([PREVIEW_WIDTH, PreviewRoom(pane_wid) - MIN_EDIT_WIDTH - 1])
+  if preview_width < MIN_PREVIEW_WIDTH
+    Error('vproj: terminal too narrow for the preview')
+    return
+  endif
+  setwinvar(pane_wid, '&winfixwidth', 1)
   # Move to a non-pane window if one exists, so botright vnew
   # splits the file area instead of nesting inside the pane.
   for wnr in range(1, winnr('$'))
@@ -2056,8 +2403,9 @@ def OpenPreview(): void
   setwinvar(preview_wid, '&signcolumn', 'no')
   setwinvar(preview_wid, '&wrap', 1)
   silent! keepalt file [Preview]
-  silent! vert resize 40
+  execute 'silent! vert resize ' .. preview_width
   win_gotoid(pane_wid)
+  ApplyWidth()
   # UpdatePreview returns at once unless preview_active is set, so set it
   # first or a freshly opened preview stays blank until the cursor moves.
   preview_active = true
@@ -2092,6 +2440,9 @@ def ClosePreview(): void
       if win_id2win(orig_wid) > 0
         win_gotoid(orig_wid)
       endif
+      # Closing the preview hands its columns to the neighbours; the pane
+      # goes back to its configured width.
+      ApplyWidth()
     endif
   endif
   preview_active = false
@@ -2129,7 +2480,7 @@ def ClearPreview(): void
     setbufvar(preview_bufnr, '&modifiable', 1)
     try
       deletebufline(preview_bufnr, 1, '$')
-      appendbufline(preview_bufnr, 1, '(no preview)')
+      setbufline(preview_bufnr, 1, '(no preview)')
     finally
       setbufvar(preview_bufnr, '&modifiable', 0)
     endtry
@@ -2144,13 +2495,16 @@ def ShowDirPreview(dir_path: string, dir_name: string): void
   try
     deletebufline(preview_bufnr, 1, '$')
     var header: string = '-- ' .. dir_name .. '/ --'
-    appendbufline(preview_bufnr, 0, header)
+    # deletebufline() of every line leaves one empty line: fill it, then append.
+    setbufline(preview_bufnr, 1, header)
     appendbufline(preview_bufnr, 1, '')
     var raw: list<string>
+    var unreadable: bool = false
     try
       raw = readdir(dir_path)
     catch
       raw = []
+      unreadable = true
     endtry
     var show_dot: bool = get(g:, 'vproj_show_dotfiles', false)
     var dirs: list<string> = []
@@ -2177,7 +2531,9 @@ def ShowDirPreview(dir_path: string, dir_name: string): void
       appendbufline(preview_bufnr, '$', '  ' .. entry)
       count += 1
     endfor
-    if count == 0
+    if unreadable
+      appendbufline(preview_bufnr, '$', '(cannot read directory)')
+    elseif count == 0
       appendbufline(preview_bufnr, '$', '(empty)')
     elseif len(entries) > 100
       appendbufline(preview_bufnr, '$', '...')
@@ -2195,28 +2551,28 @@ def ShowFilePreview(file_path: string): void
   try
     deletebufline(preview_bufnr, 1, '$')
     if !filereadable(file_path)
-      appendbufline(preview_bufnr, 0, '(cannot read)')
+      setbufline(preview_bufnr, 1, '(cannot read)')
       return
     endif
     if !IsRegularFile(file_path)
-      appendbufline(preview_bufnr, 0, '(special file)')
+      setbufline(preview_bufnr, 1, '(special file)')
       return
     endif
     if IsBinary(file_path)
-      appendbufline(preview_bufnr, 0, '(binary file)')
+      setbufline(preview_bufnr, 1, '(binary file)')
       return
     endif
     var lines: list<string>
     try
       lines = readfile(file_path, '', 200)
     catch
-      appendbufline(preview_bufnr, 0, '(cannot read)')
+      setbufline(preview_bufnr, 1, '(cannot read)')
       return
     endtry
     if empty(lines)
-      appendbufline(preview_bufnr, 0, '(empty file)')
+      setbufline(preview_bufnr, 1, '(empty file)')
     else
-      appendbufline(preview_bufnr, 0, lines)
+      setbufline(preview_bufnr, 1, lines)
     endif
     # 'filetype' takes letters, digits, '.', '-' and '_' only; a name like
     # "b.x y" would raise E474 after the text is already in the buffer.
@@ -2237,6 +2593,8 @@ export def GitCommit(): void
   if !IsPaneVisible() || (current_mode != 'file' && current_mode != 'code')
     return
   endif
+  # An action decides from live git state, not from a cached "not a repo".
+  InvalidateGitCache()
   var root: string = GitRoot()
   if empty(root)
     Error('vproj: Not in a git repository')
@@ -2247,15 +2605,37 @@ export def GitCommit(): void
     echom 'vproj: Commit cancelled'
     return
   endif
-  var output: string = system('git -C ' .. shellescape(root) .. ' commit -m ' .. shellescape(msg) .. ' 2>&1')
+  var output: string = GitSystem(root, 'commit -m ' .. shellescape(msg) .. ' 2>&1')
   if v:shell_error != 0
     Error('vproj: Commit failed -- ' .. substitute(output, '\n', ' ', 'g'))
   else
-    var hash: string = system('git -C ' .. shellescape(root) .. ' rev-parse --short HEAD 2>/dev/null')
+    var hash: string = GitSystem(root, 'rev-parse --short HEAD 2>/dev/null')
     echom 'vproj: Committed ' .. trim(hash)
   endif
   InvalidateGitCache()
   Render()
+enddef
+
+# input() returns '' for both Esc and an empty Enter. inputdialog() returns
+# its third argument on Esc (the dict form of input() does not exist in every
+# Vim), so a prompt where '' means something can tell the two apart.
+#
+# The sentinel is built once per session with unpredictable digits: a fixed
+# value could be typed (Ctrl-V Ctrl-A vproj-cancel) and would then cancel.
+def NewCancelSentinel(): string
+  var parts: list<string> = [string(localtime()), string(reltime()[1])]
+  if exists('*srand') && exists('*rand')
+    # srand() only returns a seed; it leaves the user's own rand() state alone.
+    var seed: list<number> = srand()
+    parts->add(string(rand(seed)))
+  endif
+  return "\x01vproj-cancel-" .. join(parts, '-')
+enddef
+
+const INPUT_CANCELLED: string = NewCancelSentinel()
+
+def AskOrCancel(prompt: string, text: string = ''): string
+  return inputdialog(prompt, text, INPUT_CANCELLED)
 enddef
 
 # Run a network git command with terminal prompts disabled: a credential
@@ -2269,11 +2649,14 @@ def GitNoPrompt(args: string): string
   # asking. A deliberate user choice (GIT_SSH_COMMAND or GIT_SSH) is left alone.
   # SSH_ASKPASS is not touched: ssh only uses it when it has no tty, and a
   # user's askpass helper is a legitimate non-hanging way to authenticate.
-  if saved_ssh_command == v:null && getenv('GIT_SSH') == v:null
+  # The variable outranks git config, so a configured core.sshCommand (-i key,
+  # ProxyJump, port) is a user choice too: leave it alone.
+  var configured: string = trim(GitSystem(GitRoot(), 'config --get core.sshCommand 2>/dev/null'))
+  if saved_ssh_command == v:null && getenv('GIT_SSH') == v:null && empty(configured)
     setenv('GIT_SSH_COMMAND', 'ssh -o BatchMode=yes')
   endif
   try
-    return system('git -C ' .. shellescape(GitRoot()) .. ' ' .. args .. ' 2>&1')
+    return GitSystem(GitRoot(), args .. ' 2>&1')
   finally
     setenv('GIT_TERMINAL_PROMPT', saved)
     setenv('GIT_SSH_COMMAND', saved_ssh_command)
@@ -2285,19 +2668,21 @@ export def GitPush(): void
   if !IsPaneVisible() || (current_mode != 'file' && current_mode != 'code')
     return
   endif
+  # An action decides from live git state, not from a cached "not a repo".
+  InvalidateGitCache()
   var root: string = GitRoot()
   if empty(root)
     Error('vproj: Not in a git repository')
     return
   endif
-  var remote: string = system('git -C ' .. shellescape(root) .. ' remote 2>/dev/null')
+  var remote: string = GitSystem(root, 'remote 2>/dev/null')
   if empty(trim(remote))
     Error('vproj: No remote configured')
     return
   endif
   var output: string = GitNoPrompt('push')
   if v:shell_error != 0
-    Error('vproj: Push failed -- ' .. substitute(output, '\n', ' ', 'g'))
+    Error('vproj: Push failed -- ' .. substitute(output, '[\r\n]\+', ' ', 'g'))
   else
     echom 'vproj: Pushed'
   endif
@@ -2309,21 +2694,23 @@ export def GitPull(): void
   if !IsPaneVisible() || (current_mode != 'file' && current_mode != 'code')
     return
   endif
+  # An action decides from live git state, not from a cached "not a repo".
+  InvalidateGitCache()
   var root: string = GitRoot()
   if empty(root)
     Error('vproj: Not in a git repository')
     return
   endif
-  var remote: string = system('git -C ' .. shellescape(root) .. ' remote 2>/dev/null')
+  var remote: string = GitSystem(root, 'remote 2>/dev/null')
   if empty(trim(remote))
     Error('vproj: No remote configured')
     return
   endif
   var output: string = GitNoPrompt('pull --ff-only')
   if v:shell_error != 0
-    Error('vproj: Pull failed -- ' .. substitute(output, '\n', ' ', 'g'))
+    Error('vproj: Pull failed -- ' .. substitute(output, '[\r\n]\+', ' ', 'g'))
   else
-    echom 'vproj: Pulled -- ' .. substitute(trim(output), '\n', ' ', 'g')
+    echom 'vproj: Pulled -- ' .. substitute(trim(output), '[\r\n]\+', ' ', 'g')
   endif
   # Files under open buffers may have changed.
   silent! checktime
@@ -2335,12 +2722,14 @@ export def GitBranchSwitch(): void
   if !IsPaneVisible() || (current_mode != 'file' && current_mode != 'code')
     return
   endif
+  # An action decides from live git state, not from a cached "not a repo".
+  InvalidateGitCache()
   var root: string = GitRoot()
   if empty(root)
     Error('vproj: Not in a git repository')
     return
   endif
-  var branches: string = system('git -C ' .. shellescape(root) .. ' branch 2>/dev/null')
+  var branches: string = GitSystem(root, 'branch 2>/dev/null')
   if empty(trim(branches))
     Error('vproj: No branches found')
     return
@@ -2359,7 +2748,7 @@ export def GitBranchSwitch(): void
     Error('vproj: Invalid branch name: ' .. target)
     return
   endif
-  var output: string = system('git -C ' .. shellescape(root) .. ' switch ' .. shellescape(target) .. ' 2>&1')
+  var output: string = GitSystem(root, 'switch ' .. shellescape(target) .. ' 2>&1')
   if v:shell_error != 0
     Error('vproj: Branch switch failed -- ' .. substitute(output, '\n', ' ', 'g'))
   else
@@ -2375,19 +2764,30 @@ export def GitStashPush(): void
   if !IsPaneVisible() || (current_mode != 'file' && current_mode != 'code')
     return
   endif
+  # An action decides from live git state, not from a cached "not a repo".
+  InvalidateGitCache()
   var root: string = GitRoot()
   if empty(root)
     Error('vproj: Not in a git repository')
     return
   endif
-  var msg: string = input('Stash message (empty for auto): ')
-  var cmd: string = 'git -C ' .. shellescape(root) .. ' stash push'
+  var msg: string = AskOrCancel('Stash message (empty for auto): ')
+  if msg == INPUT_CANCELLED
+    echom 'Cancelled'
+    return
+  endif
+  var stashes_before: string = GitSystem(root, 'stash list 2>/dev/null')
+  var cmd: string = 'stash push'
   if !empty(msg)
     cmd ..= ' -m ' .. shellescape(msg)
   endif
-  var output: string = system(cmd .. ' 2>&1')
+  var output: string = GitSystem(root, cmd .. ' 2>&1')
   if v:shell_error != 0
     Error('vproj: Stash failed -- ' .. substitute(output, '\n', ' ', 'g'))
+  elseif GitSystem(root, 'stash list 2>/dev/null') ==# stashes_before
+    # Exit 0 with "No local changes to save" (only untracked files): nothing
+    # was stashed. Compared by the stash list, not by git's translated text.
+    echom 'vproj: Nothing to stash (untracked files are not stashed)'
   else
     echom 'vproj: Changes stashed' .. (empty(msg) ? '' : ' -- ' .. msg)
   endif
@@ -2401,12 +2801,14 @@ export def GitStashPop(): void
   if !IsPaneVisible() || (current_mode != 'file' && current_mode != 'code')
     return
   endif
+  # An action decides from live git state, not from a cached "not a repo".
+  InvalidateGitCache()
   var root: string = GitRoot()
   if empty(root)
     Error('vproj: Not in a git repository')
     return
   endif
-  var list_output: string = system('git -C ' .. shellescape(root) .. ' stash list 2>&1')
+  var list_output: string = GitSystem(root, 'stash list 2>&1')
   if empty(trim(list_output))
     echom 'vproj: No stashes found'
     return
@@ -2415,16 +2817,20 @@ export def GitStashPop(): void
   for line in list_output->split('\n')
     echom '  ' .. line
   endfor
-  var ref: string = input('Pop which stash? (Enter for top): ')
+  var ref: string = AskOrCancel('Pop which stash? (Enter for top): ')
+  if ref == INPUT_CANCELLED
+    echom 'Cancelled'
+    return
+  endif
   if ref =~ '^-'
     Error('vproj: Invalid stash reference: ' .. ref)
     return
   endif
-  var cmd: string = 'git -C ' .. shellescape(root) .. ' stash pop'
+  var cmd: string = 'stash pop'
   if !empty(ref)
     cmd ..= ' ' .. shellescape(ref)
   endif
-  var output: string = system(cmd .. ' 2>&1')
+  var output: string = GitSystem(root, cmd .. ' 2>&1')
   if v:shell_error != 0
     Error('vproj: Stash pop failed -- ' .. substitute(output, '\n', ' ', 'g'))
   else
@@ -2441,8 +2847,14 @@ def IsRegularFile(path: string): bool
   if ftype == 'file'
     return true
   endif
-  if ftype == 'link' && getftype(resolve(path)) == 'file'
-    return true
+  if ftype == 'link'
+    # A link loop makes resolve() throw E655; such an entry is not a file
+    # that can be opened, and one bad entry must not break the listing.
+    try
+      return getftype(resolve(path)) == 'file'
+    catch
+      return false
+    endtry
   endif
   return false
 enddef
@@ -2499,7 +2911,7 @@ def BuildFileLines(file_items: list<dict<any>>): list<string>
   var prefix_width: number = 2
 
   for item in file_items
-    var name: string = get(item, 'name', '')
+    var name: string = DisplayName(get(item, 'name', ''))
     var is_dir: bool = get(item, 'is_dir', false)
     if is_dir
       name = name .. '/'
@@ -2579,14 +2991,17 @@ def BuildTreeLines(visible: list<dict<any>>): list<string>
   var visible_idx: number = 0
 
   for item in visible
-    var name: string = get(item, 'name', '')
+    var name: string = DisplayName(get(item, 'name', ''))
     var depth: number = get(item, 'depth', 0)
     var is_dir: bool = get(item, 'is_dir', false)
     var expand_char: string = ''
 
-    if is_dir && !get(item, 'is_parent', false)
-      expand_char = has_key(expanded_dirs, get(item, 'path', '')) ? '-' : '+'
+    if is_dir
+      # The parent row reads '../' like the plain view, but has no +/-.
       name = name .. '/'
+      if !get(item, 'is_parent', false)
+        expand_char = has_key(expanded_dirs, get(item, 'path', '')) ? '-' : '+'
+      endif
     endif
 
     var indent: string = repeat('  ', depth)
@@ -2654,8 +3069,13 @@ def FormatSize(bytes: number): string
     return printf('%4dK', bytes / 1024)
   elseif bytes < 1073741824
     return printf('%4dM', bytes / 1048576)
-  else
+  elseif bytes < 10000 * 1073741824
     return printf('%4dG', bytes / 1073741824)
+  elseif bytes < 10000 * 1099511627776
+    # From 10000 GiB the G form needs 6 columns; the column is 5 wide.
+    return printf('%4dT', bytes / 1099511627776)
+  else
+    return '>999T'
   endif
 enddef
 
@@ -2749,6 +3169,9 @@ def EditTargetWindow(): number
   endtry
   saved_origin_wid = win_getid()
   win_gotoid(back_wid)
+  # The new window took half the screen; the pane gets its width back now,
+  # not whenever a resize event happens to arrive.
+  ApplyWidth()
   return saved_origin_wid
 enddef
 
@@ -2849,10 +3272,22 @@ def BufferList(): list<dict<any>>
         modified: info.changed > 0,
         current: info.windows->len() > 0,
         linecount: info.linecount,
+        loaded: info.loaded != 0,
       })
     endif
   endfor
   return result
+enddef
+
+# The line count in its 4-cell column: wider counts are abbreviated so the
+# row never outgrows the pane ("12k+" for 10000-99999, ">99k" beyond).
+def LineCountCell(n: number): string
+  if n <= 9999
+    return printf('%4d', n)
+  elseif n <= 99999
+    return printf('%2dk+', n / 1000)
+  endif
+  return '>99k'
 enddef
 
 def BuildBufLines(buf_items: list<dict<any>>): list<string>
@@ -2865,10 +3300,11 @@ def BuildBufLines(buf_items: list<dict<any>>): list<string>
     if show_info_column
       flags = flags .. (item.current ? '%' : ' ')
       flags = flags .. (item.modified ? '+' : ' ')
-      flags = flags .. ' ' .. printf('%4d', item.linecount)
+      # An unloaded buffer (:badd) reports 1 line whatever the file holds.
+      flags = flags .. ' ' .. (get(item, 'loaded', true) ? LineCountCell(item.linecount) : '  --')
     endif
 
-    var name: string = item.name
+    var name: string = DisplayName(item.name)
     var name_width: number = pane_width - flag_width - 2
     if strwidth(name) > name_width
       name = TruncateToWidth(name, name_width)
@@ -2919,12 +3355,62 @@ export def PromptFilter(): void
   if !IsPaneVisible()
     return
   endif
-  var pattern: string = input('Filter: ', filter_pattern)
+  var pattern: string = AskOrCancel('Filter: ', filter_pattern)
+  if pattern == INPUT_CANCELLED
+    echom 'Cancelled'
+    return
+  endif
   filter_pattern = pattern
   selected_line = FirstSelectableLine()
   current_page = 0
   nav_offset = 0
   Render()
+enddef
+
+# Turn `git grep -n -z` output into quickfix items: {items, binary}.
+# With -z each match is file NUL lnum NUL text NL; system() turns NUL into
+# SOH (0x01). Paths are relative to root, so they are made absolute for
+# quickfix, which would otherwise resolve them against Vim's cwd.
+# One linear pass: the output is split into lines ONCE and every later
+# operation touches only its own line. (Measured: a builtin called with the
+# whole output as an argument in a loop, matchstrpos() or stridx() with a
+# start offset, copies the string each time: 50,000 matches took 50 s.)
+# A file name may hold a newline, so a line without `SOH digits SOH` is the
+# start or a middle part of a name, kept until the line that completes the
+# record. The text may hold SOH: the record is cut at the FIRST `SOH digits
+# SOH`, which no file name contains. A line `Binary file x matches` between
+# records is counted, not turned into an item.
+def ParseGrepOutput(output: string, root: string): dict<any>
+  var recs: list<dict<any>> = []
+  var binary: number = 0
+  var pending: string = ''
+  var have_pending: bool = false
+  for line in split(output, "\n", 1)
+    var m: list<string> = matchlist(line, '^\([^\x01]*\)\%x01\(\d\+\)\%x01\(.*\)$')
+    if empty(m)
+      if !have_pending && line =~# '^Binary file .* matches$' && stridx(line, "\x01") < 0
+        binary += 1
+      elseif have_pending
+        pending ..= "\n" .. line
+      else
+        pending = line
+        have_pending = true
+      endif
+      continue
+    endif
+    var file: string = have_pending ? pending .. "\n" .. m[1] : m[1]
+    pending = ''
+    have_pending = false
+    if empty(file) || str2nr(m[2]) <= 0
+      continue
+    endif
+    recs->add({
+      filename: root .. '/' .. file,
+      lnum: str2nr(m[2]),
+      text: substitute(m[3], '^\s*', '', ''),
+    })
+  endfor
+  return {items: recs, binary: binary}
 enddef
 
 export def GrepSearch(): void
@@ -2938,46 +3424,51 @@ export def GrepSearch(): void
   # Inside a repo search the whole worktree: --untracked adds untracked files
   # (still honouring .gitignore) to the tracked ones. Outside one, search the
   # pane's directory with --no-index.
+  # An action decides from live git state, not from a cached "not a repo".
+  InvalidateGitCache()
   var root: string = GitRoot()
   var scope_flag: string = '--untracked '
   if empty(root)
     root = current_dir
     scope_flag = '--no-index '
   endif
-  var output: string = system('git -C ' .. shellescape(root) .. ' grep ' .. scope_flag
-    .. '-n -i -z -- ' .. shellescape(pattern) .. ' 2>&1')
+  # stdout and stderr stay apart: a warning on stderr ('error: failed to stat
+  # x', exit 0) merged into stdout would be glued onto the next record's file
+  # name. stderr goes to a temp file, deleted on every path.
+  var errfile: string = tempname()
+  var output: string = ''
+  var status: number = 0
+  var errlines: list<string> = []
+  try
+    output = GitSystem(root, 'grep ' .. scope_flag .. '-n -i -z -- ' .. shellescape(pattern)
+      .. ' 2>' .. shellescape(errfile))
+    status = v:shell_error
+    if filereadable(errfile)
+      errlines = readfile(errfile)
+    endif
+  finally
+    delete(errfile)
+  endtry
   # git grep: 0 = matches, 1 = no match, anything else = error.
-  if v:shell_error == 1
+  if status == 1
     echom 'vproj: no matches for: ' .. pattern
     return
-  elseif v:shell_error != 0
-    Error('vproj: grep failed: ' .. substitute(trim(output), '\n', ' ', 'g'))
+  elseif status != 0
+    var why: string = trim(join(errlines, ' '))
+    Error('vproj: grep failed: ' .. (empty(why) ? 'exit status ' .. status : why))
     return
   endif
-  # With -z each match is file NUL lnum NUL text NL; system() turns NUL into
-  # SOH (0x01). Paths are relative to root, so make them absolute for
-  # quickfix, which would otherwise resolve them against Vim's cwd.
-  var qflist: list<dict<any>> = []
-  for line in split(output, "\n")
-    var fields: list<string> = split(line, "\x01", true)
-    if len(fields) < 3
-      continue
+  var parsed: dict<any> = ParseGrepOutput(output, root)
+  if empty(parsed.items)
+    if parsed.binary > 0
+      echom 'vproj: no text matches for: ' .. pattern .. ' (' .. parsed.binary
+        .. ' binary files matched and were skipped)'
+    else
+      echom 'vproj: no matches for: ' .. pattern
     endif
-    var lnum: number = str2nr(fields[1])
-    if empty(fields[0]) || lnum <= 0
-      continue
-    endif
-    qflist->add({
-      filename: root .. '/' .. fields[0],
-      lnum: lnum,
-      text: substitute(join(fields[2 : ], ' '), '^\s*', '', ''),
-    })
-  endfor
-  if empty(qflist)
-    echom 'vproj: no matches for: ' .. pattern
     return
   endif
-  setqflist([], ' ', {items: qflist, title: 'grep: ' .. pattern})
+  setqflist([], ' ', {items: parsed.items, title: 'grep: ' .. pattern})
   SwitchMode('qfix')
 enddef
 
@@ -3096,13 +3587,15 @@ export def CloseBuffer(): void
       execute 'bdelete! ' .. bufnr
     catch
       Error('vproj: Cannot close buffer -- ' .. v:exception)
+      # A partly done :bdelete may have changed the list.
+      Render()
       return
     endtry
-    if !bufexists(bufnr)
-      selected_line = FirstSelectableLine()
-      current_page = 0
-      Render()
-    endif
+    # :bdelete unlists the buffer but bufexists() stays true, so redraw
+    # unconditionally: the row must go.
+    selected_line = FirstSelectableLine()
+    current_page = 0
+    Render()
   endif
 enddef
 
@@ -3249,7 +3742,7 @@ export def DeleteSelected(): void
   if bnr > 0 && empty(win_findbuf(bnr))
     execute 'bwipeout ' .. bnr
   endif
-  echom 'Deleted: ' .. name
+  Info('Deleted: ' .. name)
   AfterFileOp()
 enddef
 
@@ -3340,7 +3833,7 @@ export def RenameSelected(): void
     return
   endif
   RetargetBuffer(src, dst)
-  echom 'Renamed ' .. old_name .. ' -> ' .. new_name
+  Info('Renamed ' .. old_name .. ' -> ' .. new_name)
   AfterFileOp()
   SelectPath(dst)
 enddef
@@ -3369,7 +3862,7 @@ export def MoveSelected(): void
   # directory), not Vim's cwd. :p expands a leading ~ and makes the path
   # absolute; drop the trailing slash it leaves on directories.
   var target: string = answer
-  if target !~ '^\~' && !isabsolutepath(target)
+  if target !~ '^\~' && !IsAbsPath(target)
     target = fnamemodify(src, ':h') .. '/' .. target
   endif
   var dest_dir: string = simplify(fnamemodify(target, ':p'))
@@ -3381,7 +3874,7 @@ export def MoveSelected(): void
     return
   endif
   if resolve(dest_dir) == resolve(fnamemodify(src, ':p:h'))
-    echom 'vproj: Move -- ' .. name .. ' is already in ' .. dest_dir
+    Info('vproj: Move -- ' .. name .. ' is already in ' .. dest_dir)
     return
   endif
   var dst: string = (dest_dir == '/' ? '' : dest_dir) .. '/' .. name
@@ -3398,7 +3891,7 @@ export def MoveSelected(): void
     return
   endif
   RetargetBuffer(src, dst)
-  echom 'Moved ' .. name .. ' -> ' .. dest_dir
+  Info('Moved ' .. name .. ' -> ' .. dest_dir)
   AfterFileOp()
 enddef
 
@@ -3454,7 +3947,7 @@ def ResolveProjectRoot(raw: string, vproj_path: string): string
   var r: string = raw
   if r =~ '^\~'
     r = fnamemodify(r, ':p')
-  elseif !isabsolutepath(r)
+  elseif !IsAbsPath(r)
     r = base .. '/' .. r
   endif
   r = simplify(r)->substitute('/\+$', '', '')
@@ -3557,6 +4050,9 @@ def SetScalar(p: dict<any>, field: string, value: string, path: string): void
   endif
 enddef
 
+# Counter that keeps WriteVprojFile's temp names unique within one process.
+var tmp_seq: number = 0
+
 def WriteVprojFile(): bool
   if empty(project) || !has_key(project, 'vproj_file')
     return false
@@ -3591,21 +4087,52 @@ def WriteVprojFile(): bool
   # the real file), and carry the file's permissions across: a private 0600
   # project file must not come back 0644.
   var dest: string = resolve(project.vproj_file)
+  # A read-only project file is the user's way of saying "do not change":
+  # rename() would replace it and copy its read-only mode.
+  if getftype(dest) != '' && filewritable(dest) != 1
+    Error('vproj: ' .. dest .. ' is read-only -- not changed')
+    return false
+  endif
   var perm: string = getfperm(dest)
-  var tmp: string = dest .. '.tmp'
-  if writefile(lines, tmp) == 0
-    if !empty(perm)
-      setfperm(tmp, perm)
+  # The temp name is unique and never an existing file (a user's own
+  # "<name>.vproj.tmp" must survive); it stays in the same directory so the
+  # rename is atomic.
+  var tmp: string = ''
+  for attempt in range(1000)
+    tmp_seq += 1
+    var cand: string = dest .. '.vproj-tmp.' .. getpid() .. '.' .. tmp_seq
+    if getftype(cand) == ''
+      tmp = cand
+      break
     endif
-    if rename(tmp, dest) == 0
-      return true
-    endif
+  endfor
+  if empty(tmp)
+    Error('vproj: Failed to write ' .. dest .. ' -- no free temporary file name')
+    return false
+  endif
+  # In a :def a failed writefile() throws (E482) instead of returning -1.
+  var rc: number = -1
+  try
+    rc = writefile(lines, tmp)
+  catch
+    Error('vproj: Failed to write ' .. dest .. ' -- ' .. v:exception)
+    silent! delete(tmp)
+    return false
+  endtry
+  if rc != 0
+    Error('vproj: Failed to write ' .. dest)
+    silent! delete(tmp)
+    return false
+  endif
+  if !empty(perm)
+    setfperm(tmp, perm)
+  endif
+  if rename(tmp, dest) != 0
     Error('vproj: Failed to write project file: ' .. dest)
     silent! delete(tmp)
-  else
-    Error('vproj: Failed to write ' .. dest)
+    return false
   endif
-  return false
+  return true
 enddef
 
 # ──────────────────────────────────────────────
@@ -3626,15 +4153,49 @@ enddef
 # against the whole relative path and against its last component, so
 # "*.swp" matches "a/b/x.swp". [ is literal: "[id].tsx" and "[slug]" are
 # real file names (Next.js, SvelteKit), not character classes.
+# Entries already reported as bad patterns: one message per entry, not one
+# per file and per redraw.
+var bad_pattern_reported: dict<bool> = {}
+
 def EntryMatches(entry: string, rel: string): bool
   if rel == entry
     return true
   endif
   if entry =~ '[*?]'
-    var re: string = glob2regpat(escape(entry, '['))
-    return rel =~ re || fnamemodify(rel, ':t') =~ re
+    var tail: string = fnamemodify(rel, ':t')
+    try
+      var re: string = EntryRegex(entry)
+      return rel =~ re || tail =~ re
+    catch
+      # A pattern Vim rejects is reported once, then compared literally, so
+      # one bad entry can never throw out of CodeItems.
+      if !has_key(bad_pattern_reported, entry)
+        bad_pattern_reported[entry] = true
+        Error('vproj: bad .vproj pattern ' .. DisplayName(entry) .. ': ' .. v:exception)
+      endif
+      return tail == entry
+    endtry
   endif
   return false
+enddef
+
+# Regex for a list entry: only * and ? are special, every other character is
+# itself (glob2regpat would also treat { } , $ ^ and \ specially).
+def EntryRegex(entry: string): string
+  # \%#=2 forces the NFA engine: the backtracking one (a user's
+  # 'regexpengine'=1) takes exponential time on '*a*a*a*a*b' against a long
+  # run of 'a'.
+  var re: string = '\%#=2\m^'
+  for c in split(entry, '\zs')
+    if c == '*'
+      re ..= '.*'
+    elseif c == '?'
+      re ..= '.'
+    else
+      re ..= escape(c, '\\.^$~[]')
+    endif
+  endfor
+  return re .. '$'
 enddef
 
 # True when rel is the directory entry or lies under it.
@@ -3791,7 +4352,7 @@ def BuildCodeLines(code_items: list<dict<any>>): list<string>
       prefix = indicator .. git_char .. '- '
     endif
 
-    var name: string = item.name
+    var name: string = DisplayName(item.name)
     if is_dir && !is_parent
       name = name .. '/'
     endif
@@ -3835,6 +4396,25 @@ def BuildCodeLines(code_items: list<dict<any>>): list<string>
   return result
 enddef
 
+# True when the .vproj format can hold this entry and read it back unchanged:
+# * and ? would be globs, the parser trims blanks, control characters and
+# U+FEFF do not survive a round trip, and a line that starts like a section
+# header would be read as one.
+def CanStoreEntry(rel: string): bool
+  # U+FEFF (a BOM) is matched as its UTF-8 bytes, not as a character: it is only
+  # a character when 'encoding' is utf-8, but the bytes are the same in every
+  # encoding, so the check holds under LANG=C too.
+  if rel =~ '[*?]' || rel != trim(rel) || rel =~ '[[:cntrl:]]' || rel =~ "\xef\xbb\xbf"
+    return false
+  endif
+  for key in keys(SECTION_MAP)
+    if tolower(rel) =~ '^' .. escape(key, ' ') .. '\s*:'
+      return false
+    endif
+  endfor
+  return true
+enddef
+
 def DoToggleInclude(action: string): void
   if current_mode != 'code' || !IsPaneVisible() || empty(project)
     if empty(project)
@@ -3863,6 +4443,10 @@ def DoToggleInclude(action: string): void
   endif
 
   var rel = RelPath(item.path)
+  if !CanStoreEntry(rel)
+    Error('vproj: ' .. rel .. ' cannot be stored in a .vproj file (glob characters, edge blanks, control characters or a header-like name)')
+    return
+  endif
   var inc = project.included_dirs
   var exc = project.excluded_dirs
   if !get(item, 'is_dir', false)
@@ -3914,6 +4498,9 @@ def DoToggleInclude(action: string): void
     Error('vproj: Failed to save project -- changes reverted')
   endif
   Render()
+  # The toggle can re-sort the rows (a directory moves between the included
+  # and excluded groups): keep the cursor on the item the user acted on.
+  SelectPath(item.path)
 enddef
 
 export def ToggleInclude(): void
@@ -4049,7 +4636,7 @@ def BuildQfixLines(qfix_items: list<dict<any>>): list<string>
   for item in qfix_items
     var indicator: string = NavChar(item, visible_idx)
     var lnum_str: string = string(item.lnum)
-    var entry_text: string = item.filename .. ':' .. lnum_str .. '  ' .. item.text
+    var entry_text: string = DisplayName(item.filename .. ':' .. lnum_str .. '  ' .. item.text)
     var text_width: number = pane_width - 2  # indicator (char+space)
     if strwidth(entry_text) > text_width
       entry_text = TruncateToWidth(entry_text, text_width)
@@ -4118,6 +4705,20 @@ export def HandlePaneQ(): void
   endif
 enddef
 
+# q in the help window: close it, then hand focus and width back to the pane.
+# A plain :close leaves focus in whichever window Vim picks (the empty edit
+# window) and the pane a column short.
+export def CloseHelp(): void
+  close
+  if IsPaneVisible()
+    var wnr: number = bufwinnr(pane_bufnr)
+    if wnr > 0
+      win_gotoid(win_getid(wnr))
+      ApplyWidth()
+    endif
+  endif
+enddef
+
 export def ShowHelp(): void
   var lines: list<string> = [
     'vproj -- key reference',
@@ -4182,6 +4783,11 @@ export def ShowHelp(): void
   var saved_winminwidth: number = &winminwidth
   var saved_winminheight: number = &winminheight
   set winminwidth=1 winminheight=1
+  # The pane must not give up columns to the help window, whatever the
+  # user's global 'winfixwidth' is.
+  if IsPaneVisible() && bufwinnr(pane_bufnr) > 0
+    setwinvar(win_getid(bufwinnr(pane_bufnr)), '&winfixwidth', 1)
+  endif
   try
     leftabove vertical new
     help_wid = win_getid()
@@ -4192,13 +4798,14 @@ export def ShowHelp(): void
     setlocal modifiable
     setline(1, lines)
     setlocal nomodifiable
-    nnoremap <buffer> <silent> q <Cmd>close<CR>
+    nnoremap <buffer> <silent> q <Cmd>call vproj#CloseHelp()<CR>
     # A negative argument is RELATIVE (it shrinks), so resize only when the
     # absolute width is usable; a narrow terminal keeps the split's own width.
     var help_width: number = min([80, &columns - vproj#GetPaneWidth() - 4])
     if help_width >= 20
       execute 'vert resize ' .. help_width
     endif
+    ApplyWidth()
     redraw
   catch
     # Don't leave a half-built empty window behind.
@@ -4310,6 +4917,8 @@ def SetupPaneMappings(): void
 enddef
 
 def SetupAutocommands(): void
+  # A fresh pane starts with no remembered over-wide request.
+  pane_width_wanted = 0
   execute 'augroup ' .. AUTOGROUP
     autocmd!
     execute 'autocmd BufWipeout <buffer> call vproj#HandleBufWipeout()'
@@ -4317,7 +4926,109 @@ def SetupAutocommands(): void
     autocmd DirChanged tabpage call vproj#OnDirChanged(expand('<amatch>'))
     autocmd DirChanged window call vproj#OnDirChanged(expand('<amatch>'))
     autocmd ColorScheme * call vproj#DefineHighlights()
+    autocmd VimResized * call vproj#HandleResize()
+    if exists('##WinResized')
+      autocmd WinResized * call vproj#HandleResize()
+    endif
   augroup END
+  SetupGuardAutocommands()
+enddef
+
+# Guards that keep the pane honest, in the same group PaneClose clears (so
+# closing the pane removes them). Called from SetupAutocommands, after its
+# `autocmd!`, with the pane buffer current.
+def SetupGuardAutocommands(): void
+  execute 'augroup ' .. AUTOGROUP
+    # The pane left as the only window: quit Vim as closing the last real
+    # window would. Never from inside the user's own command (a :quit here
+    # aborted their command line and replaced the pane with a hidden buffer):
+    # the autocmd only schedules a check, which runs after the command.
+    autocmd WinEnter * call vproj#ScheduleQuitCheck()
+    # The cursor never rests on the separator or the page footer.
+    autocmd CursorMoved <buffer> call vproj#ClampPaneCursor()
+  augroup END
+  # A fresh pane starts out fitted to the terminal as it is now.
+  NoteTermSize()
+enddef
+
+# At most one check is pending; -1 when none is.
+var quit_timer: number = -1
+
+# WinEnter: when the pane is the last window, schedule QuitIfPaneAlone for
+# after the command that caused the event. Without timers nothing is
+# scheduled and the pane stays as it is (no quit, no error).
+export def ScheduleQuitCheck(): void
+  if quit_timer != -1 || !has('timers') || !PaneIsLastWindow()
+    return
+  endif
+  quit_timer = timer_start(0, (_) => QuitIfPaneAlone())
+enddef
+
+# The deferred check: the layout may have changed since it was scheduled
+# (the pane closed, another window opened), so ask again. Plain :quit, and
+# only when no buffer is modified: with unsaved changes the pane just stays,
+# silently, instead of the quit failing with E37/E162.
+def QuitIfPaneAlone(): void
+  quit_timer = -1
+  if !PaneIsLastWindow()
+    return
+  endif
+  if !empty(getbufinfo({bufmodified: 1}))
+    return
+  endif
+  try
+    quit
+  catch
+    Error('vproj: Cannot quit -- ' .. v:exception)
+  endtry
+enddef
+
+# True when the pane is the only window of the only tab page. Not during
+# PaneOpen/PaneClose: PaneOpen splits before it enters the pane, and
+# PaneClose opens a spare window first, so neither is ever alone here.
+export def PaneIsLastWindow(): bool
+  if !IsPaneVisible()
+    return false
+  endif
+  if tabpagenr('$') > 1 || winnr('$') != 1
+    return false
+  endif
+  if getcmdwintype() != ''
+    return false
+  endif
+  return bufnr('%') == pane_bufnr
+enddef
+
+# Keep the cursor on a row that can be selected and selected_line in step
+# with it. Key handlers (SelectNext, ...) set both themselves, so this only
+# acts when the cursor got somewhere else: G, L, Ctrl-F, a mouse click.
+export def ClampPaneCursor(): void
+  if !IsPaneVisible() || bufnr('%') != pane_bufnr
+    return
+  endif
+  var total: number = line('$')
+  var lnum: number = line('.')
+  var target: number = lnum
+  if SkipNonSelectable(lnum)
+    var last: number = total
+    while last > 1 && SkipNonSelectable(last)
+      last -= 1
+    endwhile
+    # The footer is below the items: go to the last item. The separator is
+    # above them: go to the first.
+    target = lnum > last ? last : FirstSelectableLine()
+    target = min([target, total])
+    cursor(target, 1)
+  endif
+  # A pane that fits its window never needs to be scrolled (Ctrl-F, Ctrl-D).
+  if total <= winheight(0) && line('w0') > 1
+    winrestview({topline: 1})
+  endif
+  if target != selected_line
+    selected_line = target
+    UpdateCursorHighlight()
+    UpdatePreview()
+  endif
 enddef
 
 def ApplyStaticHighlights(): void
@@ -4403,6 +5114,7 @@ def ApplyWidth(): void
   win_gotoid(win_getid(wnr))
   silent! execute 'vert resize ' .. pane_width
   win_gotoid(orig_wid)
+  NoteTermSize()
 enddef
 
 # Session persistence

@@ -122,8 +122,12 @@ All git actions use the `\` prefix (file and code mode).
 
 These standard Vim keys work as usual inside the pane:
 
-`0` `$` `^` `gg` `G` `H` `L` `Ctrl-F` `Ctrl-B` `Ctrl-D`
-`Ctrl-U` `Ctrl-W` `%` `{` `}` `(` `)`
+`0` `$` `^` `H` `L` `G` `Ctrl-D` `Ctrl-U` `Ctrl-F` `Ctrl-W` `%` `{` `}` `(` `)`
+
+The cursor is kept on an item row: `G`, `L` and `Ctrl-F` end on the last
+item, never on the page footer, and the separator row is skipped. `gg` does
+not work (`g` is a nav letter); use `Ctrl-T` for the first item and `Ctrl-B`
+for the last.
 
 ## Commands
 

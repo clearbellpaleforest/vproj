@@ -268,7 +268,19 @@ var d9: string = Repo('twodiff', ['z.txt'])
 writefile(['z.txt', 'changed'], d9 .. '/z.txt')
 Fresh(d9)
 Assert(SelectName('z.txt'), 'twodiff: z.txt is listed')
+# Vim run without a terminal is 80x24 after any system() call, and a diff
+# split now needs 41 columns in the edit window (vproj refuses a narrower
+# terminal): narrow the pane, and close the first diff's window (keeping its
+# buffer) so the second diff has room and still collides on the name.
+vproj#SetPaneWidth(20)
 vproj#OpenDiffPreview()
+var first_diff: number = bufnr('vproj-diff:z.txt')
+if first_diff > 0
+  setbufvar(first_diff, '&bufhidden', 'hide')
+  for wid in win_findbuf(first_diff)
+    win_execute(wid, 'close')
+  endfor
+endif
 vproj#OpenDiffPreview()
 Assert(bufexists('vproj-diff:z.txt') && bufexists('vproj-diff:z.txt (2)'), 'twodiff: both diff buffers are named')
 
@@ -279,6 +291,9 @@ Assert(bufexists('vproj-diff:z.txt') && bufexists('vproj-diff:z.txt (2)'), 'twod
 var d10: string = Fixture('prev', ['p1.txt', 'b.x y'])
 Fresh(d10)
 Assert(SelectName('p1.txt'), 'preview: p1.txt is listed')
+# Earlier blocks ran git, which resets a terminal-less Vim to 80 columns; the
+# preview now needs room for pane + edit window + preview.
+set columns=160 lines=40
 vproj#TogglePreview()
 var pv: number = bufnr('\[Preview\]')
 Assert(pv > 0 && index(getbufline(pv, 1, '$'), 'p1.txt') >= 0, 'preview: the first toggle already shows the file text')
@@ -395,7 +410,9 @@ Fresh(d16)
 vproj#ToggleTreeView()
 Assert(SelectName('sub'), 'nested untracked: sub/ is listed in the tree')
 vproj#SelectCurrent()
-if SelectName('inner.txt')
+var inner_found: bool = SelectName('inner.txt')
+Assert(inner_found, 'nested untracked: inner.txt is listed inside sub/, so \D below really ran on it')
+if inner_found
   test_feedinput("y\<CR>")
   vproj#DiscardChanges()
   DrainInput()

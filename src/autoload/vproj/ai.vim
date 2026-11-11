@@ -35,6 +35,8 @@ var stream_job: any = v:null
 var stream_accumulated: string = ''
 var stream_cancelled: bool = false
 var stream_full_response: string = ''
+# The message of an {"error": ...} frame the server sent, '' when none.
+var stream_api_error: string = ''
 
 # Path of the terminal chat script (exported for tests).
 export def ChatScriptPath(): string
@@ -434,28 +436,38 @@ def DecodeJson(json: string): any
   var decoded: any = v:none
   try
     decoded = json_decode(json)
-  catch /E474:\|E491:\|E938:/
+  catch
+    # Every json_decode failure means "not usable JSON": E474/E491/E938, and
+    # E488 for trailing characters ('{"a":1}x') among them. Only this one
+    # call is guarded; nothing else in the module is swallowed.
     decoded = v:none
   endtry
   return decoded
 enddef
 
+# Nesting deeper than this is treated as "not found": the recursion would
+# otherwise hit E132 ('maxfuncdepth') on hostile or corrupt input.
+const MAX_FIND_DEPTH: number = 50
+
 # Search {value} for key {field}: the dict's own key first, then nested
 # values depth-first. Returns [found, value].
-def FindField(value: any, field: string): list<any>
+def FindField(value: any, field: string, depth: number = 0): list<any>
+  if depth > MAX_FIND_DEPTH
+    return [false, v:none]
+  endif
   if type(value) == v:t_dict
     if has_key(value, field)
       return [true, value[field]]
     endif
     for v in values(value)
-      var hit: list<any> = FindField(v, field)
+      var hit: list<any> = FindField(v, field, depth + 1)
       if hit[0]
         return hit
       endif
     endfor
   elseif type(value) == v:t_list
     for v in value
-      var hit: list<any> = FindField(v, field)
+      var hit: list<any> = FindField(v, field, depth + 1)
       if hit[0]
         return hit
       endif
@@ -479,7 +491,12 @@ export def ExtractJsonField(json: string, field: string): string
   if type(value) == v:t_none
     return ''
   endif
-  return json_encode(value)
+  try
+    return json_encode(value)
+  catch
+    # A value nested too deep to re-encode (E724) is as good as not found.
+    return ''
+  endtry
 enddef
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -501,33 +518,64 @@ def ProcessStreamChunk(chan: channel, msg: string): void
     var parts: list<string> = split(stream_accumulated, "\n\n", 1)
     var frame: string = parts[0]
     stream_accumulated = join(parts[1 : ], "\n\n")
-
-    for line in split(frame, "\n")
-      if line !~ '^data:\s*'
-        continue
-      endif
-      var json_str: string = substitute(line, '^data:\s*', '', '')
-      if json_str == '[DONE]'
-        return
-      endif
-      var data: any = DecodeJson(json_str)
-      if type(data) != v:t_dict
-        continue
-      endif
-      var choices: any = get(data, 'choices', [])
-      if type(choices) != v:t_list || empty(choices) || type(choices[0]) != v:t_dict
-        continue
-      endif
-      var delta: any = get(choices[0], 'delta', {})
-      if type(delta) != v:t_dict
-        continue
-      endif
-      var content: any = get(delta, 'content', '')
-      if type(content) == v:t_string && !empty(content)
-        stream_full_response ..= content
-      endif
-    endfor
+    if ApplyStreamFrame(frame)
+      return
+    endif
   endwhile
+enddef
+
+# One printable ASCII line from the "error" value of an API error frame: the
+# message of an error object, or the string itself.
+def ApiErrorText(err: any, json_str: string): string
+  var text: string = ''
+  if type(err) == v:t_string
+    text = err
+  elseif type(err) == v:t_dict
+    text = ExtractJsonField(json_str, 'message')
+  endif
+  if empty(text)
+    text = json_str
+  endif
+  text = substitute(text, '[^\x20-\x7e]\+', ' ', 'g')
+  return strpart(trim(text), 0, 200)
+enddef
+
+# Apply the "data:" lines of one SSE frame to stream_full_response. A line
+# that is not a usable chat-completions delta is skipped, so one bad frame
+# never costs the frames around it. Returns true on the [DONE] sentinel.
+def ApplyStreamFrame(frame: string): bool
+  for line in split(frame, "\n")
+    if line !~ '^data:\s*'
+      continue
+    endif
+    var json_str: string = substitute(line, '^data:\s*', '', '')
+    if json_str == '[DONE]'
+      return true
+    endif
+    var data: any = DecodeJson(json_str)
+    if type(data) != v:t_dict
+      continue
+    endif
+    # An API error frame has no 'choices': keep its message, so a stream that
+    # ends without content can say why instead of "no fenced code block".
+    if has_key(data, 'error')
+      stream_api_error = ApiErrorText(data.error, json_str)
+      continue
+    endif
+    var choices: any = get(data, 'choices', [])
+    if type(choices) != v:t_list || empty(choices) || type(choices[0]) != v:t_dict
+      continue
+    endif
+    var delta: any = get(choices[0], 'delta', {})
+    if type(delta) != v:t_dict
+      continue
+    endif
+    var content: any = get(delta, 'content', '')
+    if type(content) == v:t_string && !empty(content)
+      stream_full_response ..= content
+    endif
+  endfor
+  return false
 enddef
 
 # exit_cb of one curl job. {files} are that job's secret temp files; they
@@ -538,15 +586,28 @@ def StreamJobExit(exited: job, status: number, files: list<string>): void
     return
   endif
 
+  # A last frame the server never ended with a blank line is still complete
+  # data: apply what is left in the buffer. (A lone CR as line ending is not
+  # handled: only CRLF and LF frame a stream.)
+  if !stream_cancelled && !empty(stream_accumulated)
+    ApplyStreamFrame(stream_accumulated)
+  endif
+
   var response: string = stream_full_response
+  var api_error: string = stream_api_error
   var cancelled: bool = stream_cancelled
   stream_job = v:null
   stream_accumulated = ''
   stream_full_response = ''
+  stream_api_error = ''
   stream_cancelled = false
 
   if cancelled
     echom 'vproj-ai: cancelled'
+    return
+  endif
+  if empty(response) && !empty(api_error)
+    echohl ErrorMsg | echom 'vproj-ai: API error -- ' .. api_error | echohl None
     return
   endif
   if status != 0
@@ -608,6 +669,7 @@ export def AiCallStream(prompt: string, ctx: dict<any>): bool
 
   stream_accumulated = ''
   stream_full_response = ''
+  stream_api_error = ''
   stream_cancelled = false
 
   var opts: dict<any> = {}
@@ -657,27 +719,62 @@ enddef
 #   7. anything else                      -> code
 # A '?' inside the text (a regex such as /a?/) never counts by itself.
 # Leading words match whole words only ("however" is not "how").
+# End of a word for the leading-word tests. Not \> : that follows the current
+# buffer's 'iskeyword', so ':' or '-' in it would turn 'explain: x' and
+# 'how-to y' into non-words. A word is [A-Za-z0-9_] or a non-ASCII char that
+# is not punctuation, a symbol or a space: "what\u2019s this", "explain\u2026 it",
+# "why\uff1f", "how\u3001" and "explain\u00a0this" still start with a question
+# word, while "why\u00e9" (a letter) does not. The classes are written as
+# code points, so they do not depend on 'iskeyword' or the locale; a CJK
+# ideograph right after the word counts as a letter (no space, no word end).
+# The \xa0.. ranges are Latin-1 punctuation, valid in utf-8 and latin1
+# alike; the wider ranges exist only in utf-8 (a latin1 'encoding' rejects
+# them with E945). Other encodings keep "any non-ASCII char is a word char".
+def WordEnd(): string
+  var punct: string = ''
+  if &encoding == 'utf-8'
+    punct = '[\xa0-\xa9\xab-\xb4\xb6-\xb9\xbb-\xbf\xd7\xf7'
+      .. '\u2000-\u206f\u20a0-\u20cf\u2190-\u2bff\u2e00-\u2e7f'
+      .. '\u3000-\u3004\u3008-\u303f\ufe10-\ufe6f\uff00-\uff0f\uff1a-\uff20'
+      .. '\uff3b-\uff40\uff5b-\uff65\uffe0-\uffee\U0001f000-\U0001faff]'
+  elseif &encoding =~# '^\%(latin1\|iso-8859-\|cp125\)'
+    punct = '[\xa0-\xa9\xab-\xb4\xb6-\xb9\xbb-\xbf\xd7\xf7]'
+  endif
+  var nonascii: string = empty(punct) ? '[^\x00-\x7f]' : '\%(' .. punct .. '\)\@![^\x00-\x7f]'
+  return '\%([0-9A-Za-z_]\|' .. nonascii .. '\)\@!'
+enddef
+
+# Leading whitespace off, by the same rule for DetectMode() and StripPrefix():
+# trim() also strips a no-break space (U+00A0), which '^\s*' does not.
+def TrimLeading(s: string): string
+  return trim(s, '', 1)
+enddef
+
 def DetectMode(prompt: string): string
-  var text: string = trim(prompt)
+  var text: string = trim(TrimLeading(prompt))
   if empty(text)
     return 'code'
   endif
-  if prompt[0] == '!'
+  # {text} is trimmed: a leading blank must not change the verdict.
+  if text[0] == '!'
     return 'code'
   endif
-  if prompt[0] == '?'
+  if text[0] == '?'
     return 'question'
   endif
   var lower: string = tolower(text)
+  # \%#=2: the NFA engine. The backtracking one cannot compile the ranges
+  # above (E945) when the user sets 'regexpengine' to 1.
+  var word_end: string = WordEnd()
   var code_verbs: list<string> = ['add', 'write', 'create', 'make', 'implement', 'fix', 'refactor', 'rename', 'remove', 'delete', 'convert', 'generate', 'insert', 'replace', 'change', 'update', 'modify', 'extract', 'rewrite', 'append', 'wrap', 'move', 'simplify', 'optimize', 'optimise', 'sort', 'build', 'turn', 'put', 'use', 'apply', 'edit', 'comment', 'document', 'format', 'reformat', 'split', 'merge', 'inline', 'swap', 'reverse', 'complete', 'finish', 'port', 'translate', 'type', 'test']
   for v in code_verbs
-    if lower =~# '^' .. v .. '\>'
+    if lower =~# '\%#=2^' .. v .. word_end
       return 'code'
     endif
   endfor
   var question_words: list<string> = ['what', 'how', 'why', 'explain', 'describe', 'where', 'when', 'who', 'which', 'can you', 'could you', 'would you', 'is it', 'are there', 'does', 'do you', 'show me', 'tell me', 'find']
   for w in question_words
-    if lower =~# '^' .. w .. '\>'
+    if lower =~# '\%#=2^' .. w .. word_end
       return 'question'
     endif
   endfor
@@ -689,12 +786,13 @@ enddef
 
 # Strip mode-forcing prefix (! or ?) from prompt.
 def StripPrefix(prompt: string): string
-  if empty(prompt)
+  # The prefix counts after leading blanks, as in DetectMode().
+  var text: string = TrimLeading(prompt)
+  if empty(text)
     return prompt
   endif
-  if prompt[0] == '!' || prompt[0] == '?'
-    var stripped: string = prompt[1 : ]
-    return substitute(stripped, '^\s*', '', '')
+  if text[0] == '!' || text[0] == '?'
+    return TrimLeading(text[1 : ])
   endif
   return prompt
 enddef
@@ -844,6 +942,7 @@ enddef
 export def AiPrompt(prompt_from_cmdline: string = ''): void
   var prompt: string = prompt_from_cmdline
   if empty(trim(prompt))
+    echohl WarningMsg | echom 'vproj-ai: empty prompt' | echohl None
     return
   endif
 
@@ -851,6 +950,7 @@ export def AiPrompt(prompt_from_cmdline: string = ''): void
   var mode: string = DetectMode(prompt)
   prompt = StripPrefix(prompt)
   if empty(prompt)
+    echohl WarningMsg | echom 'vproj-ai: empty prompt' | echohl None
     return
   endif
 
@@ -869,6 +969,7 @@ export def AiPrompt(prompt_from_cmdline: string = ''): void
   stream_job = v:null
   stream_accumulated = ''
   stream_full_response = ''
+  stream_api_error = ''
   stream_cancelled = false
 
   var ctx: dict<any> = GatherContext(origin)

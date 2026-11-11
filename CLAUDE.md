@@ -125,6 +125,8 @@ tests/
 ├── unit/
 │   ├── test_first_selectable.vim
 │   ├── test_ascii_ui.vim
+│   ├── test_audit_2026_11e_misc.vim
+│   ├── test_audit_2026_11f_misc.vim
 │   ├── test_ai.vim
 │   ├── test_agent.vim
 │   └── test_ai_credentials.vim
@@ -142,7 +144,14 @@ tests/
 │   ├── test_audit_2026_11c.vim
 │   ├── test_audit_2026_11d_git.vim
 │   ├── test_audit_2026_11d_render.vim
-│   └── test_audit_2026_11d_session.vim
+│   ├── test_audit_2026_11d_session.vim
+│   ├── test_audit_2026_11e_code.vim
+│   ├── test_audit_2026_11e_git.vim
+│   ├── test_audit_2026_11e_layout.vim
+│   ├── test_audit_2026_11e_rest.vim
+│   ├── test_audit_2026_11f_git.vim
+│   ├── test_audit_2026_11f_layout.vim
+│   └── test_audit_2026_11g_adopt.vim
 ├── smoke.vim
 ├── concept_audit.vim
 ├── audit_fixes.vim
@@ -389,6 +398,8 @@ tests/
 ├── unit/
 │   ├── test_first_selectable.vim   # FirstSelectableLine mode-awareness
 │   ├── test_ascii_ui.vim           # ASCII-only output rule, scanned over the source
+│   ├── test_audit_2026_11e_misc.vim # 2026-11 audit, batch e (AI/JSON, text width, Tab map, install.sh)
+│   ├── test_audit_2026_11f_misc.vim # batch f (prompt mode, API errors, glob engine, read-only .vproj, compat)
 │   ├── test_ai.vim                 # AI subsystem (fake curl, no network)
 │   ├── test_agent.vim              # Agent terminal (fake agent CLI)
 │   └── test_ai_credentials.vim     # AI credential handling
@@ -406,7 +417,14 @@ tests/
 │   ├── test_audit_2026_11c.vim     # 2026-11 audit, batch c
 │   ├── test_audit_2026_11d_git.vim # 2026-11 audit, batch d (git)
 │   ├── test_audit_2026_11d_render.vim # 2026-11 audit, batch d (render, Enter, lazy load)
-│   └── test_audit_2026_11d_session.vim # 2026-11 audit, batch d (session)
+│   ├── test_audit_2026_11d_session.vim # 2026-11 audit, batch d (session)
+│   ├── test_audit_2026_11e_code.vim # batch e (.vproj, globs, code mode, buf mode)
+│   ├── test_audit_2026_11e_git.vim # batch e (discard safety, stash, Esc, git cache)
+│   ├── test_audit_2026_11e_layout.vim # batch e (resize, width clamp, preview, help)
+│   ├── test_audit_2026_11e_rest.vim # batch e (quit guard, cursor clamp, messages)
+│   ├── test_audit_2026_11f_git.vim # batch f (literal pathspecs, GIT_DIR isolation, grep, discard layers)
+│   ├── test_audit_2026_11f_layout.vim # batch f (deferred quit guard, manual resize, preview sizing)
+│   └── test_audit_2026_11g_adopt.vim # batch g (:only must not fix the pane width)
 ├── smoke.vim                       # Basic open/close
 ├── concept_audit.vim               # Mapping table vs the concept
 ├── audit_fixes.vim                 # Earlier audit fix verification
@@ -422,8 +440,11 @@ tests/
 ```
 
 Run all: `bash tests/run_all.sh` (`-v` prints failing lines). Each file runs
-with its own temporary HOME and XDG_CACHE_HOME, and passes only on exit code 0:
-a script that aborts falls through to `-c 'cquit!'` and fails. One file:
+with its own temporary HOME and XDG_CACHE_HOME. A file passes only when Vim
+exits 0, its output has no `FAIL:` line, and it reaches a completion marker
+such as `ALL TESTS PASSED.` (print it after the last assertion, before the
+closing `qa!`): exit 0 alone cannot tell a finished file from one that quit
+early. A script that aborts falls through to `-c 'cquit!'` and fails. One file:
 `vim -N -u NONE -i NONE -S tests/<file>.vim -c 'cquit!'`.
 
 Every test must be hermetic: set `$XDG_CACHE_HOME = tempname()` before

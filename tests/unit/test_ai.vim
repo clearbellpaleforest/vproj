@@ -322,7 +322,11 @@ def Section8(): void
   messages clear
   vproj#ai#AiPrompt('?first question')
   var start: list<any> = reltime()
-  while len(glob(fake_dir .. '/files.*', 0, 1)) < 1 && reltimefloat(reltime(start)) < 30.0
+  # The fake curl logs its two @file arguments one at a time and then sleeps.
+  # Wait for BOTH before superseding it: a second prompt that arrives after
+  # only the first was logged cancels the job mid-loop, and the later count of
+  # 4 can never be reached (seen as 3 under CPU starvation).
+  while len(CurlFiles()) < 2 && reltimefloat(reltime(start)) < 30.0
     sleep 20m
   endwhile
   vproj#ai#AiPrompt('?second question')

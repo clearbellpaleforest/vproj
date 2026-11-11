@@ -127,7 +127,9 @@ Code Mode  ([C]ode)                                 *vproj-mode-code*
     Stage (\s) stages worktree changes and untracked files
     (`git add`); on a file whose changes are only staged it unstages
     them. Diff preview (\d) opens a vertical split with the file's
-    diff (staged, unstaged or both); press q to close it. Discard
+    diff (staged, unstaged or both); the cursor stays in the pane, so
+    move to the diff window (CTRL-W w) and press q there, or use
+    :close. Discard
     (\D) asks first and says what it will do: delete an untracked
     file, unstage a newly added file (the file is kept), or revert
     every staged and unstaged change to HEAD. Commit (\c) prompts
@@ -144,7 +146,8 @@ Code Mode  ([C]ode)                                 *vproj-mode-code*
                                                *vproj-git-blame*
     Blame (\a) opens a vertical split showing `git annotate` output
     for the file under cursor. Requires the file be tracked by git.
-    Press q in the blame window to close it.
+    The cursor stays in the pane: move to the blame window (CTRL-W w)
+    and press q there, or use :close.
 
 Qfix Mode  ([Q]fix)                                 *vproj-mode-qfix*
     Displays the Vim quickfix list. Press Enter to open the
@@ -203,6 +206,17 @@ Actions:
     <F1>                Toggle info column
     ?                   Show a key reference in a help window (q closes it)
 
+Cursor motions:
+    Vim motions such as 0 $ ^ % { } ( ) <C-D> <C-U> and a mouse click move
+    the cursor as usual, but the cursor is kept on an item row (or the mode
+    menu): G, L and <C-F> end on the last item, never on the page footer, and
+    the separator row is skipped. "gg" does not work, because g is a nav
+    letter: use <C-T> (first item) and <C-B> (last item).
+
+    When the pane is the only window left (the edit window was closed), Vim
+    quits as it would on the last real window; a modified buffer still stops
+    it (E37, E162).
+
 Quick Nav:                                       *vproj-nav-char*
     >                   Letter the next 26 items (more than 26 shown)
     <                   Letter the previous 26 items
@@ -227,6 +241,12 @@ Global (outside pane):
     <Tab>               Open pane (temporary mode, auto-closes)
     <S-Tab>             Open pane (permanent mode, stays open)
 
+    The default <Tab> and <S-Tab> mappings are not defined when you already
+    map that key in Normal mode when the plugin loads; your mapping stays.
+    To use the pane with such a key anyway, map it yourself:
+>
+        nmap <Tab> <Plug>VprojToggle
+<
 Pane Modes:                                      *vproj-pane-modes*
     Temporary mode (Tab): The pane auto-closes when you open a file,
     press Esc in the pane, or press Tab again. This mode is for
@@ -370,6 +390,13 @@ A trailing / on a directory entry is ignored ("src/" is "src"). An
 entry containing * or ? is a glob, matched against the path and
 against the last name: "*.swp" excludes every .swp file. [ and ]
 are ordinary characters, so "[id].tsx" names exactly that file.
+
+Only * and ? are special in an entry; { } , $ ^ and \ are ordinary
+characters. A file cannot be included or excluded (+ and -) when its
+name cannot be stored in the .vproj file: a name with * or ?, blanks at
+either end, a control character or U+FEFF, or one that starts like a
+section header ("Included Files: x"). vproj refuses it and leaves the
+file unchanged.
 
 ==============================================================================
 AI ASSISTANT                                  *vproj-ai* *vproj-ai-setup*

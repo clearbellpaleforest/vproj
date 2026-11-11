@@ -62,11 +62,14 @@ endif
 nnoremap <silent> <Plug>VprojToggle :VprojToggle<CR>
 nnoremap <silent> <Plug>VprojTogglePermanent :call vproj#PaneTogglePermanent()<CR>
 
-if !hasmapto('<Plug>VprojToggle', 'n')
+# A default is skipped when the user maps the KEY already (maparg()), not just
+# when something maps the <Plug> (hasmapto()): an existing <Tab> mapping of
+# theirs must survive. They can opt in with: nmap <Tab> <Plug>VprojToggle
+if !hasmapto('<Plug>VprojToggle', 'n') && empty(maparg('<Tab>', 'n'))
   nmap <Tab> <Plug>VprojToggle
 endif
 
-if !hasmapto('<Plug>VprojTogglePermanent', 'n')
+if !hasmapto('<Plug>VprojTogglePermanent', 'n') && empty(maparg('<S-Tab>', 'n'))
   nmap <S-Tab> <Plug>VprojTogglePermanent
 endif
 

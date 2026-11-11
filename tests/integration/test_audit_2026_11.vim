@@ -326,6 +326,9 @@ if executable('git')
   # \d used to abort on wrap=0, show nothing for " M", and fail for untracked
   var wins_before: number = winnr('$')
   SelectName('plain.txt')
+  # A terminal-less Vim is 80x24 after any system() call and a diff split now
+  # needs 41 columns in the edit window; a 20-wide pane leaves 59.
+  vproj#SetPaneWidth(20)
   vproj#OpenDiffPreview()
   var diff_bnr: number = bufnr('vproj-diff:plain.txt')
   Assert(diff_bnr > 0 && !empty(filter(getbufline(diff_bnr, 1, '$'), (_, l) => l =~ '^+more')), '\d shows the unstaged diff')
@@ -345,6 +348,13 @@ if executable('git')
 
   # \a (blame) used to abort on wrap=0
   SelectName('hay.txt')
+  # Close the diff splits left open above: the blame split needs 41 columns
+  # in the edit window and a terminal-less Vim is only 80 wide.
+  for b in getbufinfo()
+    if b.name =~ 'vproj-diff:'
+      execute 'silent! bwipeout! ' .. b.bufnr
+    endif
+  endfor
   vproj#GitBlame()
   Assert(!empty(filter(map(getbufinfo(), (_, b) => b.name), (_, n) => n =~ 'vproj-blame:hay.txt')), '\a opens a blame split')
 

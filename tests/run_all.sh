@@ -11,13 +11,23 @@
 # with HOME, XDG_CACHE_HOME and TMPDIR pointed into a fresh temp dir, so a test
 # can never read or write the user's real ~/.cache/vproj/session or ~/.vim.
 #
-# Pass/fail is decided by Vim's exit code only:
-#   - a test that completes ends with its own `qa!` (exit 0) or `cquit!` (exit 1)
-#   - a test that aborts mid-script (E-error stops sourcing) falls through to
-#     the trailing -c 'cquit!' and exits nonzero
-#   - a hang is killed by `timeout` (exit 124; SIGKILL 5 s later if Vim
-#     ignores SIGTERM, as it does while blocked on a prompt -> exit 137)
-# PASS:/FAIL: line counts are reported for information only.
+# A file is ok only when ALL of these hold:
+#   1. Vim exits 0. A test that completes ends with its own `qa!` (exit 0) or
+#      `cquit!` (exit 1); one that aborts mid-script (E-error stops sourcing)
+#      falls through to the trailing -c 'cquit!' and exits nonzero; a hang is
+#      killed by `timeout` (exit 124; SIGKILL 5 s later if Vim ignores SIGTERM,
+#      as it does while blocked on a prompt -> exit 137).
+#   2. Its output has no `FAIL:` line (a file that prints FAIL: and then ends
+#      with `qa!` exits 0 but is still a failure).
+#   3. Its output reaches the completion marker, a line matching MARKER_RE
+#      ("ALL TESTS PASSED.", "ALL PASS", "ALL ... VERIFIED.", "All smoke tests
+#      passed.", "Agent module tests: ALL PASSED", ...). Exit 0 alone cannot
+#      tell a finished file from one that quit early (a stray `qa!`, or the
+#      plugin's own last-window `quit` autocommand): such a file exits 0 with
+#      most assertions never run. Every file prints the marker only after its
+#      last assertion and before its closing `qa!`.
+# The marker is searched in Vim's output and, for the three unit files that
+# also write their log there, in $VPROJ_TEST_RESULT.
 #
 # Not run: tests/demo.vim (interactive walkthrough, no assertions) and
 # tests/test_helpers.vim (unused helper library, not a test).
@@ -27,6 +37,14 @@
 # change fails the run. Does not depend on git or on the file being tracked.
 
 set -u
+
+# Completion marker (extended regex), the same rule for every file.
+MARKER_RE='ALL [A-Z ]*(PASSED|PASS|VERIFIED)\.?|[Aa]ll [a-z]+ tests passed\.'
+
+# Files allowed to finish without a completion marker. EMPTY ON PURPOSE: all
+# 33 files print one. Add a path here only with a comment saying why the file
+# cannot, so that skipping the check stays a visible decision.
+EXEMPT_MARKER=()
 
 VERBOSE=0
 [ "${1:-}" = "-v" ] && VERBOSE=1
@@ -84,6 +102,7 @@ for f in "${FILES[@]}"; do
   raw="$run_dir/out.raw"
 
   HOME="$run_dir/home" XDG_CACHE_HOME="$run_dir/cache" TMPDIR="$run_dir/tmp" \
+    VPROJ_TEST_RESULT="$run_dir/result.txt" \
     timeout -k 5 120 vim --not-a-term -N -u NONE -i NONE -S "$f" -c 'cquit!' </dev/null >"$raw" 2>&1
   rc=$?
 
@@ -93,8 +112,27 @@ for f in "${FILES[@]}"; do
   total_pass=$((total_pass + npass))
   total_fail=$((total_fail + nfail))
 
+  # Completion marker: in the output, or in the result file some files write.
+  reached=0
+  if grep -qE "$MARKER_RE" <<<"$out"; then
+    reached=1
+  elif [ -f "$run_dir/result.txt" ] && grep -qE "$MARKER_RE" "$run_dir/result.txt"; then
+    reached=1
+  fi
+  for ex in ${EXEMPT_MARKER[@]+"${EXEMPT_MARKER[@]}"}; do
+    [ "$ex" = "$f" ] && reached=1
+  done
+
+  failed=1
   if [ "$rc" -eq 0 ]; then
-    status=ok
+    if [ "$nfail" -ne 0 ]; then
+      status="FAILED (exit 0 but $nfail FAIL: lines)"
+    elif [ "$reached" -eq 0 ]; then
+      status="FAILED (exit 0 but no completion marker: exited early)"
+    else
+      status=ok
+      failed=0
+    fi
   elif [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
     status="FAILED (timeout)"
   elif grep -q 'Vim: Error reading input' <<<"$out"; then
@@ -105,13 +143,17 @@ for f in "${FILES[@]}"; do
   else
     status="FAILED (exit $rc)"
   fi
-  [ "$rc" -ne 0 ] && files_failed=$((files_failed + 1))
+  [ "$failed" -ne 0 ] && files_failed=$((files_failed + 1))
 
   printf '%-44s %6d %6d  %s\n' "$f" "$npass" "$nfail" "$status"
 
-  if [ "$rc" -ne 0 ] && [ "$VERBOSE" -eq 1 ]; then
+  if [ "$failed" -ne 0 ] && [ "$VERBOSE" -eq 1 ]; then
     grep -E 'FAIL:|E[0-9]+:|^line +[0-9]+:|Vim: Error reading input|\[Y\]es|\(y/N\)' <<<"$out" \
       | sed 's/^/    /' | head -40
+    if [ "$rc" -eq 0 ] && [ "$reached" -eq 0 ]; then
+      echo "    last output:"
+      grep -v '^[[:space:]]*$' <<<"$out" | tail -3 | cut -c1-160 | sed 's/^/      /'
+    fi
   fi
 done
 

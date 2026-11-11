@@ -297,7 +297,9 @@ endtry
 echom '--- PaneGrow/PaneShrink bounds ---'
 Setup()
 
-# Grow to max
+# Grow to max. The pane is clamped to the terminal (SafeMaxWidth), so an
+# 80-wide pane needs a terminal wider than the default 80x24.
+set columns=160 lines=40
 while vproj#GetPaneWidth() < 80
   vproj#PaneGrow()
 endwhile
